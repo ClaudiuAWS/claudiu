@@ -1,31 +1,15 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { roomsApi } from '../services/api'
-import { useWebSocket } from './useWebSocket'
 import { logger } from '../services/logger'
 
 const ROOM_CODE_KEY = 'fan_squad_room_code'
 
-export function useRoom(user) {
+export function useRoom() {
   const [room, setRoom] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const handleMessage = useCallback((message) => {
-    logger.info('useRoom', 'WebSocket message', message)
-
-    if (message.type === 'members_update') {
-      setRoom(prev => prev ? { ...prev, members: message.members } : prev)
-    }
-  }, [])
-
-  const { send } = useWebSocket({
-    roomCode: room?.roomCode,
-    matchId: room?.matchId,
-    userId: user?.userId,
-    displayName: user?.displayName,
-    onMessage: handleMessage,
-  })
-
+  // Restore room from localStorage on mount
   useEffect(() => {
     const savedCode = localStorage.getItem(ROOM_CODE_KEY)
     if (!savedCode) {
@@ -54,6 +38,22 @@ export function useRoom(user) {
 
     return () => controller.abort()
   }, [])
+
+  // Poll for room updates every 3 seconds when in a room
+  useEffect(() => {
+    if (!room?.roomCode) return
+
+    const interval = setInterval(async () => {
+      try {
+        const data = await roomsApi.get(room.roomCode)
+        setRoom(data)
+      } catch (err) {
+        logger.warn('useRoom', 'Poll failed', err)
+      }
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [room?.roomCode])
 
   const clearError = () => setError('')
 
@@ -105,6 +105,5 @@ export function useRoom(user) {
     createRoom,
     joinRoom,
     leaveRoom,
-    send,
   }
 }
