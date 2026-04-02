@@ -12,6 +12,15 @@ export default function LobbyPage() {
   const { room, loading, error, clearError, createRoom, joinRoom, leaveRoom } = useRoom()
   const [mode, setMode] = useState('create')
 
+
+  if (loading) {
+    return (
+      <div className="px-6 pt-12 flex items-center justify-center min-h-64">
+        <p className="text-gray-400">Loading...</p>
+      </div>
+    )
+  }
+
   if (room) {
     return (
       <div className="px-6 pt-12 space-y-4">
