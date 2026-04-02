@@ -91,7 +91,15 @@ export function useRoom() {
     }
   }
 
-  const leaveRoom = () => {
+  const leaveRoom = async () => {
+    if (room?.roomCode) {
+      try {
+        await roomsApi.leave(room.roomCode)
+        logger.success('useRoom', 'Left room on server')
+      } catch (err) {
+        logger.warn('useRoom', 'Failed to leave room on server', err)
+      }
+    }
     localStorage.removeItem(ROOM_CODE_KEY)
     setRoom(null)
     logger.info('useRoom', 'Left room')
