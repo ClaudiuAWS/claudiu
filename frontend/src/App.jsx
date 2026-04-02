@@ -4,7 +4,7 @@ import BottomNav from './components/BottomNav'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import ConfirmPage from './pages/ConfirmPage'
-import HomePage from './pages/HomePage'
+import LobbyPage from './pages/LobbyPage'
 import { useAuth } from './hooks/useAuth'
 
 const Placeholder = ({ title }) => (
@@ -42,7 +42,7 @@ export default function App() {
 
         <Route path="/" element={
           <ProtectedRoute>
-            <Layout><HomePage /></Layout>
+            <Layout><LobbyPage /></Layout>
           </ProtectedRoute>
         }/>
         <Route path="/leaderboard" element={

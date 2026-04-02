@@ -7,36 +7,36 @@ import {
   fetchAuthSession,
   resendSignUpCode,
 } from 'aws-amplify/auth'
+import { logger } from './logger'
 
 export const register = async (email, password, displayName) => {
+  logger.info('Auth', 'Registering user', { email, displayName })
   return signUp({
     username: email,
     password,
     options: {
-      userAttributes: {
-        email,
-        name: displayName,
-      }
+      userAttributes: { email, name: displayName }
     }
   })
 }
 
 export const confirmRegistration = async (email, code) => {
-  return confirmSignUp({
-    username: email,
-    confirmationCode: code,
-  })
+  logger.info('Auth', 'Confirming registration', { email })
+  return confirmSignUp({ username: email, confirmationCode: code })
 }
 
 export const resendCode = async (email) => {
+  logger.info('Auth', 'Resending confirmation code', { email })
   return resendSignUpCode({ username: email })
 }
 
 export const login = async (email, password) => {
+  logger.info('Auth', 'Signing in', { email })
   return signIn({ username: email, password })
 }
 
 export const logout = async () => {
+  logger.info('Auth', 'Signing out')
   return signOut()
 }
 
@@ -45,12 +45,15 @@ export const getUser = async () => {
     const user = await getCurrentUser()
     const session = await fetchAuthSession()
     const claims = session.tokens?.idToken?.payload
-    return {
+    const profile = {
       userId: user.userId,
       email: claims?.email,
       displayName: claims?.name,
     }
+    logger.info('Auth', 'Got current user', profile)
+    return profile
   } catch {
+    logger.warn('Auth', 'No authenticated user')
     return null
   }
 }
@@ -60,6 +63,7 @@ export const getAccessToken = async () => {
     const session = await fetchAuthSession()
     return session.tokens?.accessToken?.toString()
   } catch {
+    logger.error('Auth', 'Failed to get access token')
     return null
   }
 }
