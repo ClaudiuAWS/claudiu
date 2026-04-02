@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuth } from '../hooks/useAuth'
 import { useRoom } from '../hooks/useRoom'
 import RoomCodeDisplay from '../components/lobby/RoomCodeDisplay'
 import MembersList from '../components/lobby/MembersList'
@@ -7,6 +8,7 @@ import JoinRoom from '../components/lobby/JoinRoom'
 import ErrorBanner from '../components/ui/ErrorBanner'
 
 export default function LobbyPage() {
+  const { user } = useAuth()
   const { room, loading, error, clearError, createRoom, joinRoom, leaveRoom } = useRoom()
   const [mode, setMode] = useState('create')
 
