@@ -5,7 +5,7 @@ const tabs = [
         {
                 label: "HOME",
                 path: "/",
-                icon: (color: string) => (
+                icon: (color) => (
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                                 <path
                                         d="M3 9.5L12 3L21 9.5V20C21 20.6 20.6 21 20 21H15V15H9V21H4C3.4 21 3 20.6 3 20V9.5Z"
@@ -19,7 +19,7 @@ const tabs = [
         {
                 label: "LEADERBOARD",
                 path: "/leaderboard",
-                icon: (color: string) => (
+                icon: (color) => (
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                                 <path
                                         d="M6 9H18M8 9V6C8 4.9 8.9 4 10 4H14C15.1 4 16 4.9 16 6V9M5 9L6 19H18L19 9"
@@ -41,7 +41,7 @@ const tabs = [
         {
                 label: "BADGES",
                 path: "/badges",
-                icon: (color: string) => (
+                icon: (color) => (
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                                 <circle
                                         cx="12"
@@ -75,7 +75,7 @@ const tabs = [
         {
                 label: "PROFILE",
                 path: "/profile",
-                icon: (color: string) => (
+                icon: (color) => (
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                                 <circle
                                         cx="12"

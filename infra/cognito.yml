@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu Cognito Auth
+
+Resources:
+        UserPool:
+                Type: AWS::Cognito::UserPool
+                Properties:
+                        UserPoolName: claudiu-user-pool
+                        AutoVerifiedAttributes:
+                                - email
+                        UsernameAttributes:
+                                - email
+                        Policies:
+                                PasswordPolicy:
+                                        MinimumLength: 8
+                                        RequireUppercase: false
+                                        RequireLowercase: false
+                                        RequireNumbers: false
+                                        RequireSymbols: false
+                        Schema:
+                                - Name: name
+                                  AttributeDataType: String
+                                  Required: true
+                                  Mutable: true
+
+        UserPoolClient:
+                Type: AWS::Cognito::UserPoolClient
+                Properties:
+                        ClientName: claudiu-web-client
+                        UserPoolId: !Ref UserPool
+                        GenerateSecret: false
+                        ExplicitAuthFlows:
+                                - ALLOW_USER_SRP_AUTH
+                                - ALLOW_REFRESH_TOKEN_AUTH
+                        AccessTokenValidity: 1
+                        IdTokenValidity: 1
+                        RefreshTokenValidity: 30
+                        TokenValidityUnits:
+                                AccessToken: hours
+                                IdToken: hours
+                                RefreshToken: days
+
+Outputs:
+        UserPoolId:
+                Value: !Ref UserPool
+                Export:
+                        Name: claudiu-user-pool-id
+
+        UserPoolClientId:
+                Value: !Ref UserPoolClient
+                Export:
+                        Name: claudiu-user-pool-client-id
