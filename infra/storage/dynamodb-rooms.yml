@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu DynamoDB Tables - Rooms Feature
+
+Resources:
+        RoomsTable:
+                Type: AWS::DynamoDB::Table
+                Properties:
+                        TableName: claudiu-rooms
+                        BillingMode: PAY_PER_REQUEST
+                        AttributeDefinitions:
+                                - AttributeName: roomCode
+                                  AttributeType: S
+                                - AttributeName: matchId
+                                  AttributeType: S
+                        KeySchema:
+                                - AttributeName: roomCode
+                                  KeyType: HASH
+                        GlobalSecondaryIndexes:
+                                - IndexName: matchId-index
+                                  KeySchema:
+                                          - AttributeName: matchId
+                                            KeyType: HASH
+                                  Projection:
+                                          ProjectionType: ALL
+                        TimeToLiveSpecification:
+                                AttributeName: TTL
+                                Enabled: true
+
+        ConnectionsTable:
+                Type: AWS::DynamoDB::Table
+                Properties:
+                        TableName: claudiu-connections
+                        BillingMode: PAY_PER_REQUEST
+                        AttributeDefinitions:
+                                - AttributeName: connectionId
+                                  AttributeType: S
+                                - AttributeName: roomCode
+                                  AttributeType: S
+                                - AttributeName: userId
+                                  AttributeType: S
+                        KeySchema:
+                                - AttributeName: connectionId
+                                  KeyType: HASH
+                        GlobalSecondaryIndexes:
+                                - IndexName: roomCode-index
+                                  KeySchema:
+                                          - AttributeName: roomCode
+                                            KeyType: HASH
+                                  Projection:
+                                          ProjectionType: ALL
+                                - IndexName: userId-index
+                                  KeySchema:
+                                          - AttributeName: userId
+                                            KeyType: HASH
+                                  Projection:
+                                          ProjectionType: ALL
+                        TimeToLiveSpecification:
+                                AttributeName: TTL
+                                Enabled: true
+
+Outputs:
+        RoomsTableName:
+                Value: !Ref RoomsTable
+                Export:
+                        Name: claudiu-rooms-table
+
+        RoomsTableArn:
+                Value: !GetAtt RoomsTable.Arn
+                Export:
+                        Name: claudiu-rooms-table-arn
+
+        ConnectionsTableName:
+                Value: !Ref ConnectionsTable
+                Export:
+                        Name: claudiu-connections-table
+
+        ConnectionsTableArn:
+                Value: !GetAtt ConnectionsTable.Arn
+                Export:
+                        Name: claudiu-connections-table-arn

@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu GitHub Actions OIDC Role - Backend
+
+Resources:
+        GitHubActionsBackendRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-github-actions-backend
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+                                          Action: sts:AssumeRoleWithWebIdentity
+                                          Condition:
+                                                  StringEquals:
+                                                          token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                                                          token.actions.githubusercontent.com:sub: repo:ClaudiuAWS/claudiu:ref:refs/heads/main
+
+        GitHubActionsBackendPolicy:
+                Type: AWS::IAM::ManagedPolicy
+                Properties:
+                        ManagedPolicyName: claudiu-github-actions-backend-policy
+                        Roles:
+                                - !Ref GitHubActionsBackendRole
+                        PolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Sid: LambdaDeploy
+                                          Effect: Allow
+                                          Action:
+                                                  - lambda:UpdateFunctionCode
+                                                  - lambda:GetFunction
+                                          Resource:
+                                                  - !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-rooms
+                                                  - !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-ws-connect
+                                                  - !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-ws-disconnect
+
+Outputs:
+        RoleArn:
+                Value: !GetAtt GitHubActionsBackendRole.Arn
+                Export:
+                        Name: claudiu-github-actions-backend-role-arn
