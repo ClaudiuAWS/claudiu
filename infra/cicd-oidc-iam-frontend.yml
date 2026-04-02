@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu GitHub Actions OIDC Role
+
+Resources:
+        GitHubOIDCProvider:
+                Type: AWS::IAM::OIDCProvider
+                Properties:
+                        Url: https://token.actions.githubusercontent.com
+                        ClientIdList:
+                                - sts.amazonaws.com
+                        ThumbprintList:
+                                - 6938fd4d98bab03faadb97b34396831e3780aea1
+
+        GitHubActionsRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-github-actions-frontend
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Federated: !GetAtt GitHubOIDCProvider.Arn
+                                          Action: sts:AssumeRoleWithWebIdentity
+                                          Condition:
+                                                  StringEquals:
+                                                          token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                                                          token.actions.githubusercontent.com:sub: repo:ClaudiuAWS/claudiu:ref:refs/heads/main
+
+        GitHubActionsPolicy:
+                Type: AWS::IAM::ManagedPolicy
+                Properties:
+                        ManagedPolicyName: claudiu-github-actions-policy
+                        Roles:
+                                - !Ref GitHubActionsRole
+                        PolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Sid: S3Sync
+                                          Effect: Allow
+                                          Action:
+                                                  - s3:PutObject
+                                                  - s3:DeleteObject
+                                                  - s3:GetObject
+                                                  - s3:ListBucket
+                                          Resource:
+                                                  - arn:aws:s3:::claudiu-frontend
+                                                  - arn:aws:s3:::claudiu-frontend/*
+                                        - Sid: CloudFrontInvalidation
+                                          Effect: Allow
+                                          Action:
+                                                  - cloudfront:CreateInvalidation
+                                          Resource:
+                                                  - !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/E3MKC5CSEXRU8P
+
+Outputs:
+        RoleArn:
+                Value: !GetAtt GitHubActionsRole.Arn
+                Export:
+                        Name: claudiu-github-actions-frontend-role-arn
