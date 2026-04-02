@@ -50,6 +50,7 @@ jobs:
                                   aws s3 cp s3://claudiu-frontend/index.html \
                                     s3://claudiu-frontend/index.html \
                                     --cache-control "no-cache,no-store,must-revalidate" \
+                                    --content-type "text/html" \
                                     --metadata-directive REPLACE
 
                         - name: Invalidate CloudFront
