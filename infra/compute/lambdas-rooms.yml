@@ -71,16 +71,6 @@ Outputs:
                 Export:
                         Name: claudiu-rooms-lambda-arn
 
-        WsConnectLambdaArn:
-                Value: !GetAtt WsConnectLambda.Arn
-                Export:
-                        Name: claudiu-ws-connect-lambda-arn
-
-        WsDisconnectLambdaArn:
-                Value: !GetAtt WsDisconnectLambda.Arn
-                Export:
-                        Name: claudiu-ws-disconnect-lambda-arn
-
         RoomsLambdaRoleArn:
                 Value: !GetAtt RoomsLambdaRole.Arn
                 Export:
