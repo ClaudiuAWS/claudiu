@@ -2,6 +2,7 @@ import json
 import service
 
 def handler(event, context):
+    print("EVENT:", json.dumps(event))
     method = event['httpMethod']
     path = event['path']
     
