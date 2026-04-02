@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Claudiu API Gateway - REST and WebSocket
+Description: Claudiu API Gateway - REST
 
 Resources:
         # ─────────────────────────────────────────
@@ -24,6 +24,7 @@ Resources:
                         RestApiId: !Ref RestApi
                         ProviderARNs:
                                 - !Sub arn:aws:cognito-idp:eu-central-1:${AWS::AccountId}:userpool/eu-central-1_xMo5k0VLO
+                        AuthorizerResultTtlInSeconds: 0
 
         # /rooms resource
         RoomsResource:
@@ -48,6 +49,14 @@ Resources:
                         RestApiId: !Ref RestApi
                         ParentId: !Ref RoomsCodeResource
                         PathPart: join
+
+        # /rooms/{code}/leave resource
+        RoomsLeaveResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !Ref RoomsCodeResource
+                        PathPart: leave
 
         # POST /rooms
         PostRoomsMethod:
@@ -84,6 +93,20 @@ Resources:
                         RestApiId: !Ref RestApi
                         ResourceId: !Ref RoomsJoinResource
                         HttpMethod: POST
+                        AuthorizationType: COGNITO_USER_POOLS
+                        AuthorizerId: !Ref CognitoAuthorizer
+                        Integration:
+                                Type: AWS_PROXY
+                                IntegrationHttpMethod: POST
+                                Uri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-rooms/invocations
+
+        # DELETE /rooms/{code}/leave
+        DeleteRoomsLeaveMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref RoomsLeaveResource
+                        HttpMethod: DELETE
                         AuthorizationType: COGNITO_USER_POOLS
                         AuthorizerId: !Ref CognitoAuthorizer
                         Integration:
@@ -172,15 +195,44 @@ Resources:
                                           method.response.header.Access-Control-Allow-Methods: true
                                           method.response.header.Access-Control-Allow-Origin: true
 
+        # CORS for /rooms/{code}/leave
+        RoomsLeaveOptionsMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref RoomsLeaveResource
+                        HttpMethod: OPTIONS
+                        AuthorizationType: NONE
+                        Integration:
+                                Type: MOCK
+                                IntegrationResponses:
+                                        - StatusCode: 200
+                                          ResponseParameters:
+                                                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+                                                  method.response.header.Access-Control-Allow-Methods: "'DELETE,OPTIONS'"
+                                                  method.response.header.Access-Control-Allow-Origin: "'*'"
+                                          ResponseTemplates:
+                                                  application/json: ""
+                                RequestTemplates:
+                                        application/json: '{"statusCode": 200}'
+                        MethodResponses:
+                                - StatusCode: 200
+                                  ResponseParameters:
+                                          method.response.header.Access-Control-Allow-Headers: true
+                                          method.response.header.Access-Control-Allow-Methods: true
+                                          method.response.header.Access-Control-Allow-Origin: true
+
         RestApiDeployment:
                 Type: AWS::ApiGateway::Deployment
                 DependsOn:
                         - PostRoomsMethod
                         - GetRoomsCodeMethod
                         - PostRoomsJoinMethod
+                        - DeleteRoomsLeaveMethod
                         - RoomsOptionsMethod
                         - RoomsCodeOptionsMethod
                         - RoomsJoinOptionsMethod
+                        - RoomsLeaveOptionsMethod
                 Properties:
                         RestApiId: !Ref RestApi
 
@@ -192,55 +244,7 @@ Resources:
                         StageName: prod
 
         # ─────────────────────────────────────────
-        # WebSocket API
-        # ─────────────────────────────────────────
-
-        WebSocketApi:
-                Type: AWS::ApiGatewayV2::Api
-                Properties:
-                        Name: claudiu-websocket-api
-                        ProtocolType: WEBSOCKET
-                        RouteSelectionExpression: "$request.body.action"
-
-        WebSocketConnectRoute:
-                Type: AWS::ApiGatewayV2::Route
-                Properties:
-                        ApiId: !Ref WebSocketApi
-                        RouteKey: $connect
-                        AuthorizationType: NONE
-                        Target: !Sub integrations/${WebSocketConnectIntegration}
-
-        WebSocketDisconnectRoute:
-                Type: AWS::ApiGatewayV2::Route
-                Properties:
-                        ApiId: !Ref WebSocketApi
-                        RouteKey: $disconnect
-                        AuthorizationType: NONE
-                        Target: !Sub integrations/${WebSocketDisconnectIntegration}
-
-        WebSocketConnectIntegration:
-                Type: AWS::ApiGatewayV2::Integration
-                Properties:
-                        ApiId: !Ref WebSocketApi
-                        IntegrationType: AWS_PROXY
-                        IntegrationUri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-ws-connect/invocations
-
-        WebSocketDisconnectIntegration:
-                Type: AWS::ApiGatewayV2::Integration
-                Properties:
-                        ApiId: !Ref WebSocketApi
-                        IntegrationType: AWS_PROXY
-                        IntegrationUri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-ws-disconnect/invocations
-
-        WebSocketStage:
-                Type: AWS::ApiGatewayV2::Stage
-                Properties:
-                        ApiId: !Ref WebSocketApi
-                        StageName: prod
-                        AutoDeploy: true
-
-        # ─────────────────────────────────────────
-        # Lambda permissions to be invoked by API Gateway
+        # Lambda permissions
         # ─────────────────────────────────────────
 
         RoomsLambdaPermission:
@@ -250,22 +254,6 @@ Resources:
                         Action: lambda:InvokeFunction
                         Principal: apigateway.amazonaws.com
                         SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:${RestApi}/*
-
-        WsConnectLambdaPermission:
-                Type: AWS::Lambda::Permission
-                Properties:
-                        FunctionName: claudiu-ws-connect
-                        Action: lambda:InvokeFunction
-                        Principal: apigateway.amazonaws.com
-                        SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:${WebSocketApi}/*
-
-        WsDisconnectLambdaPermission:
-                Type: AWS::Lambda::Permission
-                Properties:
-                        FunctionName: claudiu-ws-disconnect
-                        Action: lambda:InvokeFunction
-                        Principal: apigateway.amazonaws.com
-                        SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:${WebSocketApi}/*
 
 Outputs:
         RestApiUrl:
@@ -277,13 +265,3 @@ Outputs:
                 Value: !Ref RestApi
                 Export:
                         Name: claudiu-rest-api-id
-
-        WebSocketUrl:
-                Value: !Sub wss://${WebSocketApi}.execute-api.eu-central-1.amazonaws.com/prod
-                Export:
-                        Name: claudiu-websocket-url
-
-        WebSocketApiId:
-                Value: !Ref WebSocketApi
-                Export:
-                        Name: claudiu-websocket-api-id

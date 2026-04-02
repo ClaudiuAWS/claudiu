@@ -75,6 +75,24 @@ def join_room(room_code: str, user_id: str, display_name: str) -> dict:
     room['members'] = members
     return room
 
+def leave_room(room_code: str, user_id: str) -> dict:
+    room = rooms_table.get_item(
+        Key={'roomCode': room_code}
+    ).get('Item')
+    
+    if not room:
+        raise ValueError('Room not found')
+    
+    members = [m for m in room.get('members', []) if m['userId'] != user_id]
+    
+    rooms_table.update_item(
+        Key={'roomCode': room_code},
+        UpdateExpression='SET members = :members',
+        ExpressionAttributeValues={':members': members}
+    )
+    
+    return {'roomCode': room_code, 'members': members}
+
 def get_room(room_code: str) -> dict:
     room = rooms_table.get_item(
         Key={'roomCode': room_code}

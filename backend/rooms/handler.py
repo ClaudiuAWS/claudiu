@@ -21,6 +21,9 @@ def handler(event, context):
         elif method == 'POST' and '/join' in path:
             return _join_room(event, user_id, display_name)
         
+        elif method == 'DELETE' and '/leave' in path:
+            return _leave_room(event, user_id)
+        
         else:
             return _response(404, {'error': 'Not found'})
     
@@ -51,6 +54,11 @@ def _join_room(event, user_id, display_name):
     room = service.join_room(room_code, user_id, display_name)
     return _response(200, room)
 
+def _leave_room(event, user_id):
+    room_code = event['pathParameters']['code']
+    result = service.leave_room(room_code, user_id)
+    return _response(200, result)
+
 def _response(status_code: int, body: dict) -> dict:
     return {
         'statusCode': status_code,
@@ -61,3 +69,4 @@ def _response(status_code: int, body: dict) -> dict:
         },
         'body': json.dumps(body, default=str)
     }
+    
