@@ -9,7 +9,7 @@ import ErrorBanner from '../components/ui/ErrorBanner'
 
 export default function LobbyPage() {
   const { user } = useAuth()
-  const { room, loading, error, clearError, createRoom, joinRoom, leaveRoom } = useRoom()
+  const { room, loading, error, clearError, createRoom, joinRoom, leaveRoom, send } = useRoom(user)
   const [mode, setMode] = useState('create')
 
 

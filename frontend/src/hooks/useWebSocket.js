@@ -9,7 +9,11 @@ export function useWebSocket({ roomCode, matchId, userId, displayName, onMessage
   const shouldReconnect = useRef(true)
 
   const connect = useCallback(() => {
-    if (!roomCode || !userId || !matchId) return
+        logger.info('WebSocket', 'Connect called', { roomCode, userId, matchId })
+  if (!roomCode || !userId || !matchId) {
+    logger.warn('WebSocket', 'Missing params, skipping connect', { roomCode, userId, matchId })
+    return
+  }
     if (ws.current?.readyState === WebSocket.OPEN) return
 
     const url = `${WS_URL}?roomCode=${roomCode}&userId=${userId}&matchId=${matchId}&displayName=${encodeURIComponent(displayName)}`
