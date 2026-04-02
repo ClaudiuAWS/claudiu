@@ -6,21 +6,12 @@ import MembersList from '../components/lobby/MembersList'
 import CreateRoom from '../components/lobby/CreateRoom'
 import JoinRoom from '../components/lobby/JoinRoom'
 import ErrorBanner from '../components/ui/ErrorBanner'
-import { fetchAuthSession } from 'aws-amplify/auth'
-import { useEffect } from 'react'
 
 export default function LobbyPage() {
   const { user } = useAuth()
   const { room, loading, error, clearError, createRoom, joinRoom, leaveRoom } = useRoom()
   const [mode, setMode] = useState('create')
 
-  useEffect(() => {
-  fetchAuthSession().then(s => {
-    console.log('tokens:', s.tokens)
-    console.log('idToken:', s.tokens?.idToken)
-    console.log('idToken string:', s.tokens?.idToken?.toString())
-  })
-}, [])
   if (room) {
     return (
       <div className="px-6 pt-12 space-y-4">
