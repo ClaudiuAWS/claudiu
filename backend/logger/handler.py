@@ -6,6 +6,7 @@ import boto3
 logs = boto3.client('logs')
 LOG_GROUP = os.environ['LOG_GROUP']
 
+# cicd
 
 def handler(event, context):
     try:
