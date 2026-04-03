@@ -1,8 +1,6 @@
-import { useState } from 'react'
-
 const MATCH_ID = 'DFL-MAT-111111'
 
-export default function CreateRoom({ onJoin, onSwitch, loading, error }) {
+export default function CreateRoom({ onJoin, onSwitch, loading }) {
   const handleCreate = () => onJoin(MATCH_ID)
 
   return (
@@ -10,9 +8,16 @@ export default function CreateRoom({ onJoin, onSwitch, loading, error }) {
       <button
         onClick={handleCreate}
         disabled={loading}
-        className="w-full bg-green-500 text-black font-bold py-4 rounded-2xl text-lg disabled:opacity-50 transition-opacity"
+        className="w-full bg-green-500 text-black font-bold py-4 rounded-2xl text-lg disabled:opacity-50 transition-all hover:bg-green-400 active:scale-95"
       >
-        {loading ? 'Creating...' : 'Create Squad'}
+        {loading ? (
+          <span className="flex items-center justify-center gap-2">
+            <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+            Creating...
+          </span>
+        ) : (
+          'Create Squad'
+        )}
       </button>
 
       <div className="flex items-center gap-3">
@@ -23,7 +28,8 @@ export default function CreateRoom({ onJoin, onSwitch, loading, error }) {
 
       <button
         onClick={onSwitch}
-        className="w-full bg-gray-900 text-white font-semibold py-4 rounded-2xl border border-gray-700"
+        disabled={loading}
+        className="w-full bg-gray-900 text-white font-semibold py-4 rounded-2xl border border-gray-700 hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50"
       >
         Join with Code
       </button>

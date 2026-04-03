@@ -5,18 +5,19 @@ import RoomCodeDisplay from '../components/lobby/RoomCodeDisplay'
 import MembersList from '../components/lobby/MembersList'
 import CreateRoom from '../components/lobby/CreateRoom'
 import JoinRoom from '../components/lobby/JoinRoom'
-import ErrorBanner from '../components/ui/ErrorBanner'
 
 export default function LobbyPage() {
   const { user } = useAuth()
-  const { room, loading, error, clearError, createRoom, joinRoom, leaveRoom } = useRoom()
+  const { room, loading, createRoom, joinRoom, leaveRoom } = useRoom()
   const [mode, setMode] = useState('create')
-
 
   if (loading) {
     return (
       <div className="px-6 pt-12 flex items-center justify-center min-h-64">
-        <p className="text-gray-400">Loading...</p>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-400 text-sm">Loading...</p>
+        </div>
       </div>
     )
   }
@@ -38,9 +39,10 @@ export default function LobbyPage() {
 
         <button
           onClick={leaveRoom}
-          className="w-full text-red-400 text-sm py-3 hover:text-red-300"
+          disabled={loading}
+          className="w-full text-red-400 text-sm py-3 hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
         >
-          {isHost ? 'Destroy room' : 'Leave room'}
+          {loading ? 'Leaving...' : isHost ? 'Destroy room' : 'Leave room'}
         </button>
       </div>
     )
@@ -57,14 +59,11 @@ export default function LobbyPage() {
         </p>
       </div>
 
-      <ErrorBanner message={error} onDismiss={clearError} />
-
       {mode === 'create' ? (
         <CreateRoom
           onJoin={createRoom}
           onSwitch={() => setMode('join')}
           loading={loading}
-          error={error}
         />
       ) : (
         <JoinRoom

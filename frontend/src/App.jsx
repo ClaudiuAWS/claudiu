@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute'
 import BottomNav from './components/BottomNav'
+import TopNav from './components/TopNav'
+import ToastProvider from './components/ToastProvider'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import ConfirmPage from './pages/ConfirmPage'
@@ -15,10 +17,13 @@ const Placeholder = ({ title }) => (
 )
 
 const Layout = ({ children }) => (
-  <div className="pb-24">
-    {children}
+  <>
+    <TopNav />
+    <div className="pt-16 pb-24">
+      {children}
+    </div>
     <BottomNav />
-  </div>
+  </>
 )
 
 export default function App() {
@@ -26,6 +31,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-950">
+      <ToastProvider />
       <Routes>
         <Route
           path="/login"

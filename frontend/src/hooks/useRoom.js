@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { roomsApi } from '../services/api'
 import { logger } from '../services/logger'
+import toast from 'react-hot-toast'
 
 const ROOM_CODE_KEY = 'fan_squad_room_code'
 
 export function useRoom() {
   const [room, setRoom] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
 
   // Restore room from localStorage on mount
   useEffect(() => {
@@ -48,7 +48,6 @@ export function useRoom() {
         const data = await roomsApi.get(room.roomCode)
         setRoom(data)
       } catch (err) {
-        // Room was deleted or no longer exists
         logger.warn('useRoom', 'Room no longer exists', err)
         localStorage.removeItem(ROOM_CODE_KEY)
         setRoom(null)
@@ -58,20 +57,19 @@ export function useRoom() {
     return () => clearInterval(interval)
   }, [room?.roomCode])
 
-  const clearError = () => setError('')
-
   const createRoom = async (matchId) => {
     setLoading(true)
-    setError('')
     try {
       const data = await roomsApi.create(matchId)
       setRoom(data)
       localStorage.setItem(ROOM_CODE_KEY, data.roomCode)
       logger.success('useRoom', 'Room created', data)
+      toast.success('Room created!')
       return data
     } catch (err) {
       logger.error('useRoom', 'Failed to create room', err)
-      setError(err.message)
+      toast.error(err.message || 'Failed to create room')
+      throw err
     } finally {
       setLoading(false)
     }
@@ -79,16 +77,17 @@ export function useRoom() {
 
   const joinRoom = async (roomCode) => {
     setLoading(true)
-    setError('')
     try {
       const data = await roomsApi.join(roomCode)
       setRoom(data)
       localStorage.setItem(ROOM_CODE_KEY, data.roomCode)
       logger.success('useRoom', 'Room joined', data)
+      toast.success('Joined room!')
       return data
     } catch (err) {
       logger.error('useRoom', 'Failed to join room', err)
-      setError(err.message)
+      toast.error(err.message || 'Failed to join room')
+      throw err
     } finally {
       setLoading(false)
     }
@@ -97,6 +96,7 @@ export function useRoom() {
   const leaveRoom = async () => {
     if (!room?.roomCode) return
     
+    setLoading(true)
     try {
       const result = await roomsApi.leave(room.roomCode)
       localStorage.removeItem(ROOM_CODE_KEY)
@@ -104,22 +104,24 @@ export function useRoom() {
       
       if (result.deleted) {
         logger.info('useRoom', 'Room was deleted')
+        toast.success('Room destroyed')
       } else {
         logger.success('useRoom', 'Left room')
+        toast.success('Left room')
       }
     } catch (err) {
       logger.error('useRoom', 'Failed to leave room', err)
-      // Clear local state anyway
       localStorage.removeItem(ROOM_CODE_KEY)
       setRoom(null)
+      toast.error(err.message || 'Failed to leave room')
+    } finally {
+      setLoading(false)
     }
   }
 
   return {
     room,
     loading,
-    error,
-    clearError,
     createRoom,
     joinRoom,
     leaveRoom,
