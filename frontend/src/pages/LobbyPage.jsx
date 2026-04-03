@@ -22,12 +22,14 @@ export default function LobbyPage() {
   }
 
   if (room) {
+    const isHost = room.hostUserId === user?.userId
+
     return (
       <div className="px-6 pt-12 space-y-4">
         <div>
           <h1 className="text-white text-2xl font-bold">Your Squad</h1>
           <p className="text-gray-400 text-sm mt-1">
-            Waiting for players to join
+            {isHost ? 'You are the host' : 'Waiting for players to join'}
           </p>
         </div>
 
@@ -36,9 +38,9 @@ export default function LobbyPage() {
 
         <button
           onClick={leaveRoom}
-          className="w-full text-gray-500 text-sm py-3"
+          className="w-full text-red-400 text-sm py-3 hover:text-red-300"
         >
-          Leave room
+          {isHost ? 'Destroy room' : 'Leave room'}
         </button>
       </div>
     )

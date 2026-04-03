@@ -48,7 +48,10 @@ export function useRoom() {
         const data = await roomsApi.get(room.roomCode)
         setRoom(data)
       } catch (err) {
-        logger.warn('useRoom', 'Poll failed', err)
+        // Room was deleted or no longer exists
+        logger.warn('useRoom', 'Room no longer exists', err)
+        localStorage.removeItem(ROOM_CODE_KEY)
+        setRoom(null)
       }
     }, 3000)
 
@@ -92,17 +95,24 @@ export function useRoom() {
   }
 
   const leaveRoom = async () => {
-    if (room?.roomCode) {
-      try {
-        await roomsApi.leave(room.roomCode)
-        logger.success('useRoom', 'Left room on server')
-      } catch (err) {
-        logger.warn('useRoom', 'Failed to leave room on server', err)
+    if (!room?.roomCode) return
+    
+    try {
+      const result = await roomsApi.leave(room.roomCode)
+      localStorage.removeItem(ROOM_CODE_KEY)
+      setRoom(null)
+      
+      if (result.deleted) {
+        logger.info('useRoom', 'Room was deleted')
+      } else {
+        logger.success('useRoom', 'Left room')
       }
+    } catch (err) {
+      logger.error('useRoom', 'Failed to leave room', err)
+      // Clear local state anyway
+      localStorage.removeItem(ROOM_CODE_KEY)
+      setRoom(null)
     }
-    localStorage.removeItem(ROOM_CODE_KEY)
-    setRoom(null)
-    logger.info('useRoom', 'Left room')
   }
 
   return {
