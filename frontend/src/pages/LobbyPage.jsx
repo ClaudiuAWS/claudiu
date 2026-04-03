@@ -5,6 +5,7 @@ import RoomCodeDisplay from '../components/lobby/RoomCodeDisplay'
 import MembersList from '../components/lobby/MembersList'
 import CreateRoom from '../components/lobby/CreateRoom'
 import JoinRoom from '../components/lobby/JoinRoom'
+import LoadingSpinner from '../components/ui/LoadingSpinner'
 
 export default function LobbyPage() {
   const { user } = useAuth()
@@ -12,14 +13,7 @@ export default function LobbyPage() {
   const [mode, setMode] = useState('create')
 
   if (loading) {
-    return (
-      <div className="px-6 pt-12 flex items-center justify-center min-h-64">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-sm">Loading...</p>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner />
   }
 
   if (room) {
