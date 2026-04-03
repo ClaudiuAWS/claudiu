@@ -61,7 +61,7 @@ export const getUser = async () => {
 export const getAccessToken = async () => {
   try {
     const session = await fetchAuthSession()
-    return session.tokens?.accessToken?.toString()
+    return session.tokens?.idToken?.toString()  // ID token, not access token
   } catch {
     logger.error('Auth', 'Failed to get access token')
     return null
