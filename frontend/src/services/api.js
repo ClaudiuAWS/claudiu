@@ -1,20 +1,12 @@
-import { fetchAuthSession } from 'aws-amplify/auth'
 import { logger } from './logger'
 import { getAccessToken } from './auth'
 
 const API_URL = import.meta.env.VITE_API_URL
 
-const getToken = async () => {
-  const session = await fetchAuthSession()
-  const token = session.tokens?.idToken?.toString()
-  console.log(token)
-  return token
-}
-
 const request = async (path, method = 'GET', body = null) => {
   logger.info('API', `${method} ${path}`, body ?? undefined)
 
-  const token = await getToken()
+  const token = await getAccessToken()
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
