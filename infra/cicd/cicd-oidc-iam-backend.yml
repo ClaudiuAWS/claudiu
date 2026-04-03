@@ -33,9 +33,7 @@ Resources:
                                                   - lambda:UpdateFunctionCode
                                                   - lambda:GetFunction
                                           Resource:
-                                                  - !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-rooms
-                                                  - !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-ws-connect
-                                                  - !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-ws-disconnect
+                                                  - !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-*
 
 Outputs:
         RoleArn:
