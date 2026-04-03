@@ -17,7 +17,12 @@ const request = async (path, method = 'GET', body = null) => {
     ...(body && { body: JSON.stringify(body) })
   })
 
-  const data = await res.json()
+  let data
+  try {
+    data = await res.json()
+  } catch {
+    data = { error: 'Invalid response from server' }
+  }
 
   if (!res.ok) {
     logger.error('API', `${method} ${path} failed ${res.status}`, data)
