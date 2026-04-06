@@ -1,12 +1,18 @@
+import { fetchAuthSession } from 'aws-amplify/auth'
 import { logger } from './logger'
-import { getAccessToken } from './auth'
 
 const API_URL = import.meta.env.VITE_API_URL
+
+const getToken = async () => {
+  const session = await fetchAuthSession()
+  const token = session.tokens?.idToken?.toString()
+  return token
+}
 
 const request = async (path, method = 'GET', body = null) => {
   logger.info('API', `${method} ${path}`, body ?? undefined)
 
-  const token = await getAccessToken()
+  const token = await getToken()
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
@@ -17,12 +23,7 @@ const request = async (path, method = 'GET', body = null) => {
     ...(body && { body: JSON.stringify(body) })
   })
 
-  let data
-  try {
-    data = await res.json()
-  } catch {
-    data = { error: 'Invalid response from server' }
-  }
+  const data = await res.json()
 
   if (!res.ok) {
     logger.error('API', `${method} ${path} failed ${res.status}`, data)
@@ -38,4 +39,10 @@ export const roomsApi = {
   get: (roomCode) => request(`/rooms/${roomCode}`),
   join: (roomCode) => request(`/rooms/${roomCode}/join`, 'POST'),
   leave: (roomCode) => request(`/rooms/${roomCode}/leave`, 'DELETE'),
+}
+
+export const matchesApi = {
+  list: () => request('/matches'),
+  get: (matchId) => request(`/matches/${matchId}`),
+  getEvents: (matchId) => request(`/matches/${matchId}/events`),
 }

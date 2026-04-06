@@ -26,6 +26,153 @@ Resources:
                                 - !Sub arn:aws:cognito-idp:eu-central-1:${AWS::AccountId}:userpool/eu-central-1_xMo5k0VLO
                         AuthorizerResultTtlInSeconds: 0
 
+        # /matches resource
+        MatchesResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !GetAtt RestApi.RootResourceId
+                        PathPart: matches
+
+        # /matches/{matchId} resource
+        MatchesIdResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !Ref MatchesResource
+                        PathPart: "{matchId}"
+
+        # /matches/{matchId}/events resource
+        MatchesEventsResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !Ref MatchesIdResource
+                        PathPart: events
+
+        # GET /matches
+        GetMatchesMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref MatchesResource
+                        HttpMethod: GET
+                        AuthorizationType: COGNITO_USER_POOLS
+                        AuthorizerId: !Ref CognitoAuthorizer
+                        Integration:
+                                Type: AWS_PROXY
+                                IntegrationHttpMethod: POST
+                                Uri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-matches/invocations
+
+        # GET /matches/{matchId}
+        GetMatchesIdMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref MatchesIdResource
+                        HttpMethod: GET
+                        AuthorizationType: COGNITO_USER_POOLS
+                        AuthorizerId: !Ref CognitoAuthorizer
+                        Integration:
+                                Type: AWS_PROXY
+                                IntegrationHttpMethod: POST
+                                Uri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-matches/invocations
+
+        # GET /matches/{matchId}/events
+        GetMatchesEventsMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref MatchesEventsResource
+                        HttpMethod: GET
+                        AuthorizationType: COGNITO_USER_POOLS
+                        AuthorizerId: !Ref CognitoAuthorizer
+                        Integration:
+                                Type: AWS_PROXY
+                                IntegrationHttpMethod: POST
+                                Uri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-matches/invocations
+
+        # CORS for /matches
+        MatchesOptionsMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref MatchesResource
+                        HttpMethod: OPTIONS
+                        AuthorizationType: NONE
+                        Integration:
+                                Type: MOCK
+                                IntegrationResponses:
+                                        - StatusCode: 200
+                                          ResponseParameters:
+                                                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+                                                  method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+                                                  method.response.header.Access-Control-Allow-Origin: "'*'"
+                                          ResponseTemplates:
+                                                  application/json: ""
+                                RequestTemplates:
+                                        application/json: '{"statusCode": 200}'
+                        MethodResponses:
+                                - StatusCode: 200
+                                  ResponseParameters:
+                                          method.response.header.Access-Control-Allow-Headers: true
+                                          method.response.header.Access-Control-Allow-Methods: true
+                                          method.response.header.Access-Control-Allow-Origin: true
+
+        # CORS for /matches/{matchId}
+        MatchesIdOptionsMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref MatchesIdResource
+                        HttpMethod: OPTIONS
+                        AuthorizationType: NONE
+                        Integration:
+                                Type: MOCK
+                                IntegrationResponses:
+                                        - StatusCode: 200
+                                          ResponseParameters:
+                                                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+                                                  method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+                                                  method.response.header.Access-Control-Allow-Origin: "'*'"
+                                          ResponseTemplates:
+                                                  application/json: ""
+                                RequestTemplates:
+                                        application/json: '{"statusCode": 200}'
+                        MethodResponses:
+                                - StatusCode: 200
+                                  ResponseParameters:
+                                          method.response.header.Access-Control-Allow-Headers: true
+                                          method.response.header.Access-Control-Allow-Methods: true
+                                          method.response.header.Access-Control-Allow-Origin: true
+
+        # CORS for /matches/{matchId}/events
+        MatchesEventsOptionsMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref MatchesEventsResource
+                        HttpMethod: OPTIONS
+                        AuthorizationType: NONE
+                        Integration:
+                                Type: MOCK
+                                IntegrationResponses:
+                                        - StatusCode: 200
+                                          ResponseParameters:
+                                                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+                                                  method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+                                                  method.response.header.Access-Control-Allow-Origin: "'*'"
+                                          ResponseTemplates:
+                                                  application/json: ""
+                                RequestTemplates:
+                                        application/json: '{"statusCode": 200}'
+                        MethodResponses:
+                                - StatusCode: 200
+                                  ResponseParameters:
+                                          method.response.header.Access-Control-Allow-Headers: true
+                                          method.response.header.Access-Control-Allow-Methods: true
+                                          method.response.header.Access-Control-Allow-Origin: true
+
         # ─────────────────────────────────────────
         # /rooms
         # ─────────────────────────────────────────
@@ -271,6 +418,14 @@ Resources:
                         Principal: apigateway.amazonaws.com
                         SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:${RestApi}/*
 
+        MatchesLambdaPermission:
+                Type: AWS::Lambda::Permission
+                Properties:
+                        FunctionName: claudiu-matches
+                        Action: lambda:InvokeFunction
+                        Principal: apigateway.amazonaws.com
+                        SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:${RestApi}/*
+
         AdminApiKey:
                 Type: AWS::ApiGateway::ApiKey
                 Properties:
@@ -302,13 +457,19 @@ Resources:
                 DependsOn:
                         - PostRoomsMethod
                         - GetRoomsCodeMethod
-                        - PostAdminMatchesStartMethod
                         - PostRoomsJoinMethod
                         - DeleteRoomsLeaveMethod
+                        - PostAdminMatchesStartMethod
+                        - GetMatchesMethod
+                        - GetMatchesIdMethod
+                        - GetMatchesEventsMethod
                         - RoomsOptionsMethod
                         - RoomsCodeOptionsMethod
                         - RoomsJoinOptionsMethod
                         - RoomsLeaveOptionsMethod
+                        - MatchesOptionsMethod
+                        - MatchesIdOptionsMethod
+                        - MatchesEventsOptionsMethod
                 Properties:
                         RestApiId: !Ref RestApi
 
