@@ -31,7 +31,7 @@ export default function EventItem({ event }) {
   }
 
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-gray-800 last:border-0">
+    <div className="match-event-in flex items-start gap-3 py-3 border-b border-gray-800 last:border-0">
       <span className="text-lg">{config.emoji}</span>
       <div className="flex-1">
         <div className="flex items-center gap-2">

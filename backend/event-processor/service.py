@@ -53,7 +53,25 @@ def process_event(
 
 def _handle_goal(match_id: str, game_time: str, data: dict) -> None:
     current_result = data.get('currentResult', '')
-    home_score, away_score = _parse_result(current_result)
+    new_home, new_away = _parse_result(current_result)
+
+    existing = matches_table.get_item(
+        Key={'matchId': match_id}, ConsistentRead=True
+    ).get('Item') or {}
+    old_home = _int_score(existing.get('homeScore', 0))
+    old_away = _int_score(existing.get('awayScore', 0))
+
+    new_total = new_home + new_away
+    old_total = old_home + old_away
+    # Goals can fire out of schedule order; a later goal may commit before an earlier one.
+    # Never lower total goals (e.g. 2:0 must not overwrite 3:0).
+    if new_total < old_total:
+        home_score, away_score = old_home, old_away
+    else:
+        home_score = max(old_home, new_home)
+        away_score = max(old_away, new_away)
+
+    minute = _merge_minute_value(existing.get('currentMinute'), game_time)
 
     matches_table.update_item(
         Key={'matchId': match_id},
@@ -61,10 +79,10 @@ def _handle_goal(match_id: str, game_time: str, data: dict) -> None:
         ExpressionAttributeValues={
             ':h': home_score,
             ':a': away_score,
-            ':m': game_time,
+            ':m': minute,
         }
     )
-    print(f"Goal processed — {current_result} at {game_time}")
+    print(f"Goal processed — {current_result} at {game_time} (board {home_score}:{away_score})")
 
 
 def _handle_halftime(match_id: str, game_time: str, data: dict) -> None:
@@ -108,10 +126,16 @@ def _handle_fulltime(match_id: str, game_time: str, data: dict) -> None:
 
 
 def _handle_minor_event(match_id: str, game_time: str) -> None:
+    # Cards/subs may be scheduled after a later gameTime goal (XML eventTime order).
+    # Never move the match clock backward.
+    existing = matches_table.get_item(
+        Key={'matchId': match_id}, ConsistentRead=True
+    ).get('Item') or {}
+    minute = _merge_minute_value(existing.get('currentMinute'), game_time)
     matches_table.update_item(
         Key={'matchId': match_id},
         UpdateExpression='SET currentMinute = :m',
-        ExpressionAttributeValues={':m': game_time}
+        ExpressionAttributeValues={':m': minute}
     )
 
 
@@ -144,11 +168,52 @@ def _parse_result(result: str) -> tuple:
         return 0, 0
 
 
+def _int_score(value) -> int:
+    if value is None:
+        return 0
+    if hasattr(value, 'as_tuple'):
+        return int(value)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _game_time_seconds(gt: str) -> int:
+    if not gt:
+        return -1
+    s = str(gt).strip()
+    parts = s.split(':')
+    if len(parts) != 2:
+        return -1
+    try:
+        return int(parts[0]) * 60 + int(parts[1])
+    except ValueError:
+        return -1
+
+
+def _merge_minute_value(current, proposed: str) -> str:
+    """Keep the later in-match clock; avoids out-of-order XML times rewinding the board."""
+    if proposed is None:
+        proposed = '00:00'
+    np = _game_time_seconds(str(proposed))
+    if np < 0:
+        return str(current) if current is not None else '00:00'
+    if current is None:
+        return str(proposed)
+    cp = _game_time_seconds(str(current))
+    if np >= cp:
+        return str(proposed)
+    return str(current)
+
+
 def _is_active_run(match_id: str, run_id: str) -> bool:
     if not run_id:
         return False
 
-    match = matches_table.get_item(Key={'matchId': match_id}).get('Item')
+    match = matches_table.get_item(
+        Key={'matchId': match_id}, ConsistentRead=True
+    ).get('Item')
     if not match:
         return False
     return match.get('activeRunId') == run_id

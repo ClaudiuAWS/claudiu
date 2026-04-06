@@ -24,6 +24,17 @@ export function gameTimeToSeconds(gameTime) {
   return -1
 }
 
+/** Latest known match-clock second among fired events (feed is ahead of match.currentMinute while polls race). */
+export function maxEventGameSeconds(events) {
+  if (!events?.length) return -1
+  let max = -1
+  for (const e of events) {
+    const s = gameTimeToSeconds(e.gameTime)
+    if (s > max) max = s
+  }
+  return max
+}
+
 function clockSortKey(event) {
   const sec = gameTimeToSeconds(event.gameTime)
   if (sec >= 0) return sec
@@ -34,8 +45,16 @@ function clockSortKey(event) {
   return Number.MAX_SAFE_INTEGER
 }
 
+function feedTimeKey(event) {
+  if (event.eventTime) {
+    const t = Date.parse(String(event.eventTime))
+    if (!Number.isNaN(t)) return t
+  }
+  return NaN
+}
+
 /**
- * Stable chronological order (earliest kickoff-first).
+ * Match-clock order (gameTime), then XML event time for same-minute events.
  */
 export function sortMatchEventsChronologically(events) {
   if (!events?.length) return []
@@ -44,6 +63,13 @@ export function sortMatchEventsChronologically(events) {
     const ka = clockSortKey(a)
     const kb = clockSortKey(b)
     if (ka !== kb) return ka - kb
+    const ta = feedTimeKey(a)
+    const tb = feedTimeKey(b)
+    if (!Number.isNaN(ta) && !Number.isNaN(tb) && ta !== tb) {
+      return ta - tb
+    }
+    if (!Number.isNaN(ta) && Number.isNaN(tb)) return -1
+    if (Number.isNaN(ta) && !Number.isNaN(tb)) return 1
     return String(a.eventId ?? '').localeCompare(String(b.eventId ?? ''))
   })
 }

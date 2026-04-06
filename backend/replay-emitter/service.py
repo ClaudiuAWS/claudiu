@@ -25,7 +25,7 @@ SKIP_EVENT_TYPES = {'kickoff'}
 
 def start_match(match_id: str, speed_multiplier: float) -> dict:
     match = _get_match(match_id)
-    events = _get_match_events(match_id)
+    events = _sort_events_for_schedule(_get_match_events(match_id))
     kickoff_time = _find_kickoff_time(match)
     run_id = datetime.now(timezone.utc).isoformat()
     run_tag = hashlib.sha256(run_id.encode()).hexdigest()[:8]
@@ -85,6 +85,34 @@ def _get_match_events(match_id: str) -> list:
         raise ValueError(f"No events found for match: {match_id}")
 
     return events
+
+
+def _sort_events_for_schedule(events: list) -> list:
+    """
+    DynamoDB query order is undefined. Schedule in the same order as the UI
+    (match clock, then eventTime) so later-fired events never insert above
+    earlier gameTime rows in the feed.
+    """
+    return sorted(events, key=_schedule_order_key)
+
+
+def _schedule_order_key(e: dict) -> tuple:
+    """Keep in sync with backend/matches/service.py _event_feed_order_key."""
+    gt = e.get("gameTime")
+    if gt is not None:
+        s = str(gt).strip()
+        parts = s.split(":")
+        if len(parts) == 2 and parts[0].isdigit() and len(parts[1]) == 2 and parts[1].isdigit():
+            try:
+                sec = int(parts[0]) * 60 + int(parts[1])
+                et = e.get("eventTime")
+                return (0, sec, str(et or ""), str(e.get("eventId", "")))
+            except ValueError:
+                pass
+    et = e.get("eventTime")
+    if et is not None:
+        return (1, str(et), str(e.get("eventId", "")))
+    return (2, "", str(e.get("eventId", "")))
 
 
 def _find_kickoff_time(match: dict) -> datetime:

@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+@keyframes match-event-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.match-event-in {
+  animation: match-event-in 0.22s ease-out;
+}

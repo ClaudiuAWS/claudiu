@@ -27,7 +27,7 @@ def get_match(match_id: str) -> dict:
 
 
 def get_match_events(match_id: str) -> list:
-    """Return fired events sorted by match clock (gameTime), not processing time."""
+    """Return fired events sorted by match clock (gameTime), then eventTime."""
     events = []
     kwargs = {
         'KeyConditionExpression': Key('matchId').eq(match_id),
@@ -41,11 +41,11 @@ def get_match_events(match_id: str) -> list:
             break
         kwargs['ExclusiveStartKey'] = lek
 
-    return sorted(events, key=_event_match_clock_key)
+    return sorted(events, key=_event_feed_order_key)
 
 
-def _event_match_clock_key(e: dict) -> tuple:
-    """Sort by in-game time (MM:SS), then eventId."""
+def _event_feed_order_key(e: dict) -> tuple:
+    """Sort by match clock MM:SS, then XML event time, then id."""
     gt = e.get('gameTime')
     if gt is not None:
         s = str(gt).strip()
@@ -53,7 +53,8 @@ def _event_match_clock_key(e: dict) -> tuple:
         if len(parts) == 2 and parts[0].isdigit() and len(parts[1]) == 2 and parts[1].isdigit():
             try:
                 sec = int(parts[0]) * 60 + int(parts[1])
-                return (0, sec, str(e.get('eventId', '')))
+                et = e.get('eventTime')
+                return (0, sec, str(et or ''), str(e.get('eventId', '')))
             except ValueError:
                 pass
     et = e.get('eventTime')

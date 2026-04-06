@@ -33,6 +33,8 @@ def parse_events(xml_path: str, players: dict) -> list:
 
     processed.sort(key=lambda e: e["eventTime"])
 
+    _recalculate_second_half_match_clock(processed)
+
     # Keep DynamoDB query order aligned with match chronology by prefixing
     # eventId with an incrementing sequence (zero-padded for lexical sorting).
     for idx, event in enumerate(processed, start=1):
@@ -75,6 +77,71 @@ def _calculate_game_time(event_time_str: str, kickoff_dt: datetime) -> Optional[
         return f"{minutes:02d}:{seconds:02d}"
     except Exception:
         return None
+
+
+def _mmss_to_seconds(mmss: Optional[str]) -> Optional[int]:
+    if not mmss:
+        return None
+    parts = str(mmss).strip().split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        return int(parts[0]) * 60 + int(parts[1])
+    except ValueError:
+        return None
+
+
+def _seconds_to_mmss(total: int) -> str:
+    t = max(0, int(total))
+    minutes, seconds = divmod(t, 60)
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def _recalculate_second_half_match_clock(processed: list) -> None:
+    """
+    Wall-clock offset from kickoff includes real half-time break, so second-half
+    events get inflated MM:SS (e.g. 68:30) while earlier subs look earlier (66:22).
+    From the second-half kickoff onward, use: halftime clock + elapsed since 2H kickoff.
+    """
+    halftime_sec = None
+    for e in processed:
+        if e.get("eventType") == EventType.HALFTIME:
+            halftime_sec = _mmss_to_seconds(e.get("gameTime"))
+            break
+    if halftime_sec is None:
+        return
+
+    sh = None
+    for e in processed:
+        if e.get("eventType") == EventType.SECOND_HALF:
+            sh = e
+            break
+    if not sh:
+        return
+
+    try:
+        sh_dt = datetime.fromisoformat(sh["eventTime"]).astimezone(timezone.utc)
+    except Exception:
+        return
+
+    # Second-half kickoff must sit right after halftime on the match clock. Do not
+    # rely on the loop below — rare et < sh_dt edge cases could skip this row and
+    # leave an inflated wall-clock MM:SS (~68:00), which sorts after 66:xx subs.
+    sh["gameTime"] = _seconds_to_mmss(halftime_sec + 1)
+
+    for e in processed:
+        if e is sh:
+            continue
+        try:
+            et = datetime.fromisoformat(e["eventTime"]).astimezone(timezone.utc)
+        except Exception:
+            continue
+        if et < sh_dt:
+            continue
+        extra = int((et - sh_dt).total_seconds())
+        if extra < 0:
+            extra = 0
+        e["gameTime"] = _seconds_to_mmss(halftime_sec + 1 + extra)
 
 
 def _process_event(raw_event: dict, players: dict) -> Optional[dict]:

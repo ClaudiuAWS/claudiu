@@ -15,7 +15,7 @@ export default function MatchPage() {
 
   return (
     <div className="px-4 pt-6 space-y-4 pb-24">
-      <Scoreboard match={match} />
+      <Scoreboard match={match} events={events} />
 
       {room && (
         <div className="bg-gray-900 rounded-2xl p-4">

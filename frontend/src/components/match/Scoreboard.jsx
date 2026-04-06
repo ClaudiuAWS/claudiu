@@ -6,8 +6,8 @@ const STATUS_LABEL = {
   fulltime: { text: 'FULL TIME', color: 'text-gray-400' },
 }
 
-export default function Scoreboard({ match }) {
-  const clock = useMatchClock(match)
+export default function Scoreboard({ match, events }) {
+  const clock = useMatchClock(match, events)
 
   if (!match) return null
 
