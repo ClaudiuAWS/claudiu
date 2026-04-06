@@ -1,3 +1,22 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Data files — too large for git
+data/positions.xml
+data/kpi.xml
+data/events.xml
+data/match.xml
+
+# Environment
+.env.local
+.env
 # Logs
 .DS_Store
 logs
