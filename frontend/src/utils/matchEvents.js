@@ -9,8 +9,16 @@ function coerceGameTime(gameTime) {
  * Supports "MM:SS" and legacy "23'" minute-only format.
  */
 export function gameTimeToSeconds(gameTime) {
+  if (typeof gameTime === 'number' && Number.isFinite(gameTime)) {
+    const n = Math.floor(gameTime)
+    if (n >= 0 && n <= 150 * 60) return n
+  }
   const trimmed = coerceGameTime(gameTime)
   if (!trimmed) return -1
+  if (/^\d+$/.test(trimmed)) {
+    const n = parseInt(trimmed, 10)
+    if (n >= 0 && n <= 150 * 60) return n
+  }
   const mmss = trimmed.match(/^(\d+):(\d{1,2})$/)
   if (mmss) {
     return parseInt(mmss[1], 10) * 60 + parseInt(mmss[2], 10)
@@ -77,5 +85,15 @@ export function sortMatchEventsChronologically(events) {
 /** Newest / latest match-clock events first (for the live feed list). */
 export function sortMatchEventsNewestFirst(events) {
   if (!events?.length) return []
-  return [...sortMatchEventsChronologically(events)].reverse()
+  return [...events].sort((a, b) => {
+    const ka = clockSortKey(a)
+    const kb = clockSortKey(b)
+    if (ka !== kb) return kb - ka
+    const ta = feedTimeKey(a)
+    const tb = feedTimeKey(b)
+    if (!Number.isNaN(ta) && !Number.isNaN(tb) && ta !== tb) return tb - ta
+    if (!Number.isNaN(ta) && Number.isNaN(tb)) return 1
+    if (Number.isNaN(ta) && !Number.isNaN(tb)) return -1
+    return String(b.eventId ?? '').localeCompare(String(a.eventId ?? ''))
+  })
 }

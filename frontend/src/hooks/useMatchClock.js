@@ -1,13 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { maxEventGameSeconds } from '../utils/matchEvents'
-
-function parseMmSs(s) {
-  if (s == null) return 0
-  const str = typeof s === 'string' ? s.trim() : String(s).trim()
-  const m = str.match(/^(\d+):(\d{2})$/)
-  if (!m) return 0
-  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10)
-}
+import { gameTimeToSeconds, maxEventGameSeconds } from '../utils/matchEvents'
 
 function formatMmSs(totalSeconds) {
   const t = Math.max(0, Math.floor(totalSeconds))
@@ -47,7 +39,8 @@ export function useMatchClock(match, events) {
     if (!match?.currentMinute) return
     const srv = String(match.currentMinute).trim()
     if (srv === lastServerMinuteRef.current) return
-    const gs = parseMmSs(srv)
+    const raw = gameTimeToSeconds(srv)
+    const gs = raw >= 0 ? raw : 0
     // Reject only when server minute moves backward vs last accepted (out-of-order write).
     // Do not compare to local extrapolation — with speedMultiplier>1 the client can run
     // ahead of discrete server updates until the next poll; that must not block valid snaps.

@@ -193,9 +193,10 @@ def _schedule_events(
         if fire_at <= last_fire_at:
             fire_at = last_fire_at + timedelta(seconds=1)
 
+        # Never skip: a dropped schedule leaves holes in the feed while the scoreboard
+        # can still jump from a later event (e.g. 4:0) that did run.
         if fire_at <= now:
-            print(f"Skipping past event {event['eventId']} at {fire_at}")
-            continue
+            fire_at = last_fire_at + timedelta(seconds=1)
 
         _create_schedule(match_id, event, fire_at, run_id, run_tag, schedules_created)
         schedules_created += 1
