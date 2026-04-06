@@ -10,14 +10,19 @@ match_events_table = dynamodb.Table(os.environ['MATCH_EVENTS_TABLE'])
 
 def process_event(
     match_id: str,
+    run_id: str,
     event_id: str,
     event_type: str,
     game_time: str,
     data: dict,
 ) -> None:
+    if not _is_active_run(match_id, run_id):
+        print(f"Skipping stale event {event_id} for run {run_id}")
+        return
+
     # Mark only persisted match events as fired.
     if event_type != 'clocktick':
-        _mark_event_fired(match_id, event_id)
+        _mark_event_fired(match_id, event_id, run_id)
 
     # Route to correct handler
     if event_type == 'goal':
@@ -122,13 +127,14 @@ def _handle_clock_tick(match_id: str, game_time: str) -> None:
 # Private helpers
 # ─────────────────────────────────────────
 
-def _mark_event_fired(match_id: str, event_id: str) -> None:
+def _mark_event_fired(match_id: str, event_id: str, run_id: str) -> None:
     match_events_table.update_item(
         Key={'matchId': match_id, 'eventId': event_id},
-        UpdateExpression='SET fired = :f, firedAt = :t',
+        UpdateExpression='SET fired = :f, firedAt = :t, firedRunId = :r',
         ExpressionAttributeValues={
             ':f': True,
             ':t': datetime.now(timezone.utc).isoformat(),
+            ':r': run_id,
         }
     )
 
@@ -139,3 +145,13 @@ def _parse_result(result: str) -> tuple:
         return int(parts[0]), int(parts[1])
     except Exception:
         return 0, 0
+
+
+def _is_active_run(match_id: str, run_id: str) -> bool:
+    if not run_id:
+        return False
+
+    match = matches_table.get_item(Key={'matchId': match_id}).get('Item')
+    if not match:
+        return False
+    return match.get('activeRunId') == run_id

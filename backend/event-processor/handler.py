@@ -8,6 +8,7 @@ def handler(event, context):
     try:
         process_event(
             match_id   = event['matchId'],
+            run_id     = event.get('runId'),
             event_id   = event['eventId'],
             event_type = event['eventType'],
             game_time  = event.get('gameTime'),

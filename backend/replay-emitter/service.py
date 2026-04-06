@@ -23,16 +23,18 @@ def start_match(match_id: str, speed_multiplier: float) -> dict:
     match = _get_match(match_id)
     events = _get_match_events(match_id)
     kickoff_time = _find_kickoff_time(match)  
-    _mark_match_live(match_id, speed_multiplier)
+    run_id = datetime.now(timezone.utc).isoformat()
+    _mark_match_live(match_id, speed_multiplier, run_id)
     tick_schedules = _schedule_clock_ticks(
-        match_id, events, kickoff_time, speed_multiplier
+        match_id, events, kickoff_time, speed_multiplier, run_id
     )
     schedules_created = _schedule_events(
-        match_id, events, kickoff_time, speed_multiplier
+        match_id, events, kickoff_time, speed_multiplier, run_id
     )
     return {
         'matchId':          match_id,
         'status':           'live',
+        'runId':            run_id,
         'schedulesCreated': schedules_created + tick_schedules,
         'eventSchedules':   schedules_created,
         'tickSchedules':    tick_schedules,
@@ -76,15 +78,16 @@ def _find_kickoff_time(match: dict) -> datetime:
     return datetime.fromisoformat(kickoff).astimezone(timezone.utc)
 
 
-def _mark_match_live(match_id: str, speed_multiplier: float) -> None:
+def _mark_match_live(match_id: str, speed_multiplier: float, run_id: str) -> None:
     matches_table.update_item(
         Key={'matchId': match_id},
-        UpdateExpression='SET #s = :s, startedAt = :t, speedMultiplier = :m',
+        UpdateExpression='SET #s = :s, startedAt = :t, speedMultiplier = :m, activeRunId = :r',
         ExpressionAttributeNames={'#s': 'status'},
         ExpressionAttributeValues={
             ':s': 'live',
             ':t': datetime.now(timezone.utc).isoformat(),
             ':m': str(speed_multiplier),
+            ':r': run_id,
         }
     )
     print(f"Match {match_id} marked as live")
@@ -94,7 +97,8 @@ def _schedule_events(
     match_id: str,
     events: list,
     kickoff_time: datetime,
-    speed_multiplier: float
+    speed_multiplier: float,
+    run_id: str
 ) -> int:
     now = datetime.now(timezone.utc)
     schedules_created = 0
@@ -120,7 +124,7 @@ def _schedule_events(
             print(f"Skipping past event {event['eventId']} at {fire_at}")
             continue
 
-        _create_schedule(match_id, event, fire_at)
+        _create_schedule(match_id, event, fire_at, run_id)
         schedules_created += 1
         last_fire_at = fire_at
 
@@ -128,11 +132,12 @@ def _schedule_events(
     return schedules_created
 
 
-def _create_schedule(match_id: str, event: dict, fire_at: datetime) -> None:
+def _create_schedule(match_id: str, event: dict, fire_at: datetime, run_id: str) -> None:
     schedule_name = f"m{match_id[-6:]}-e{event['eventId'][-10:]}"
 
     payload = {
         'matchId':   match_id,
+        'runId':     run_id,
         'eventId':   event['eventId'],
         'eventType': event['eventType'],
         'gameTime':  event.get('gameTime'),
@@ -160,7 +165,8 @@ def _schedule_clock_ticks(
     match_id: str,
     events: list,
     kickoff_time: datetime,
-    speed_multiplier: float
+    speed_multiplier: float,
+    run_id: str
 ) -> int:
     """Schedule synthetic per-second ticks so clock advances continuously."""
     if speed_multiplier <= 0:
@@ -186,7 +192,7 @@ def _schedule_clock_ticks(
         minutes, seconds = divmod(game_second, 60)
         game_time = f"{minutes:02d}:{seconds:02d}"
         fire_at = now + timedelta(seconds=replay_second)
-        _create_tick_schedule(match_id, replay_second, game_time, fire_at)
+        _create_tick_schedule(match_id, replay_second, game_time, fire_at, run_id)
         created += 1
 
     print(f"Created {created} clock tick schedules")
@@ -197,11 +203,13 @@ def _create_tick_schedule(
     match_id: str,
     replay_second: int,
     game_time: str,
-    fire_at: datetime
+    fire_at: datetime,
+    run_id: str
 ) -> None:
     schedule_name = f"m{match_id[-6:]}-t{replay_second:04d}"
     payload = {
         'matchId': match_id,
+        'runId': run_id,
         'eventId': f"tick-{replay_second:04d}",
         'eventType': 'clocktick',
         'gameTime': game_time,
