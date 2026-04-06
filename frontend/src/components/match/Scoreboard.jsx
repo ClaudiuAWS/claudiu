@@ -1,3 +1,5 @@
+import { useMatchClock } from '../../hooks/useMatchClock'
+
 const STATUS_LABEL = {
   live:     { text: 'LIVE',      color: 'text-green-400 animate-pulse' },
   halftime: { text: 'HALF TIME', color: 'text-yellow-400' },
@@ -5,6 +7,8 @@ const STATUS_LABEL = {
 }
 
 export default function Scoreboard({ match }) {
+  const clock = useMatchClock(match)
+
   if (!match) return null
 
   const status = STATUS_LABEL[match.status]
@@ -18,8 +22,8 @@ export default function Scoreboard({ match }) {
               {status.text}
             </div>
             {match.currentMinute && (
-              <div className="text-gray-500 text-xs">
-                {match.currentMinute}
+              <div className="text-gray-500 text-xs tabular-nums">
+                {clock}
               </div>
             )}
           </>

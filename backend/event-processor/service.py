@@ -116,11 +116,8 @@ def _handle_minor_event(match_id: str, game_time: str) -> None:
 
 
 def _handle_clock_tick(match_id: str, game_time: str) -> None:
-    matches_table.update_item(
-        Key={'matchId': match_id},
-        UpdateExpression='SET currentMinute = :m',
-        ExpressionAttributeValues={':m': game_time}
-    )
+    # Legacy: ticks disabled in replay-emitter; ignore any in-flight schedules.
+    return
 
 
 # ─────────────────────────────────────────

@@ -32,9 +32,10 @@ def start_match(match_id: str, speed_multiplier: float) -> dict:
 
     try:
         _mark_match_live(match_id, speed_multiplier, run_id)
-        tick_schedules = _schedule_clock_ticks(
-            match_id, events, kickoff_time, speed_multiplier, run_id, run_tag
-        )
+        # Do not schedule per-second clock ticks: they advance time through half-time
+        # and race with event updates (causing random jumps). Match clock is driven by
+        # events on the server + smooth client-side display in the UI.
+        tick_schedules = 0
         schedules_created = _schedule_events(
             match_id, events, kickoff_time, speed_multiplier, run_id, run_tag
         )
