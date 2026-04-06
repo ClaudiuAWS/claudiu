@@ -178,6 +178,11 @@ def _schedule_events(
     Feed gameTime is continuous across half-time (51:00 → 51:01); XML timestamps
     can still be out of order, which used to schedule 2H subs before the second-half
     row and left the board on half-time while late-clock events appeared.
+
+    EventBridge one-shot schedules use **second** resolution. Sub-second wall gaps
+    collapse to the same `at(…:SS)` so multiple Lambdas run together and **finish**
+    in arbitrary order — e.g. 67' goal before 51' half-time in Dynamo even when
+    gameTime order is correct.
     """
     now = datetime.now(timezone.utc)
     schedules_created = 0
@@ -194,17 +199,20 @@ def _schedule_events(
                 delta_match = max(1, sec)
             else:
                 delta_match = max(1, sec - prev_match_sec)
-            fire_at = last_fire_at + timedelta(seconds=delta_match / speed_multiplier)
+            wall_seconds = delta_match / speed_multiplier
+            step = max(1, math.ceil(wall_seconds - 1e-12))
+            fire_at = last_fire_at + timedelta(seconds=step)
             prev_match_sec = sec
         else:
             event_time = datetime.fromisoformat(
                 event['eventTime']
             ).astimezone(timezone.utc)
             offset_seconds = (event_time - kickoff_time).total_seconds()
-            fire_at = now + timedelta(seconds=offset_seconds / speed_multiplier)
-
-        if fire_at <= last_fire_at:
-            fire_at = last_fire_at + timedelta(seconds=1)
+            wall_seconds = offset_seconds / speed_multiplier
+            ideal = now + timedelta(seconds=wall_seconds)
+            raw_gap = (ideal - last_fire_at).total_seconds()
+            step = max(1, math.ceil(raw_gap - 1e-12))
+            fire_at = last_fire_at + timedelta(seconds=step)
 
         if fire_at <= now:
             fire_at = last_fire_at + timedelta(seconds=1)
