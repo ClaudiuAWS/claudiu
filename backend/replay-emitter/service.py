@@ -21,21 +21,17 @@ SKIP_EVENT_TYPES = {'kickoff'}
 def start_match(match_id: str, speed_multiplier: float) -> dict:
     match = _get_match(match_id)
     events = _get_match_events(match_id)
-    kickoff_time = _find_kickoff_time(events)
-
+    kickoff_time = _find_kickoff_time(match)  
     _mark_match_live(match_id, speed_multiplier)
-
     schedules_created = _schedule_events(
         match_id, events, kickoff_time, speed_multiplier
     )
-
     return {
         'matchId':          match_id,
         'status':           'live',
         'schedulesCreated': schedules_created,
         'speedMultiplier':  speed_multiplier,
     }
-
 
 # ─────────────────────────────────────────
 # Private helpers
