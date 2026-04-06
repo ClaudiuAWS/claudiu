@@ -33,6 +33,12 @@ def parse_events(xml_path: str, players: dict) -> list:
 
     processed.sort(key=lambda e: e["eventTime"])
 
+    # Keep DynamoDB query order aligned with match chronology by prefixing
+    # eventId with an incrementing sequence (zero-padded for lexical sorting).
+    for idx, event in enumerate(processed, start=1):
+        original_id = event["eventId"]
+        event["eventId"] = f"{idx:06d}#{original_id}"
+
     print(f"  Found {len(processed)} relevant events out of {len(raw_events)} total")
     return processed
 
@@ -56,16 +62,17 @@ def _find_kickoff(raw_events: list) -> Optional[datetime]:
 
 def _calculate_game_time(event_time_str: str, kickoff_dt: datetime) -> Optional[str]:
     """
-    Calculate match minute from EventTime and kickoff time.
-    Returns "23'" format.
+    Calculate elapsed game time from EventTime and kickoff time.
+    Returns "MM:SS" format.
     """
     try:
         event_dt = datetime.fromisoformat(event_time_str).astimezone(timezone.utc)
         offset_seconds = (event_dt - kickoff_dt).total_seconds()
         if offset_seconds < 0:
-            return "0'"
-        minutes = int(offset_seconds // 60) + 1
-        return f"{minutes}'"
+            return "00:00"
+        elapsed = int(offset_seconds)
+        minutes, seconds = divmod(elapsed, 60)
+        return f"{minutes:02d}:{seconds:02d}"
     except Exception:
         return None
 

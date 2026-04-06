@@ -2,6 +2,7 @@ import boto3
 import time
 from decimal import Decimal
 from boto3 import Session
+from boto3.dynamodb.conditions import Key
 from constants import (
     MATCHES_TABLE,
     MATCH_EVENTS_TABLE,
@@ -25,6 +26,10 @@ def write_match(match: dict) -> None:
 def write_events(events: list) -> None:
     table = dynamodb.Table(MATCH_EVENTS_TABLE)
     ttl = int(time.time()) + MATCH_TTL_SECONDS
+    match_id = events[0]["matchId"] if events else None
+
+    if match_id:
+        _delete_existing_events(table, match_id)
 
     with table.batch_writer() as batch:
         for event in events:
@@ -73,3 +78,27 @@ def _clean(obj):
     if isinstance(obj, float):
         return Decimal(str(obj))
     return obj
+
+
+def _delete_existing_events(table, match_id: str) -> None:
+    """Remove previous events for this match to avoid duplicates/stale order."""
+    query_kwargs = {"KeyConditionExpression": Key("matchId").eq(match_id)}
+    deleted = 0
+
+    while True:
+        response = table.query(**query_kwargs)
+        items = response.get("Items", [])
+
+        if items:
+            with table.batch_writer() as batch:
+                for item in items:
+                    batch.delete_item(Key={"matchId": item["matchId"], "eventId": item["eventId"]})
+                    deleted += 1
+
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        query_kwargs["ExclusiveStartKey"] = last_key
+
+    if deleted:
+        print(f"  🧹 Deleted {deleted} existing events for {match_id}")
