@@ -67,18 +67,11 @@ def _get_match_events(match_id: str) -> list:
     return events
 
 
-def _find_kickoff_time(events: list) -> datetime:
-    kickoff = next(
-        (e for e in events if e['eventType'] == 'kickoff'),
-        None
-    )
-
+def _find_kickoff_time(match: dict) -> datetime:
+    kickoff = match.get('kickoffTime')
     if not kickoff:
-        raise ValueError('No kickoff event found')
-
-    return datetime.fromisoformat(
-        kickoff['eventTime']
-    ).astimezone(timezone.utc)
+        raise ValueError('No kickoff time on match record')
+    return datetime.fromisoformat(kickoff).astimezone(timezone.utc)
 
 
 def _mark_match_live(match_id: str, speed_multiplier: float) -> None:

@@ -1,5 +1,5 @@
 import xmltodict
-from constants import POSITION_NAMES
+from constants import POSITION_NAMES, MATCH_ID, KICKOFF_TIME
 
 def parse_match(xml_path: str) -> dict:
     with open(xml_path, "r", encoding="utf-8") as f:
@@ -27,14 +27,14 @@ def parse_match(xml_path: str) -> dict:
 
 def _parse_general(general: dict, environment: dict) -> dict:
     return {
-        "matchId":        general["@MatchId"],
+        "matchId":        MATCH_ID,
         "homeTeamId":     general["@HomeTeamId"],
         "homeTeamName":   general["@HomeTeamName"],
         "awayTeamId":     general["@GuestTeamId"],
         "awayTeamName":   general["@GuestTeamName"],
         "homeFormation":  None,  # filled in from Teams
         "awayFormation":  None,  # filled in from Teams
-        "kickoffTime":    general["@KickoffTime"],
+        "kickoffTime":    KICKOFF_TIME,
         "stadium":        environment["@StadiumName"],
         "spectators":     int(environment["@NumberOfSpectators"]),
         "homeScore":      0,

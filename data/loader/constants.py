@@ -6,6 +6,19 @@ MATCHES_TABLE = "claudiu-matches"
 MATCH_EVENTS_TABLE = "claudiu-match-events"
 PLAYER_LOOKUP_TABLE = "claudiu-player-lookup"
 
+# -----------------------------------------
+# Match ID
+# -----------------------------------------
+
+MATCH_ID = "DFL-MAT-111111"
+
+# -----------------------------------------
+# Kickoff Time
+# -----------------------------------------
+
+KICKOFF_TIME = "2025-01-01T14:30:17.210+00:00"
+
+
 # ─────────────────────────────────────────
 # File Paths (relative to data/ folder)
 # ─────────────────────────────────────────
