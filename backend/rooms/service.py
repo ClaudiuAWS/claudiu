@@ -7,6 +7,7 @@ from boto3.dynamodb.conditions import Attr
 
 dynamodb = boto3.resource('dynamodb')
 rooms_table = dynamodb.Table(os.environ['ROOMS_TABLE'])
+matches_table = dynamodb.Table(os.environ['MATCHES_TABLE'])
 
 
 def generate_room_code():
@@ -27,12 +28,18 @@ def create_room(match_id: str, user_id: str, display_name: str) -> dict:
     if existing_room:
         raise ValueError('You are already in a room. Leave it first.')
     
+    match = matches_table.get_item(Key={'matchId': match_id}).get('Item')
+    if not match:
+        raise ValueError('Match not found')
+    
     for _ in range(5):
         room_code = generate_room_code()
         if not rooms_table.get_item(Key={'roomCode': room_code}).get('Item'):
             break
     else:
         raise RuntimeError('Failed to generate unique room code')
+    
+    
     
     room = {
         'roomCode': room_code,
