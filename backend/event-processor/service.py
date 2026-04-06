@@ -15,9 +15,9 @@ def process_event(
     game_time: str,
     data: dict,
 ) -> None:
-
-    # Mark event as fired in DynamoDB
-    _mark_event_fired(match_id, event_id)
+    # Mark only persisted match events as fired.
+    if event_type != 'clocktick':
+        _mark_event_fired(match_id, event_id)
 
     # Route to correct handler
     if event_type == 'goal':
@@ -34,6 +34,9 @@ def process_event(
 
     elif event_type in ('card', 'substitution'):
         _handle_minor_event(match_id, game_time)
+
+    elif event_type == 'clocktick':
+        _handle_clock_tick(match_id, game_time)
 
     else:
         print(f"Unknown event type: {event_type}")
@@ -100,6 +103,14 @@ def _handle_fulltime(match_id: str, game_time: str, data: dict) -> None:
 
 
 def _handle_minor_event(match_id: str, game_time: str) -> None:
+    matches_table.update_item(
+        Key={'matchId': match_id},
+        UpdateExpression='SET currentMinute = :m',
+        ExpressionAttributeValues={':m': game_time}
+    )
+
+
+def _handle_clock_tick(match_id: str, game_time: str) -> None:
     matches_table.update_item(
         Key={'matchId': match_id},
         UpdateExpression='SET currentMinute = :m',

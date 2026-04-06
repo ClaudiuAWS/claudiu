@@ -1,4 +1,5 @@
 import xmltodict
+import re
 from constants import POSITION_NAMES, MATCH_ID, KICKOFF_TIME
 
 def parse_match(xml_path: str) -> dict:
@@ -61,7 +62,7 @@ def _parse_teams(teams_raw, match_id: str) -> dict:
         team_id   = team["@TeamId"]
         team_name = team["@TeamName"]
         role      = team["@Role"]        # "home" or "guest"
-        formation = team["@LineUp"]
+        formation = _normalize_formation(team.get("@LineUp", ""))
         team_role = "home" if role == "home" else "away"
 
         formations[team_role] = formation
@@ -89,6 +90,18 @@ def _parse_teams(teams_raw, match_id: str) -> dict:
             }
 
     return players, formations
+
+
+def _normalize_formation(raw_formation: str) -> str:
+    """
+    Extract a canonical formation token like 4-2-3-1.
+    Falls back to the raw input when no clear token is found.
+    """
+    if not raw_formation:
+        return raw_formation
+
+    match = re.search(r"\b\d+(?:-\d+){2,3}\b", raw_formation)
+    return match.group(0) if match else raw_formation
 
 
 def _build_display_name(player: dict, team_role: str) -> str:
