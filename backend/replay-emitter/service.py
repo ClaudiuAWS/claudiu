@@ -173,28 +173,39 @@ def _schedule_events(
     run_id: str,
     run_tag: str
 ) -> int:
+    """
+    Space fires by **match-clock** deltas (gameTime), not XML wall time vs kickoff.
+    Feed gameTime is continuous across half-time (51:00 → 51:01); XML timestamps
+    can still be out of order, which used to schedule 2H subs before the second-half
+    row and left the board on half-time while late-clock events appeared.
+    """
     now = datetime.now(timezone.utc)
     schedules_created = 0
     last_fire_at = now
+    prev_match_sec = None
 
     for event in events:
         if event['eventType'] in SKIP_EVENT_TYPES:
             continue
 
-        event_time = datetime.fromisoformat(
-            event['eventTime']
-        ).astimezone(timezone.utc)
+        sec = _game_clock_seconds(event.get('gameTime'))
+        if sec is not None and speed_multiplier > 0:
+            if prev_match_sec is None:
+                delta_match = max(1, sec)
+            else:
+                delta_match = max(1, sec - prev_match_sec)
+            fire_at = last_fire_at + timedelta(seconds=delta_match / speed_multiplier)
+            prev_match_sec = sec
+        else:
+            event_time = datetime.fromisoformat(
+                event['eventTime']
+            ).astimezone(timezone.utc)
+            offset_seconds = (event_time - kickoff_time).total_seconds()
+            fire_at = now + timedelta(seconds=offset_seconds / speed_multiplier)
 
-        offset_seconds = (event_time - kickoff_time).total_seconds()
-        fire_at = now + timedelta(seconds=offset_seconds / speed_multiplier)
-
-        # EventBridge schedules have second-level resolution; ensure
-        # chronological events never collapse to the same timestamp.
         if fire_at <= last_fire_at:
             fire_at = last_fire_at + timedelta(seconds=1)
 
-        # Never skip: a dropped schedule leaves holes in the feed while the scoreboard
-        # can still jump from a later event (e.g. 4:0) that did run.
         if fire_at <= now:
             fire_at = last_fire_at + timedelta(seconds=1)
 
