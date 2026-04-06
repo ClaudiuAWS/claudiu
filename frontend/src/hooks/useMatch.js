@@ -51,7 +51,7 @@ export function useMatch(matchId) {
     const interval = setInterval(() => {
       fetchMatch()
       fetchEvents()
-    }, 3000)
+    }, 1000)
 
     return () => clearInterval(interval)
   }, [matchId])

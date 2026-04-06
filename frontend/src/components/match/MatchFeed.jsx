@@ -1,4 +1,5 @@
 import EventItem from './EventItem'
+import { sortMatchEventsChronologically } from '../../utils/matchEvents'
 
 export default function MatchFeed({ events }) {
   if (!events?.length) {
@@ -9,12 +10,14 @@ export default function MatchFeed({ events }) {
     )
   }
 
+  const ordered = sortMatchEventsChronologically(events)
+
   return (
     <div className="bg-gray-900 rounded-2xl px-4">
       <p className="text-gray-400 text-sm py-3 border-b border-gray-800">
         Match Events
       </p>
-      {[...events].reverse().map(event => (
+      {ordered.map(event => (
         <EventItem key={event.eventId} event={event} />
       ))}
     </div>
