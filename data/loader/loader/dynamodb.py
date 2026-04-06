@@ -1,3 +1,4 @@
+import os
 import boto3
 import time
 from decimal import Decimal
@@ -11,7 +12,8 @@ from constants import (
     AWS_REGION,
 )
 
-session = Session(profile_name="hackathon", region_name=AWS_REGION)
+_profile = os.environ.get("AWS_PROFILE") or "hackathon"
+session = Session(profile_name=_profile, region_name=AWS_REGION)
 dynamodb = session.resource("dynamodb")
 
 
