@@ -1,4 +1,5 @@
 import json
+import traceback
 from service import start_match
 
 
@@ -16,8 +17,11 @@ def handler(event, context):
     except ValueError as e:
         return _response(400, {'error': str(e)})
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
-        return _response(500, {'error': 'Internal server error'})
+        print(traceback.format_exc())
+        return _response(500, {
+            'error': 'Internal server error',
+            'detail': str(e),
+        })
 
 
 def _response(status_code: int, body: dict) -> dict:

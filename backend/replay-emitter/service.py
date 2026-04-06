@@ -2,8 +2,12 @@ import json
 import boto3
 import os
 import math
+import hashlib
 from datetime import datetime, timezone, timedelta
 from boto3.dynamodb.conditions import Key
+
+# Avoid Lambda timeouts / account limits from huge tick storms (e.g. speedMultiplier=1).
+_MAX_TICK_SCHEDULES = 4000
 
 dynamodb = boto3.resource('dynamodb')
 scheduler = boto3.client('scheduler')
@@ -22,24 +26,30 @@ SKIP_EVENT_TYPES = {'kickoff'}
 def start_match(match_id: str, speed_multiplier: float) -> dict:
     match = _get_match(match_id)
     events = _get_match_events(match_id)
-    kickoff_time = _find_kickoff_time(match)  
+    kickoff_time = _find_kickoff_time(match)
     run_id = datetime.now(timezone.utc).isoformat()
-    _mark_match_live(match_id, speed_multiplier, run_id)
-    tick_schedules = _schedule_clock_ticks(
-        match_id, events, kickoff_time, speed_multiplier, run_id
-    )
-    schedules_created = _schedule_events(
-        match_id, events, kickoff_time, speed_multiplier, run_id
-    )
-    return {
-        'matchId':          match_id,
-        'status':           'live',
-        'runId':            run_id,
-        'schedulesCreated': schedules_created + tick_schedules,
-        'eventSchedules':   schedules_created,
-        'tickSchedules':    tick_schedules,
-        'speedMultiplier':  speed_multiplier,
-    }
+    run_tag = hashlib.sha256(run_id.encode()).hexdigest()[:8]
+
+    try:
+        _mark_match_live(match_id, speed_multiplier, run_id)
+        tick_schedules = _schedule_clock_ticks(
+            match_id, events, kickoff_time, speed_multiplier, run_id, run_tag
+        )
+        schedules_created = _schedule_events(
+            match_id, events, kickoff_time, speed_multiplier, run_id, run_tag
+        )
+        return {
+            'matchId':          match_id,
+            'status':           'live',
+            'runId':            run_id,
+            'schedulesCreated': schedules_created + tick_schedules,
+            'eventSchedules':   schedules_created,
+            'tickSchedules':    tick_schedules,
+            'speedMultiplier':  speed_multiplier,
+        }
+    except Exception:
+        _reset_match_after_failed_start(match_id)
+        raise
 
 # ─────────────────────────────────────────
 # Private helpers
@@ -60,10 +70,15 @@ def _get_match(match_id: str) -> dict:
 
 
 def _get_match_events(match_id: str) -> list:
-    response = match_events_table.query(
-        KeyConditionExpression=Key('matchId').eq(match_id)
-    )
-    events = response.get('Items', [])
+    events = []
+    kwargs = {'KeyConditionExpression': Key('matchId').eq(match_id)}
+    while True:
+        response = match_events_table.query(**kwargs)
+        events.extend(response.get('Items', []))
+        lek = response.get('LastEvaluatedKey')
+        if not lek:
+            break
+        kwargs['ExclusiveStartKey'] = lek
 
     if not events:
         raise ValueError(f"No events found for match: {match_id}")
@@ -93,12 +108,27 @@ def _mark_match_live(match_id: str, speed_multiplier: float, run_id: str) -> Non
     print(f"Match {match_id} marked as live")
 
 
+def _reset_match_after_failed_start(match_id: str) -> None:
+    """Allow /start to be retried after a partial scheduling failure."""
+    try:
+        matches_table.update_item(
+            Key={'matchId': match_id},
+            UpdateExpression='SET #s = :s REMOVE startedAt, speedMultiplier, activeRunId',
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={':s': 'upcoming'},
+        )
+        print(f"Reset match {match_id} to upcoming after failed start")
+    except Exception as e:
+        print(f"Failed to reset match {match_id}: {e}")
+
+
 def _schedule_events(
     match_id: str,
     events: list,
     kickoff_time: datetime,
     speed_multiplier: float,
-    run_id: str
+    run_id: str,
+    run_tag: str
 ) -> int:
     now = datetime.now(timezone.utc)
     schedules_created = 0
@@ -124,7 +154,7 @@ def _schedule_events(
             print(f"Skipping past event {event['eventId']} at {fire_at}")
             continue
 
-        _create_schedule(match_id, event, fire_at, run_id)
+        _create_schedule(match_id, event, fire_at, run_id, run_tag, schedules_created)
         schedules_created += 1
         last_fire_at = fire_at
 
@@ -132,8 +162,18 @@ def _schedule_events(
     return schedules_created
 
 
-def _create_schedule(match_id: str, event: dict, fire_at: datetime, run_id: str) -> None:
-    schedule_name = f"m{match_id[-6:]}-e{event['eventId'][-10:]}"
+def _create_schedule(
+    match_id: str,
+    event: dict,
+    fire_at: datetime,
+    run_id: str,
+    run_tag: str,
+    seq: int,
+) -> None:
+    # Unique per run; avoids collisions with leftover schedules from failed runs.
+    schedule_name = f"m{match_id[-6:]}-e{seq:04d}-{run_tag}"
+    if len(schedule_name) > 64:
+        schedule_name = schedule_name[:64]
 
     payload = {
         'matchId':   match_id,
@@ -166,7 +206,8 @@ def _schedule_clock_ticks(
     events: list,
     kickoff_time: datetime,
     speed_multiplier: float,
-    run_id: str
+    run_id: str,
+    run_tag: str
 ) -> int:
     """Schedule synthetic per-second ticks so clock advances continuously."""
     if speed_multiplier <= 0:
@@ -181,6 +222,13 @@ def _schedule_clock_ticks(
         int((latest_event_time - kickoff_time).total_seconds())
     )
     replay_seconds = max(1, math.ceil(total_game_seconds / speed_multiplier))
+    if replay_seconds > _MAX_TICK_SCHEDULES:
+        print(
+            f"Capping tick schedules from {replay_seconds} to {_MAX_TICK_SCHEDULES} "
+            f"(total_game_seconds={total_game_seconds}, speed={speed_multiplier})"
+        )
+        replay_seconds = _MAX_TICK_SCHEDULES
+
     now = datetime.now(timezone.utc)
 
     created = 0
@@ -192,7 +240,7 @@ def _schedule_clock_ticks(
         minutes, seconds = divmod(game_second, 60)
         game_time = f"{minutes:02d}:{seconds:02d}"
         fire_at = now + timedelta(seconds=replay_second)
-        _create_tick_schedule(match_id, replay_second, game_time, fire_at, run_id)
+        _create_tick_schedule(match_id, replay_second, game_time, fire_at, run_id, run_tag)
         created += 1
 
     print(f"Created {created} clock tick schedules")
@@ -204,9 +252,12 @@ def _create_tick_schedule(
     replay_second: int,
     game_time: str,
     fire_at: datetime,
-    run_id: str
+    run_id: str,
+    run_tag: str
 ) -> None:
-    schedule_name = f"m{match_id[-6:]}-t{replay_second:04d}"
+    schedule_name = f"m{match_id[-6:]}-t{replay_second:04d}-{run_tag}"
+    if len(schedule_name) > 64:
+        schedule_name = schedule_name[:64]
     payload = {
         'matchId': match_id,
         'runId': run_id,
