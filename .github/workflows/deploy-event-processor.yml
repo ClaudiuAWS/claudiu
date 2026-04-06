@@ -1,0 +1,39 @@
+name: Deploy Event Processor Lambda
+
+on:
+        push:
+                branches: [main]
+                paths:
+                        - "backend/event-processor/**"
+                        - "backend/shared/**"
+
+permissions:
+        id-token: write
+        contents: read
+
+jobs:
+        deploy:
+                runs-on: ubuntu-latest
+                steps:
+                        - uses: actions/checkout@v4
+
+                        - name: Configure AWS credentials
+                          uses: aws-actions/configure-aws-credentials@v4
+                          with:
+                                  role-to-assume: ${{ secrets.AWS_BACKEND_GITHUB_ACTIONS_ROLE_ARN }}
+                                  aws-region: eu-central-1
+
+                        - name: Build and deploy
+                          run: |
+                                  cd backend/event-processor
+                                  pip install -r requirements.txt \
+                                    --platform mlinux_x86_64 \
+                                    --target ./package \
+                                    --implementation cp \
+                                    --python-version 3.14 \
+                                    --only-binary=:all:
+                                  cp handler.py service.py ./package
+                                  cd package && zip -r ../function.zip .
+                                  aws lambda update-function-code \
+                                    --function-name claudiu-event-processor \
+                                    --zip-file fileb://../function.zip

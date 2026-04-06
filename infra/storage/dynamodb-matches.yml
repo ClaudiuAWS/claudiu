@@ -1,0 +1,89 @@
+# infra/storage/dynamodb-matches.yml
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu DynamoDB Tables - Matches
+
+Resources:
+        MatchesTable:
+                Type: AWS::DynamoDB::Table
+                Properties:
+                        TableName: claudiu-matches
+                        BillingMode: PAY_PER_REQUEST
+                        AttributeDefinitions:
+                                - AttributeName: matchId
+                                  AttributeType: S
+                        KeySchema:
+                                - AttributeName: matchId
+                                  KeyType: HASH
+                        TimeToLiveSpecification:
+                                AttributeName: TTL
+                                Enabled: true
+
+        MatchEventsTable:
+                Type: AWS::DynamoDB::Table
+                Properties:
+                        TableName: claudiu-match-events
+                        BillingMode: PAY_PER_REQUEST
+                        AttributeDefinitions:
+                                - AttributeName: matchId
+                                  AttributeType: S
+                                - AttributeName: eventId
+                                  AttributeType: S
+                        KeySchema:
+                                - AttributeName: matchId
+                                  KeyType: HASH
+                                - AttributeName: eventId
+                                  KeyType: RANGE
+                        TimeToLiveSpecification:
+                                AttributeName: TTL
+                                Enabled: true
+
+        PlayerLookupTable:
+                Type: AWS::DynamoDB::Table
+                Properties:
+                        TableName: claudiu-player-lookup
+                        BillingMode: PAY_PER_REQUEST
+                        AttributeDefinitions:
+                                - AttributeName: matchId
+                                  AttributeType: S
+                                - AttributeName: playerId
+                                  AttributeType: S
+                        KeySchema:
+                                - AttributeName: matchId
+                                  KeyType: HASH
+                                - AttributeName: playerId
+                                  KeyType: RANGE
+                        TimeToLiveSpecification:
+                                AttributeName: TTL
+                                Enabled: true
+
+Outputs:
+        MatchesTableName:
+                Value: !Ref MatchesTable
+                Export:
+                        Name: claudiu-matches-table
+
+        MatchesTableArn:
+                Value: !GetAtt MatchesTable.Arn
+                Export:
+                        Name: claudiu-matches-table-arn
+
+        MatchEventsTableName:
+                Value: !Ref MatchEventsTable
+                Export:
+                        Name: claudiu-match-events-table
+
+        MatchEventsTableArn:
+                Value: !GetAtt MatchEventsTable.Arn
+                Export:
+                        Name: claudiu-match-events-table-arn
+
+        PlayerLookupTableName:
+                Value: !Ref PlayerLookupTable
+                Export:
+                        Name: claudiu-player-lookup-table
+
+        PlayerLookupTableArn:
+                Value: !GetAtt PlayerLookupTable.Arn
+                Export:
+                        Name: claudiu-player-lookup-table-arn

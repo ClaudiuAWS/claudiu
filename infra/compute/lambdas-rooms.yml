@@ -53,6 +53,7 @@ Resources:
                         Environment:
                                 Variables:
                                         ROOMS_TABLE: claudiu-rooms
+                                        MATCHES_TABLE: claudiu-matches
                         Code:
                                 ZipFile: |
                                         def handler(event, context):

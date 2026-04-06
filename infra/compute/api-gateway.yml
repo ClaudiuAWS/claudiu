@@ -27,64 +27,6 @@ Resources:
                         AuthorizerResultTtlInSeconds: 0
 
         # ─────────────────────────────────────────
-        # /logs
-        # ─────────────────────────────────────────
-
-        LogsResource:
-                Type: AWS::ApiGateway::Resource
-                Properties:
-                        RestApiId: !Ref RestApi
-                        ParentId: !GetAtt RestApi.RootResourceId
-                        PathPart: logs
-
-        PostLogsMethod:
-                Type: AWS::ApiGateway::Method
-                Properties:
-                        RestApiId: !Ref RestApi
-                        ResourceId: !Ref LogsResource
-                        HttpMethod: POST
-                        AuthorizationType: COGNITO_USER_POOLS
-                        AuthorizerId: !Ref CognitoAuthorizer
-                        Integration:
-                                Type: AWS_PROXY
-                                IntegrationHttpMethod: POST
-                                Uri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-logger/invocations
-
-        LogsOptionsMethod:
-                Type: AWS::ApiGateway::Method
-                Properties:
-                        RestApiId: !Ref RestApi
-                        ResourceId: !Ref LogsResource
-                        HttpMethod: OPTIONS
-                        AuthorizationType: NONE
-                        Integration:
-                                Type: MOCK
-                                IntegrationResponses:
-                                        - StatusCode: 200
-                                          ResponseParameters:
-                                                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
-                                                  method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-                                                  method.response.header.Access-Control-Allow-Origin: "'*'"
-                                          ResponseTemplates:
-                                                  application/json: ""
-                                RequestTemplates:
-                                        application/json: '{"statusCode": 200}'
-                        MethodResponses:
-                                - StatusCode: 200
-                                  ResponseParameters:
-                                          method.response.header.Access-Control-Allow-Headers: true
-                                          method.response.header.Access-Control-Allow-Methods: true
-                                          method.response.header.Access-Control-Allow-Origin: true
-
-        LoggerLambdaPermission:
-                Type: AWS::Lambda::Permission
-                Properties:
-                        FunctionName: claudiu-logger
-                        Action: lambda:InvokeFunction
-                        Principal: apigateway.amazonaws.com
-                        SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:${RestApi}/*
-
-        # ─────────────────────────────────────────
         # /rooms
         # ─────────────────────────────────────────
 
@@ -115,6 +57,47 @@ Resources:
                         RestApiId: !Ref RestApi
                         ParentId: !Ref RoomsCodeResource
                         PathPart: leave
+
+        AdminResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !GetAtt RestApi.RootResourceId
+                        PathPart: admin
+
+        AdminMatchesResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !Ref AdminResource
+                        PathPart: matches
+
+        AdminMatchesStartResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !Ref AdminMatchesIdResource
+                        PathPart: start
+
+        AdminMatchesIdResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !Ref AdminMatchesResource
+                        PathPart: "{matchId}"
+
+        PostAdminMatchesStartMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref AdminMatchesStartResource
+                        HttpMethod: POST
+                        AuthorizationType: NONE
+                        ApiKeyRequired: true
+                        Integration:
+                                Type: AWS_PROXY
+                                IntegrationHttpMethod: POST
+                                Uri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-replay-emitter/invocations
 
         PostRoomsMethod:
                 Type: AWS::ApiGateway::Method
@@ -280,6 +263,36 @@ Resources:
                         Principal: apigateway.amazonaws.com
                         SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:${RestApi}/*
 
+        ReplayEmitterLambdaPermission:
+                Type: AWS::Lambda::Permission
+                Properties:
+                        FunctionName: claudiu-replay-emitter
+                        Action: lambda:InvokeFunction
+                        Principal: apigateway.amazonaws.com
+                        SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:${RestApi}/*
+
+        AdminApiKey:
+                Type: AWS::ApiGateway::ApiKey
+                Properties:
+                        Name: claudiu-admin-key
+                        Enabled: true
+
+        AdminUsagePlan:
+                Type: AWS::ApiGateway::UsagePlan
+                DependsOn: RestApiStage
+                Properties:
+                        UsagePlanName: claudiu-admin-usage-plan
+                        ApiStages:
+                                - ApiId: !Ref RestApi
+                                  Stage: prod
+
+        AdminUsagePlanKey:
+                Type: AWS::ApiGateway::UsagePlanKey
+                Properties:
+                        KeyId: !Ref AdminApiKey
+                        KeyType: API_KEY
+                        UsagePlanId: !Ref AdminUsagePlan
+
         # ─────────────────────────────────────────
         # Deployment
         # ─────────────────────────────────────────
@@ -287,10 +300,9 @@ Resources:
         RestApiDeployment:
                 Type: AWS::ApiGateway::Deployment
                 DependsOn:
-                        - PostLogsMethod
-                        - LogsOptionsMethod
                         - PostRoomsMethod
                         - GetRoomsCodeMethod
+                        - PostAdminMatchesStartMethod
                         - PostRoomsJoinMethod
                         - DeleteRoomsLeaveMethod
                         - RoomsOptionsMethod

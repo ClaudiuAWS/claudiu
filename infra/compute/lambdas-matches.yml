@@ -1,0 +1,195 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu Lambda Functions - Matches Feature
+
+Resources:
+        # ─────────────────────────────────────────
+        # EventBridge role to invoke event-processor
+        # ─────────────────────────────────────────
+
+        EventBridgeInvokeRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-eventbridge-invoke-role
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Service: scheduler.amazonaws.com
+                                          Action: sts:AssumeRole
+                        Policies:
+                                - PolicyName: claudiu-eventbridge-invoke-policy
+                                  PolicyDocument:
+                                          Version: "2012-10-17"
+                                          Statement:
+                                                  - Sid: InvokeEventProcessor
+                                                    Effect: Allow
+                                                    Action: lambda:InvokeFunction
+                                                    Resource: !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-event-processor
+
+        # ─────────────────────────────────────────
+        # Replay Emitter Role
+        # ─────────────────────────────────────────
+
+        ReplayEmitterRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-replay-emitter-role
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Service: lambda.amazonaws.com
+                                          Action: sts:AssumeRole
+                        ManagedPolicyArns:
+                                - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+                        Policies:
+                                - PolicyName: claudiu-replay-emitter-policy
+                                  PolicyDocument:
+                                          Version: "2012-10-17"
+                                          Statement:
+                                                  - Sid: MatchEventsRead
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:Query
+                                                    Resource:
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-match-events
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-match-events/index/*
+                                                  - Sid: MatchesWrite
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:GetItem
+                                                            - dynamodb:UpdateItem
+                                                    Resource:
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-matches
+                                                  - Sid: SchedulerCreate
+                                                    Effect: Allow
+                                                    Action:
+                                                            - scheduler:CreateSchedule
+                                                    Resource: "*"
+                                                  - Sid: PassEventBridgeRole
+                                                    Effect: Allow
+                                                    Action:
+                                                            - iam:PassRole
+                                                    Resource: !GetAtt EventBridgeInvokeRole.Arn
+
+        # ─────────────────────────────────────────
+        # Event Processor Role
+        # ─────────────────────────────────────────
+
+        EventProcessorRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-event-processor-role
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Service: lambda.amazonaws.com
+                                          Action: sts:AssumeRole
+                        ManagedPolicyArns:
+                                - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+                        Policies:
+                                - PolicyName: claudiu-event-processor-policy
+                                  PolicyDocument:
+                                          Version: "2012-10-17"
+                                          Statement:
+                                                  - Sid: MatchesAccess
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:GetItem
+                                                            - dynamodb:UpdateItem
+                                                    Resource:
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-matches
+                                                  - Sid: MatchEventsAccess
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:UpdateItem
+                                                    Resource:
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-match-events
+        # ─────────────────────────────────────────
+        # Replay Emitter Lambda
+        # ─────────────────────────────────────────
+
+        ReplayEmitterLambda:
+                Type: AWS::Lambda::Function
+                Properties:
+                        FunctionName: claudiu-replay-emitter
+                        Runtime: python3.14
+                        Handler: handler.handler
+                        Role: !GetAtt ReplayEmitterRole.Arn
+                        Timeout: 300
+                        MemorySize: 256
+                        Environment:
+                                Variables:
+                                        MATCH_EVENTS_TABLE: claudiu-match-events
+                                        MATCHES_TABLE: claudiu-matches
+                                        EVENT_PROCESSOR_ARN: !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-event-processor
+                                        EVENTBRIDGE_ROLE_ARN: !GetAtt EventBridgeInvokeRole.Arn
+                                        SCHEDULE_GROUP: claudiu-match-events
+                        Code:
+                                ZipFile: |
+                                        def handler(event, context):
+                                            return {'statusCode': 200, 'body': 'ok'}
+
+        ReplayEmitterPermission:
+                Type: AWS::Lambda::Permission
+                Properties:
+                        FunctionName: !GetAtt ReplayEmitterLambda.Arn
+                        Action: lambda:InvokeFunction
+                        Principal: apigateway.amazonaws.com
+                        SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:1jmrjvnbs5/*
+
+        # ─────────────────────────────────────────
+        # Event Processor Lambda
+        # ─────────────────────────────────────────
+
+        EventProcessorLambda:
+                Type: AWS::Lambda::Function
+                Properties:
+                        FunctionName: claudiu-event-processor
+                        Runtime: python3.14
+                        Handler: handler.handler
+                        Role: !GetAtt EventProcessorRole.Arn
+                        Timeout: 30
+                        MemorySize: 256
+                        Environment:
+                                Variables:
+                                        MATCHES_TABLE: claudiu-matches
+                                        MATCH_EVENTS_TABLE: claudiu-match-events
+                                        WEBSOCKET_ENDPOINT: https://4iowcae701.execute-api.eu-central-1.amazonaws.com/prod
+                        Code:
+                                ZipFile: |
+                                        def handler(event, context):
+                                            return {'statusCode': 200, 'body': 'ok'}
+
+        EventProcessorPermission:
+                Type: AWS::Lambda::Permission
+                Properties:
+                        FunctionName: !GetAtt EventProcessorLambda.Arn
+                        Action: lambda:InvokeFunction
+                        Principal: scheduler.amazonaws.com
+                        SourceArn: !Sub arn:aws:scheduler:eu-central-1:${AWS::AccountId}:schedule/claudiu-match-events/*
+
+        MatchEventsScheduleGroup:
+                Type: AWS::Scheduler::ScheduleGroup
+                Properties:
+                        Name: claudiu-match-events
+
+Outputs:
+        ReplayEmitterArn:
+                Value: !GetAtt ReplayEmitterLambda.Arn
+                Export:
+                        Name: claudiu-replay-emitter-arn
+
+        EventProcessorArn:
+                Value: !GetAtt EventProcessorLambda.Arn
+                Export:
+                        Name: claudiu-event-processor-arn
+
+        EventBridgeInvokeRoleArn:
+                Value: !GetAtt EventBridgeInvokeRole.Arn
+                Export:
+                        Name: claudiu-eventbridge-invoke-role-arn

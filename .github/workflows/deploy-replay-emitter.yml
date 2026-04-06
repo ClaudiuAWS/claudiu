@@ -1,10 +1,11 @@
-name: Deploy Logger Lambda
+name: Deploy Replay Emitter Lambda
 
 on:
         push:
                 branches: [main]
                 paths:
-                        - "backend/logger/**"
+                        - "backend/replay-emitter/**"
+                        - "backend/shared/**"
 
 permissions:
         id-token: write
@@ -24,10 +25,15 @@ jobs:
 
                         - name: Build and deploy
                           run: |
-                                  cd backend/logger
-                                  mkdir -p package
-                                  cp handler.py ./package
+                                  cd backend/replay-emitter
+                                  pip install -r requirements.txt \
+                                    --platform mlinux_x86_64 \
+                                    --target ./package \
+                                    --implementation cp \
+                                    --python-version 3.14 \
+                                    --only-binary=:all:
+                                  cp handler.py service.py ./package
                                   cd package && zip -r ../function.zip .
                                   aws lambda update-function-code \
-                                    --function-name claudiu-logger \
+                                    --function-name claudiu-replay-emitter \
                                     --zip-file fileb://../function.zip
