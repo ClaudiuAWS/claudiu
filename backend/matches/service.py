@@ -44,20 +44,34 @@ def get_match_events(match_id: str) -> list:
     return sorted(events, key=_event_feed_order_key)
 
 
+def _game_clock_seconds(gt) -> int | None:
+    """Match clock seconds from gameTime; handles MM:SS, Decimal, total seconds."""
+    if gt is None:
+        return None
+    try:
+        if hasattr(gt, "as_tuple"):
+            total = int(gt)
+            if 0 <= total <= 150 * 60:
+                return total
+    except Exception:
+        pass
+    s = str(gt).strip()
+    parts = s.split(":")
+    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+        try:
+            return int(parts[0]) * 60 + int(parts[1])
+        except ValueError:
+            pass
+    return None
+
+
 def _event_feed_order_key(e: dict) -> tuple:
     """Sort by match clock MM:SS, then XML event time, then id."""
-    gt = e.get('gameTime')
-    if gt is not None:
-        s = str(gt).strip()
-        parts = s.split(':')
-        if len(parts) == 2 and parts[0].isdigit() and len(parts[1]) == 2 and parts[1].isdigit():
-            try:
-                sec = int(parts[0]) * 60 + int(parts[1])
-                et = e.get('eventTime')
-                return (0, sec, str(et or ''), str(e.get('eventId', '')))
-            except ValueError:
-                pass
-    et = e.get('eventTime')
+    sec = _game_clock_seconds(e.get("gameTime"))
+    if sec is not None:
+        et = e.get("eventTime")
+        return (0, sec, str(et or ""), str(e.get("eventId", "")))
+    et = e.get("eventTime")
     if et is not None:
-        return (1, str(et), str(e.get('eventId', '')))
-    return (2, '', str(e.get('eventId', '')))
+        return (1, str(et), str(e.get("eventId", "")))
+    return (2, "", str(e.get("eventId", "")))

@@ -11,7 +11,7 @@ function coerceGameTime(gameTime) {
 export function gameTimeToSeconds(gameTime) {
   const trimmed = coerceGameTime(gameTime)
   if (!trimmed) return -1
-  const mmss = trimmed.match(/^(\d+):(\d{2})$/)
+  const mmss = trimmed.match(/^(\d+):(\d{1,2})$/)
   if (mmss) {
     return parseInt(mmss[1], 10) * 60 + parseInt(mmss[2], 10)
   }
@@ -72,4 +72,10 @@ export function sortMatchEventsChronologically(events) {
     if (Number.isNaN(ta) && !Number.isNaN(tb)) return 1
     return String(a.eventId ?? '').localeCompare(String(b.eventId ?? ''))
   })
+}
+
+/** Newest / latest match-clock events first (for the live feed list). */
+export function sortMatchEventsNewestFirst(events) {
+  if (!events?.length) return []
+  return [...sortMatchEventsChronologically(events)].reverse()
 }

@@ -1,5 +1,5 @@
 import EventItem from './EventItem'
-import { sortMatchEventsChronologically } from '../../utils/matchEvents'
+import { sortMatchEventsNewestFirst } from '../../utils/matchEvents'
 
 export default function MatchFeed({ events }) {
   if (!events?.length) {
@@ -10,7 +10,7 @@ export default function MatchFeed({ events }) {
     )
   }
 
-  const ordered = sortMatchEventsChronologically(events)
+  const ordered = sortMatchEventsNewestFirst(events)
 
   return (
     <div className="bg-gray-900 rounded-2xl px-4">
