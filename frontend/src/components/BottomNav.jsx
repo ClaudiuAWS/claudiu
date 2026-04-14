@@ -1,4 +1,3 @@
-// src/components/BottomNav.jsx
 import { useLocation, useNavigate } from "react-router-dom";
 
 const tabs = [
