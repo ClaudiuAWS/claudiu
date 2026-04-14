@@ -514,11 +514,13 @@ Resources:
                         - RoomsCodeOptionsMethod
                         - RoomsJoinOptionsMethod
                         - RoomsLeaveOptionsMethod
+                        - RoomsMessageOptionsMethod
                         - MatchesOptionsMethod
                         - MatchesIdOptionsMethod
                         - MatchesEventsOptionsMethod
                 Properties:
                         RestApiId: !Ref RestApi
+                        Description: "2026-04-14-chat"
 
         RestApiStage:
                 Type: AWS::ApiGateway::Stage
