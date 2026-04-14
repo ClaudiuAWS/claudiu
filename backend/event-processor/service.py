@@ -1,6 +1,7 @@
 import boto3
 import os
 from datetime import datetime, timezone
+from boto3.dynamodb.conditions import Key
 
 import ws
 
@@ -8,6 +9,7 @@ dynamodb = boto3.resource('dynamodb')
 
 matches_table      = dynamodb.Table(os.environ['MATCHES_TABLE'])
 match_events_table = dynamodb.Table(os.environ['MATCH_EVENTS_TABLE'])
+rooms_table        = dynamodb.Table(os.environ['ROOMS_TABLE'])
 
 
 def process_event(
@@ -139,6 +141,7 @@ def _handle_fulltime(match_id: str, game_time: str, data: dict) -> None:
             ':f': datetime.now(timezone.utc).isoformat(),
         }
     )
+    _cleanup_rooms(match_id)
     print(f"Fulltime processed — {data.get('finalResult')} at {game_time}")
 
 
@@ -164,6 +167,20 @@ def _handle_clock_tick(match_id: str, game_time: str) -> None:
 # ─────────────────────────────────────────
 # Private helpers
 # ─────────────────────────────────────────
+
+def _cleanup_rooms(match_id: str) -> None:
+    response = rooms_table.query(
+        IndexName='matchId-index',
+        KeyConditionExpression=Key('matchId').eq(match_id),
+    )
+    for room in response.get('Items', []):
+        code = room['roomCode']
+        rooms_table.delete_item(Key={'roomCode': code})
+        ws.push_to_channel(f"room#{code}", {'type': 'room_closed'})
+    count = len(response.get('Items', []))
+    if count:
+        print(f"Cleaned up {count} rooms for match {match_id}")
+
 
 def _mark_event_fired(match_id: str, event_id: str, run_id: str) -> None:
     match_events_table.update_item(
