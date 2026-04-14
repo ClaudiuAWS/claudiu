@@ -45,6 +45,7 @@ def process_event(
 
     elif event_type == 'clocktick':
         _handle_clock_tick(match_id, game_time)
+        return
 
     else:
         print(f"Unknown event type: {event_type}")
