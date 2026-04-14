@@ -23,7 +23,7 @@ export default function MatchPage() {
   if (!room) return <Navigate to={`/lobby/${matchId}`} replace />
 
   return (
-    <div className="flex flex-col pb-28">
+    <div className="flex flex-col pb-36">
       <Scoreboard match={match} events={events} />
 
       {/* Squad strip */}
@@ -53,17 +53,15 @@ export default function MatchPage() {
               tab === t ? 'text-white' : 'text-gray-600'
             }`}
           >
-            {t === 'chat' && messages.length > 0 && (
+            {t === 'chat' && messages.length > 0 && tab !== 'chat' && (
               <span className="absolute top-2.5 right-[calc(50%-22px)] w-1.5 h-1.5 rounded-full bg-green-400" />
             )}
             {t}
+            {tab === t && (
+              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-px bg-white" />
+            )}
           </button>
         ))}
-        {/* Active indicator */}
-        <div
-          className="absolute h-px bg-white transition-all duration-200"
-          style={{ bottom: 0, width: '50%', left: tab === 'feed' ? 0 : '50%' }}
-        />
       </div>
 
       {/* Content */}
@@ -72,8 +70,6 @@ export default function MatchPage() {
           ? <MatchFeed events={events} />
           : <ChatPanel messages={messages} onSend={(text) => sendMessage(room.roomCode, text)} room={room} />
         }
-
-        {/* Floating chat bubbles — only on feed tab */}
         {tab === 'feed' && bubbles.length > 0 && (
           <ChatBubbles bubbles={bubbles} />
         )}
