@@ -1,37 +1,32 @@
-const MATCH_ID = 'DFL-MAT-111111'
-
-export default function CreateRoom({ onJoin, onSwitch, loading }) {
-  const handleCreate = () => onJoin(MATCH_ID)
-
+export default function CreateRoom({ onCreate, onSwitch, loading }) {
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-3">
       <button
-        onClick={handleCreate}
+        onClick={onCreate}
         disabled={loading}
-        className="w-full bg-green-500 text-black font-bold py-4 rounded-2xl text-lg disabled:opacity-50 transition-all hover:bg-green-400 active:scale-95"
+        className="w-full bg-green-500 text-black font-bold py-4 rounded-2xl text-base tracking-wide disabled:opacity-50 transition-all active:scale-[0.98] hover:bg-green-400"
       >
         {loading ? (
           <span className="flex items-center justify-center gap-2">
-            <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-            Creating...
+            <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+            Creating…
           </span>
-        ) : (
-          'Create Squad'
-        )}
+        ) : 'Create Squad'}
       </button>
 
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-px bg-gray-800" />
-        <span className="text-gray-600 text-sm">or</span>
-        <div className="flex-1 h-px bg-gray-800" />
+      <div className="flex items-center gap-3 py-1">
+        <div className="flex-1 h-px bg-white/5" />
+        <span className="text-gray-600 text-xs">or</span>
+        <div className="flex-1 h-px bg-white/5" />
       </div>
 
       <button
         onClick={onSwitch}
         disabled={loading}
-        className="w-full bg-gray-900 text-white font-semibold py-4 rounded-2xl border border-gray-700 hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50"
+        className="w-full py-4 rounded-2xl text-gray-300 text-sm font-medium disabled:opacity-50 transition-all active:scale-[0.98]"
+        style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
       >
-        Join with Code
+        Join with a code
       </button>
     </div>
   )

@@ -1,38 +1,35 @@
-function MemberAvatar({ name }) {
-  return (
-    <div className="w-9 h-9 rounded-full bg-green-500 flex items-center justify-center text-black font-bold text-sm flex-shrink-0">
-      {name?.[0]?.toUpperCase() ?? '?'}
-    </div>
-  )
-}
+const COLORS = [
+  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
+  'bg-orange-500', 'bg-pink-500', 'bg-cyan-500',
+]
 
-function MemberRow({ member, isHost }) {
-  return (
-    <div className="flex items-center gap-3 py-2">
-      <MemberAvatar name={member.displayName} />
-      <span className="text-white flex-1">{member.displayName}</span>
-      {isHost && (
-        <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded-full">
-          Host
-        </span>
-      )}
-    </div>
-  )
+function avatar(name, index) {
+  return COLORS[index % COLORS.length]
 }
 
 export default function MembersList({ members, hostUserId }) {
   return (
-    <div className="bg-gray-900 rounded-2xl p-4">
-      <p className="text-gray-400 text-sm mb-3">
-        Squad — {members.length} {members.length === 1 ? 'player' : 'players'}
-      </p>
-      <div className="divide-y divide-gray-800">
-        {members.map((member) => (
-          <MemberRow
-            key={member.userId}
-            member={member}
-            isHost={member.userId === hostUserId}
-          />
+    <div className="rounded-3xl overflow-hidden"
+      style={{ background: 'linear-gradient(145deg,#111827,#0d1117)', border: '1px solid rgba(255,255,255,0.06)' }}>
+
+      <div className="px-5 pt-4 pb-3 border-b border-white/5 flex items-center justify-between">
+        <p className="text-gray-500 text-xs font-semibold tracking-widest uppercase">Squad</p>
+        <p className="text-gray-600 text-xs">{members.length} {members.length === 1 ? 'player' : 'players'}</p>
+      </div>
+
+      <div className="px-5 py-2">
+        {members.map((member, i) => (
+          <div key={member.userId} className="flex items-center gap-3 py-3 border-b border-white/[0.04] last:border-0">
+            <div className={`w-9 h-9 rounded-full ${avatar(member.displayName, i)} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
+              {member.displayName?.[0]?.toUpperCase() ?? '?'}
+            </div>
+            <span className="text-white text-sm flex-1">{member.displayName}</span>
+            {member.userId === hostUserId && (
+              <span className="text-[10px] font-semibold tracking-widest uppercase text-green-400 bg-green-400/10 px-2.5 py-1 rounded-full">
+                Host
+              </span>
+            )}
+          </div>
         ))}
       </div>
     </div>
