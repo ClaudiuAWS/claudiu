@@ -66,9 +66,7 @@ export function useMatchClock(match, events) {
 
     const tick = () => {
       const { gameSec, wallMs } = anchorRef.current
-      // Tick at 1:1 between events — events arrive frequently at high speed
-      // and each one re-anchors the clock to the correct game time.
-      let fromServer = gameSec + (Date.now() - wallMs) / 1000
+      let fromServer = gameSec + ((Date.now() - wallMs) / 1000) * speed
       const floor = maxEventGameSeconds(eventsRef.current)
       if (floor >= 0 && floor > fromServer) {
         anchorRef.current = { gameSec: floor, wallMs: Date.now() }
