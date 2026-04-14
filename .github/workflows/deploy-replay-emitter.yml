@@ -32,7 +32,7 @@ jobs:
                                     --implementation cp \
                                     --python-version 3.14 \
                                     --only-binary=:all:
-                                  cp handler.py service.py ./package
+                                  cp handler.py service.py ../shared/ws.py ./package
                                   cd package && zip -r ../function.zip .
                                   aws lambda update-function-code \
                                     --function-name claudiu-replay-emitter \

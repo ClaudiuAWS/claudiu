@@ -6,6 +6,8 @@ import hashlib
 from datetime import datetime, timezone, timedelta
 from boto3.dynamodb.conditions import Key
 
+import ws
+
 # Avoid Lambda timeouts / account limits from huge tick storms (e.g. speedMultiplier=1).
 _MAX_TICK_SCHEDULES = 4000
 
@@ -32,6 +34,15 @@ def start_match(match_id: str, speed_multiplier: float) -> dict:
 
     try:
         _mark_match_live(match_id, speed_multiplier, run_id)
+
+        # Notify clients in the lobby that the match is now live
+        live_match = matches_table.get_item(
+            Key={'matchId': match_id}, ConsistentRead=True
+        ).get('Item', {})
+        ws.push_to_channel(f"match#{match_id}", {
+            'type':  'match_update',
+            'match': live_match,
+        })
         # Do not schedule per-second clock ticks: they advance time through half-time
         # and race with event updates (causing random jumps). Match clock is driven by
         # events on the server + smooth client-side display in the UI.
