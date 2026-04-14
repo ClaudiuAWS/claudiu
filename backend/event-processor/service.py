@@ -49,7 +49,9 @@ def process_event(
         return
 
     # Push updated match state + the triggering event to all watching clients
-    match = matches_table.get_item(Key={'matchId': match_id}).get('Item', {})
+    match = matches_table.get_item(
+        Key={'matchId': match_id}, ConsistentRead=True
+    ).get('Item', {})
     ws.push_to_channel(f"match#{match_id}", {
         'type':      'match_update',
         'match':     match,
