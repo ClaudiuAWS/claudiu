@@ -18,15 +18,14 @@ export function useWebSocket(channel, onMessage) {
     unmounted.current = false
 
     async function connect() {
-      // WebSocket doesn't support Authorization headers, so we pass the
-      // Cognito token as a query param. The ws-handler currently doesn't
-      // validate it (acceptable for a hackathon), but the param is there
-      // so you can add validation later without changing the client.
       let token = ''
       try {
         const session = await fetchAuthSession()
         token = session.tokens?.idToken?.toString() ?? ''
       } catch (_) {}
+
+      // Component may have unmounted while we were awaiting the token
+      if (unmounted.current) return
 
       const url = `${WS_URL}?channel=${encodeURIComponent(channel)}&token=${token}`
       const ws = new WebSocket(url)
