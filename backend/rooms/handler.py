@@ -21,7 +21,10 @@ def handler(event, context):
             
             elif method == 'DELETE' and '/leave' in path:
                 return _leave_room(event, user_id)
-            
+
+            elif method == 'POST' and '/message' in path:
+                return _send_message(event, user_id, display_name)
+
             else:
                 return _response(404, {'error': 'Not found'})
         
@@ -56,6 +59,17 @@ def _leave_room(event, user_id):
         room_code = event['pathParameters']['code']
         result = service.leave_room(room_code, user_id)
         return _response(200, result)
+
+def _send_message(event, user_id, display_name):
+        room_code = event['pathParameters']['code']
+        body = json.loads(event.get('body') or '{}')
+        text = (body.get('text') or '').strip()
+        if not text:
+            return _response(400, {'error': 'text is required'})
+        if len(text) > 200:
+            return _response(400, {'error': 'message too long'})
+        service.send_message(room_code, user_id, display_name, text)
+        return _response(200, {'ok': True})
 
 def _response(status_code: int, body: dict) -> dict:
         return {

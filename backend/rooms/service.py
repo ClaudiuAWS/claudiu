@@ -126,6 +126,22 @@ def get_room(room_code: str) -> dict:
     return room
 
 
+def send_message(room_code: str, user_id: str, display_name: str, text: str) -> None:
+    room = rooms_table.get_item(Key={'roomCode': room_code}).get('Item')
+    if not room:
+        raise ValueError('Room not found')
+    if not any(m['userId'] == user_id for m in room.get('members', [])):
+        raise ValueError('You are not in this room')
+
+    ws.push_to_channel(f"room#{room_code}", {
+        'type':        'chat_message',
+        'userId':      user_id,
+        'displayName': display_name,
+        'text':        text,
+        'ts':          int(time.time() * 1000),
+    })
+
+
 def _push_room_update(room: dict) -> None:
     ws.push_to_channel(f"room#{room['roomCode']}", {
         'type': 'room_update',

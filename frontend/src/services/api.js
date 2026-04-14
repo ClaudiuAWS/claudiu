@@ -35,10 +35,11 @@ const request = async (path, method = 'GET', body = null) => {
 }
 
 export const roomsApi = {
-  create: (matchId) => request('/rooms', 'POST', { matchId }),
-  get: (roomCode) => request(`/rooms/${roomCode}`),
-  join: (roomCode) => request(`/rooms/${roomCode}/join`, 'POST'),
-  leave: (roomCode) => request(`/rooms/${roomCode}/leave`, 'DELETE'),
+  create:      (matchId)            => request('/rooms', 'POST', { matchId }),
+  get:         (roomCode)           => request(`/rooms/${roomCode}`),
+  join:        (roomCode)           => request(`/rooms/${roomCode}/join`, 'POST'),
+  leave:       (roomCode)           => request(`/rooms/${roomCode}/leave`, 'DELETE'),
+  sendMessage: (roomCode, text)     => request(`/rooms/${roomCode}/message`, 'POST', { text }),
 }
 
 export const matchesApi = {

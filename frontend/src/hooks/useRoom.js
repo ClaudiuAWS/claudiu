@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 
 const ROOM_CODE_KEY = 'fan_squad_room_code'
 
-export function useRoom() {
+export function useRoom(onChatMessage) {
   const [room, setRoom] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -51,11 +51,12 @@ export function useRoom() {
       toast('Room was closed')
       logger.info('useRoom', 'WS room_closed')
     } else if (msg.type === 'match_ended') {
-      // Match is over — room stays open so squad can hang, but user can now join other rooms
       toast('Full time! 🏁')
       logger.info('useRoom', 'WS match_ended', msg.finalResult)
+    } else if (msg.type === 'chat_message') {
+      onChatMessage?.(msg)
     }
-  }, [])
+  }, [onChatMessage])
 
   useWebSocket(room?.roomCode ? `room#${room.roomCode}` : null, handleMessage)
 
