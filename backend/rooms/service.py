@@ -18,7 +18,7 @@ def generate_room_code():
 
 def _get_user_current_room(user_id: str):
     response = rooms_table.scan(
-        FilterExpression=Attr('members').contains({'userId': user_id})
+        FilterExpression=Attr('members').contains({'userId': user_id}) & Attr('status').ne('ended')
     )
     rooms = response.get('Items', [])
     return rooms[0] if rooms else None

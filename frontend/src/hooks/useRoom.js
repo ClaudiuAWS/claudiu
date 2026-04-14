@@ -50,6 +50,10 @@ export function useRoom() {
       setRoom(null)
       toast('Room was closed')
       logger.info('useRoom', 'WS room_closed')
+    } else if (msg.type === 'match_ended') {
+      // Match is over — room stays open so squad can hang, but user can now join other rooms
+      toast('Full time! 🏁')
+      logger.info('useRoom', 'WS match_ended', msg.finalResult)
     }
   }, [])
 

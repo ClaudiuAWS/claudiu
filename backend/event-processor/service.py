@@ -142,7 +142,7 @@ def _handle_fulltime(match_id: str, game_time: str, data: dict) -> None:
             ':f': datetime.now(timezone.utc).isoformat(),
         }
     )
-    _cleanup_rooms(match_id)
+    _end_rooms(match_id, data.get('finalResult'))
     print(f"Fulltime processed — {data.get('finalResult')} at {game_time}")
 
 
@@ -181,6 +181,29 @@ def _cleanup_rooms(match_id: str) -> None:
     count = len(response.get('Items', []))
     if count:
         print(f"Cleaned up {count} rooms for match {match_id}")
+
+
+def _end_rooms(match_id: str, final_result: str) -> None:
+    """Mark rooms as ended so users can join new rooms, but keep them visible for post-match UX."""
+    response = rooms_table.query(
+        IndexName='matchId-index',
+        KeyConditionExpression=Key('matchId').eq(match_id),
+    )
+    for room in response.get('Items', []):
+        code = room['roomCode']
+        rooms_table.update_item(
+            Key={'roomCode': code},
+            UpdateExpression='SET #s = :s',
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={':s': 'ended'},
+        )
+        ws.push_to_channel(f"room#{code}", {
+            'type':        'match_ended',
+            'finalResult': final_result,
+        })
+    count = len(response.get('Items', []))
+    if count:
+        print(f"Ended {count} rooms for match {match_id}")
 
 
 def _mark_event_fired(match_id: str, event_id: str, run_id: str) -> None:
