@@ -49,8 +49,10 @@ export function useMatch(matchId) {
     if (msg.type === 'match_update') {
       setMatch(msg.match)
       setEvents(prev => {
+        const flat = { ...msg.event.data, ...msg.event }
+        delete flat.data
         const ids = new Set(prev.map(e => e.eventId))
-        return ids.has(msg.event.eventId) ? prev : [...prev, msg.event]
+        return ids.has(flat.eventId) ? prev : [...prev, flat]
       })
       logger.success('useMatch', 'WS match_update', msg.match)
     }
