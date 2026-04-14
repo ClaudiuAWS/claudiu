@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { matchesApi } from '../services/api'
 import { logger } from '../services/logger'
+import { useWebSocket } from './useWebSocket'
 
 export function useMatches() {
   const [matches, setMatches] = useState([])
@@ -23,38 +24,39 @@ export function useMatch(matchId) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Initial load
   useEffect(() => {
     if (!matchId) return
 
-    const fetchMatch = () => {
-      matchesApi.get(matchId)
-        .then(data => {
-          setMatch(data)
-          logger.success('useMatch', 'Match updated', data)
-        })
-        .catch(err => {
-          logger.error('useMatch', 'Failed to fetch match', err)
-          setError(err.message)
-        })
-        .finally(() => setLoading(false))
-    }
-
-    const fetchEvents = () => {
-      matchesApi.getEvents(matchId)
-        .then(data => setEvents(data))
-        .catch(err => logger.warn('useMatch', 'Failed to fetch events', err))
-    }
-
-    fetchMatch()
-    fetchEvents()
-
-    const interval = setInterval(() => {
-      fetchMatch()
-      fetchEvents()
-    }, 1000)
-
-    return () => clearInterval(interval)
+    Promise.all([
+      matchesApi.get(matchId),
+      matchesApi.getEvents(matchId),
+    ])
+      .then(([matchData, eventsData]) => {
+        setMatch(matchData)
+        setEvents(eventsData)
+        logger.success('useMatch', 'Initial load', matchData)
+      })
+      .catch(err => {
+        logger.error('useMatch', 'Failed to fetch match', err)
+        setError(err.message)
+      })
+      .finally(() => setLoading(false))
   }, [matchId])
+
+  // Real-time updates via WebSocket
+  const handleMessage = useCallback((msg) => {
+    if (msg.type === 'match_update') {
+      setMatch(msg.match)
+      setEvents(prev => {
+        const ids = new Set(prev.map(e => e.eventId))
+        return ids.has(msg.event.eventId) ? prev : [...prev, msg.event]
+      })
+      logger.success('useMatch', 'WS match_update', msg.match)
+    }
+  }, [])
+
+  useWebSocket(matchId ? `match#${matchId}` : null, handleMessage)
 
   return { match, events, loading, error }
 }

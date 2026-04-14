@@ -2,6 +2,8 @@ import boto3
 import os
 from datetime import datetime, timezone
 
+import ws
+
 dynamodb = boto3.resource('dynamodb')
 
 matches_table      = dynamodb.Table(os.environ['MATCHES_TABLE'])
@@ -24,7 +26,6 @@ def process_event(
     if event_type != 'clocktick':
         _mark_event_fired(match_id, event_id, run_id)
 
-    # Route to correct handler
     if event_type == 'goal':
         _handle_goal(match_id, game_time, data)
 
@@ -45,6 +46,20 @@ def process_event(
 
     else:
         print(f"Unknown event type: {event_type}")
+        return
+
+    # Push updated match state + the triggering event to all watching clients
+    match = matches_table.get_item(Key={'matchId': match_id}).get('Item', {})
+    ws.push_to_channel(f"match#{match_id}", {
+        'type':      'match_update',
+        'match':     match,
+        'event':     {
+            'eventId':   event_id,
+            'eventType': event_type,
+            'gameTime':  game_time,
+            'data':      data,
+        },
+    })
 
 
 # ─────────────────────────────────────────

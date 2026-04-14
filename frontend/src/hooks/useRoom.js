@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { roomsApi } from '../services/api'
 import { logger } from '../services/logger'
+import { useWebSocket } from './useWebSocket'
 import toast from 'react-hot-toast'
 
 const ROOM_CODE_KEY = 'fan_squad_room_code'
@@ -39,23 +40,20 @@ export function useRoom() {
     return () => controller.abort()
   }, [])
 
-  // Poll for room updates every 3 seconds when in a room
-  useEffect(() => {
-    if (!room?.roomCode) return
+  // Real-time updates via WebSocket
+  const handleMessage = useCallback((msg) => {
+    if (msg.type === 'room_update') {
+      setRoom(msg.room)
+      logger.success('useRoom', 'WS room_update', msg.room)
+    } else if (msg.type === 'room_closed') {
+      localStorage.removeItem(ROOM_CODE_KEY)
+      setRoom(null)
+      toast('Room was closed')
+      logger.info('useRoom', 'WS room_closed')
+    }
+  }, [])
 
-    const interval = setInterval(async () => {
-      try {
-        const data = await roomsApi.get(room.roomCode)
-        setRoom(data)
-      } catch (err) {
-        logger.warn('useRoom', 'Room no longer exists', err)
-        localStorage.removeItem(ROOM_CODE_KEY)
-        setRoom(null)
-      }
-    }, 3000)
-
-    return () => clearInterval(interval)
-  }, [room?.roomCode])
+  useWebSocket(room?.roomCode ? `room#${room.roomCode}` : null, handleMessage)
 
   const createRoom = async (matchId) => {
     setLoading(true)
@@ -95,13 +93,13 @@ export function useRoom() {
 
   const leaveRoom = async () => {
     if (!room?.roomCode) return
-    
+
     setLoading(true)
     try {
       const result = await roomsApi.leave(room.roomCode)
       localStorage.removeItem(ROOM_CODE_KEY)
       setRoom(null)
-      
+
       if (result.deleted) {
         logger.info('useRoom', 'Room was deleted')
         toast.success('Room destroyed')
