@@ -15,7 +15,7 @@ export default function MatchPage() {
   const { matchId } = useParams()
   const [tab, setTab] = useState('feed') // 'feed' | 'chat'
 
-  const { messages, bubbles, onChatMessage, sendMessage } = useChat(null)
+  const { messages, bubbles, onChatMessage, sendMessage } = useChat()
   const { room, loading: roomLoading } = useRoom(onChatMessage)
   const { match, events, loading } = useMatch(matchId)
 
@@ -70,7 +70,7 @@ export default function MatchPage() {
       <div className="relative">
         {tab === 'feed'
           ? <MatchFeed events={events} />
-          : <ChatPanel messages={messages} onSend={sendMessage} room={room} />
+          : <ChatPanel messages={messages} onSend={(text) => sendMessage(room.roomCode, text)} room={room} />
         }
 
         {/* Floating chat bubbles — only on feed tab */}

@@ -4,7 +4,7 @@ import service
 def handler(event, context):
         method = event['httpMethod']
         path = event['path']
-        
+
         claims = event['requestContext']['authorizer']['claims']
         user_id = claims['sub']
         display_name = claims.get('name', 'Anonymous')

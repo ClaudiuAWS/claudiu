@@ -4,33 +4,27 @@ import { roomsApi } from '../services/api'
 const MAX_BUBBLE_MESSAGES = 3
 const BUBBLE_TTL_MS = 4000
 
-export function useChat(room) {
-  const [messages, setMessages]       = useState([])  // full history
-  const [bubbles, setBubbles]         = useState([])  // last 3, auto-expire
-  const bubbleTimers                  = useRef({})
+export function useChat() {
+  const [messages, setMessages] = useState([])
+  const [bubbles, setBubbles]   = useState([])
+  const bubbleTimers            = useRef({})
 
-  // Called by useRoom when a chat_message WS message arrives
   const onChatMessage = useCallback((msg) => {
     const message = { id: `${msg.userId}-${msg.ts}`, ...msg }
 
     setMessages(prev => [...prev, message])
+    setBubbles(prev => [...prev, message].slice(-MAX_BUBBLE_MESSAGES))
 
-    setBubbles(prev => {
-      const next = [...prev, message].slice(-MAX_BUBBLE_MESSAGES)
-      return next
-    })
-
-    // Auto-remove bubble after TTL
     clearTimeout(bubbleTimers.current[message.id])
     bubbleTimers.current[message.id] = setTimeout(() => {
       setBubbles(prev => prev.filter(b => b.id !== message.id))
     }, BUBBLE_TTL_MS)
   }, [])
 
-  const sendMessage = useCallback(async (text) => {
-    if (!room?.roomCode || !text.trim()) return
-    await roomsApi.sendMessage(room.roomCode, text.trim())
-  }, [room?.roomCode])
+  const sendMessage = useCallback(async (roomCode, text) => {
+    if (!roomCode || !text.trim()) return
+    await roomsApi.sendMessage(roomCode, text.trim())
+  }, [])
 
   return { messages, bubbles, onChatMessage, sendMessage }
 }
