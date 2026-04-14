@@ -5,34 +5,37 @@ import Scoreboard from '../components/match/Scoreboard'
 import MatchFeed from '../components/match/MatchFeed'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 
+const AVATAR_COLORS = ['bg-violet-500','bg-blue-500','bg-emerald-500','bg-orange-500','bg-pink-500','bg-cyan-500']
+
 export default function MatchPage() {
   const { matchId } = useParams()
   const { match, events, loading } = useMatch(matchId)
   const { room, loading: roomLoading } = useRoom()
 
   if (loading || roomLoading) return <LoadingSpinner />
-
-  // Must be in a room to watch
   if (!room) return <Navigate to={`/lobby/${matchId}`} replace />
 
   return (
-    <div className="px-4 pt-6 space-y-4 pb-24">
+    <div className="flex flex-col pb-28">
       <Scoreboard match={match} events={events} />
 
-      <div className="bg-gray-900 rounded-2xl p-4">
-        <p className="text-gray-400 text-sm mb-3">
-          Your Squad — {room.members?.length} watching
-        </p>
-        <div className="flex gap-2 flex-wrap">
-          {room.members?.map(member => (
+      {/* Squad strip */}
+      <div className="px-4 py-3 flex items-center gap-3 border-b border-white/[0.04]">
+        <div className="flex -space-x-2">
+          {room.members?.slice(0, 5).map((m, i) => (
             <div
-              key={member.userId}
-              className="bg-gray-800 rounded-full px-3 py-1 text-white text-xs"
+              key={m.userId}
+              className={`w-7 h-7 rounded-full ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white text-[10px] font-bold ring-2 ring-gray-950`}
             >
-              {member.displayName}
+              {m.displayName?.[0]?.toUpperCase()}
             </div>
           ))}
         </div>
+        <p className="text-gray-500 text-xs">
+          {room.members?.length === 1
+            ? 'Just you watching'
+            : `${room.members?.length} watching together`}
+        </p>
       </div>
 
       <MatchFeed events={events} />

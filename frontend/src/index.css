@@ -1,16 +1,25 @@
 @import "tailwindcss";
 
 @keyframes match-event-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+.match-event-in {
+  animation: match-event-in 0.25s cubic-bezier(0.16,1,0.3,1);
 }
 
-.match-event-in {
-  animation: match-event-in 0.22s ease-out;
+@keyframes goal-flash {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+.goal-flash {
+  animation: goal-flash 0.6s ease-in-out 2;
+}
+
+@keyframes live-pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%     { opacity: 0.5; transform: scale(0.85); }
+}
+.live-dot {
+  animation: live-pulse 1.4s ease-in-out infinite;
 }
