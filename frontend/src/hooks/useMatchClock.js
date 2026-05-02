@@ -72,6 +72,19 @@ export function useMatchClock(match, events) {
         anchorRef.current = { gameSec: floor, wallMs: Date.now() }
         fromServer = floor
       }
+      // Ceiling: never display past the next known boundary's gameTime.
+      // If halftime fired but secondhalf hasn't, cap at halftime's stored sec.
+      // If we're in the second half, cap at fulltime's stored sec (if known).
+      // Boundary events always reach the client right around the cap, then
+      // status flips to halftime/fulltime and the interval shuts down.
+      const evs = eventsRef.current ?? []
+      const ht  = evs.find(e => e.eventType === 'halftime')
+      const sh  = evs.find(e => e.eventType === 'secondhalf')
+      const ft  = evs.find(e => e.eventType === 'fulltime')
+      let cap = -1
+      if (ht && !sh) cap = gameTimeToSeconds(ht.gameTime)
+      else if (ft)   cap = gameTimeToSeconds(ft.gameTime)
+      if (cap >= 0 && fromServer > cap) fromServer = cap
       setDisplay(formatMmSs(fromServer))
     }
 

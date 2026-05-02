@@ -82,6 +82,34 @@ export function sortMatchEventsChronologically(events) {
   })
 }
 
+/**
+ * Format stored game-time clock (MM:SS) as football display time.
+ *   storedSec   — seconds from the event's gameTime
+ *   htStoredSec — seconds of the halftime event clock (-1 = still first half / unknown)
+ *
+ * First half:  storedSec > 45*60 → "45+N'"  else "M'"
+ * Second half: footballMin = 45 + (storedSec - htStoredSec)/60
+ *              footballMin > 90 → "90+N'"  else "M'"
+ */
+export function formatFootballTime(storedSec, htStoredSec = -1) {
+  if (storedSec < 0) return ''
+
+  // Treat as first-half whenever halftime is unknown OR this event happened
+  // before the halftime boundary. Without the per-event check, every old
+  // first-half row re-renders with the second-half formula once halftime
+  // fires (e.g. a 0' card flips to "-6'" when htStoredSec = 3060).
+  if (htStoredSec < 0 || storedSec <= htStoredSec) {
+    const min = Math.floor(storedSec / 60)
+    if (min > 45) return `45+${min - 45}'`
+    return `${min}'`
+  }
+
+  const elapsed = storedSec - htStoredSec
+  const footballMin = 45 + Math.floor(elapsed / 60)
+  if (footballMin > 90) return `90+${footballMin - 90}'`
+  return `${footballMin}'`
+}
+
 /** Newest / latest match-clock events first (for the live feed list). */
 export function sortMatchEventsNewestFirst(events) {
   if (!events?.length) return []

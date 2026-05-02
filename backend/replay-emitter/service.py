@@ -24,6 +24,11 @@ SCHEDULE_GROUP       = os.environ['SCHEDULE_GROUP']
 # Events that should not be scheduled — they are anchors or irrelevant
 SKIP_EVENT_TYPES = {'kickoff'}
 
+# Boundary events — scheduled at their exact target second; minor neighbours
+# get pushed around them so the visible "Half Time / 2nd Half / Full Time"
+# transition lands on its true gameTime (no clock overshoot).
+BOUNDARY_EVENT_TYPES = {'halftime', 'secondhalf', 'fulltime'}
+
 
 def start_match(match_id: str, speed_multiplier: float) -> dict:
     match = _get_match(match_id)
@@ -203,32 +208,65 @@ def _schedule_events(
     `_recalculate_second_half_match_clock` in the loader.
     """
     now = datetime.now(timezone.utc)
-    schedules_created = 0
-    last_fire_at = now
 
+    # Compute each event's natural target wall-second once.
+    targets = []
     for event in events:
         if event['eventType'] in SKIP_EVENT_TYPES:
+            targets.append(None)
             continue
 
         sec = _game_clock_seconds(event.get('gameTime'))
         if sec is not None and speed_multiplier > 0:
             offset_wall = math.ceil(sec / speed_multiplier - 1e-12)
-            target = now + timedelta(seconds=max(1, offset_wall))
         else:
             event_time = datetime.fromisoformat(
                 event['eventTime']
             ).astimezone(timezone.utc)
             offset_seconds = (event_time - kickoff_time).total_seconds()
             offset_wall = math.ceil(offset_seconds / speed_multiplier - 1e-12)
-            target = now + timedelta(seconds=max(1, offset_wall))
 
-        # Monotonic floor: ≥1s after previous so EventBridge schedules are
-        # all distinct seconds and fire in submission (gameTime-sorted) order.
-        fire_at = max(target, last_fire_at + timedelta(seconds=1))
+        targets.append(now + timedelta(seconds=max(1, offset_wall)))
+
+    # Pre-pass: assign boundary events their own slots in gameTime order,
+    # enforcing monotonicity among themselves. Loader sets secondhalf
+    # gameTime = halftime + 1s, so they often share a target wall-second —
+    # without this, secondhalf could race ahead of halftime in EventBridge
+    # and leave status stuck on 'halftime'.
+    claimed = set()
+    boundary_fire_at = {}
+    boundary_last = now
+    for idx, (event, target) in enumerate(zip(events, targets)):
+        if target is None or event['eventType'] not in BOUNDARY_EVENT_TYPES:
+            continue
+        slot = max(target, boundary_last + timedelta(seconds=1)) if claimed else target
+        boundary_fire_at[idx] = slot
+        claimed.add(slot)
+        boundary_last = slot
+
+    schedules_created = 0
+    last_fire_at = now
+
+    for idx, (event, target) in enumerate(zip(events, targets)):
+        if target is None:
+            continue
+
+        if idx in boundary_fire_at:
+            # Boundary lands on its reserved slot, regardless of last_fire_at.
+            fire_at = boundary_fire_at[idx]
+        else:
+            candidate = max(target, last_fire_at + timedelta(seconds=1))
+            # Step over any second reserved for a boundary event.
+            while candidate in claimed:
+                candidate += timedelta(seconds=1)
+            fire_at = candidate
 
         _create_schedule(match_id, event, fire_at, run_id, run_tag, schedules_created)
         schedules_created += 1
-        last_fire_at = fire_at
+        # Monotonic in submission order so subsequent non-boundary events
+        # don't snap backward onto earlier seconds.
+        if fire_at > last_fire_at:
+            last_fire_at = fire_at
 
     print(f"Created {schedules_created} schedules")
     return schedules_created
