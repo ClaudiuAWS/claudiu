@@ -1,6 +1,6 @@
 import xmltodict
 import re
-from constants import POSITION_NAMES, MATCH_ID, KICKOFF_TIME
+from constants import POSITION_NAMES, MATCH_ID, KICKOFF_TIME, HOME_TEAM_NAME, AWAY_TEAM_NAME
 
 def parse_match(xml_path: str) -> dict:
     with open(xml_path, "r", encoding="utf-8") as f:
@@ -30,9 +30,9 @@ def _parse_general(general: dict, environment: dict) -> dict:
     return {
         "matchId":        MATCH_ID,
         "homeTeamId":     general["@HomeTeamId"],
-        "homeTeamName":   general["@HomeTeamName"],
+        "homeTeamName":   HOME_TEAM_NAME or general["@HomeTeamName"],
         "awayTeamId":     general["@GuestTeamId"],
-        "awayTeamName":   general["@GuestTeamName"],
+        "awayTeamName":   AWAY_TEAM_NAME or general["@GuestTeamName"],
         "homeFormation":  None,  # filled in from Teams
         "awayFormation":  None,  # filled in from Teams
         "kickoffTime":    KICKOFF_TIME,
@@ -60,10 +60,11 @@ def _parse_teams(teams_raw, match_id: str) -> dict:
 
     for team in teams_raw:
         team_id   = team["@TeamId"]
-        team_name = team["@TeamName"]
         role      = team["@Role"]        # "home" or "guest"
         formation = _normalize_formation(team.get("@LineUp", ""))
         team_role = "home" if role == "home" else "away"
+        # Use override name if set, otherwise fall back to what's in the XML
+        team_name = (HOME_TEAM_NAME if team_role == "home" else AWAY_TEAM_NAME) or team["@TeamName"]
 
         formations[team_role] = formation
 

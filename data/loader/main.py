@@ -5,10 +5,17 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from parsers.match import parse_match
 from parsers.events import parse_events
+from parsers.kpi import parse_kpi
 from loader.dynamodb import write_match, write_events, write_players
-from constants import MATCH_FILE, EVENTS_FILE
+from constants import MATCH_FILE, EVENTS_FILE, KPI_FILE
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..")
+
+# KPI file locations to try in order
+_KPI_CANDIDATES = [
+    os.path.join(DATA_DIR, KPI_FILE),
+    os.path.expanduser("~/Downloads/kpi_data_Bayern_Hamburg.xml"),
+]
 
 
 def main():
@@ -23,6 +30,17 @@ def main():
     print("\nParsing events...")
     events = parse_events(os.path.join(DATA_DIR, EVENTS_FILE), players)
     print(f"  {len(events)} relevant events")
+
+    # Merge KPI stats into player records if the file is available
+    kpi_path = next((p for p in _KPI_CANDIDATES if os.path.exists(p)), None)
+    if kpi_path:
+        print(f"\nParsing KPI stats from {os.path.basename(kpi_path)}...")
+        kpi_stats = parse_kpi(kpi_path, players)
+        for pid, player in players.items():
+            player["stats"] = kpi_stats.get(pid, {})
+        print(f"  Stats merged for {sum(1 for p in players.values() if p.get('stats'))} players")
+    else:
+        print("\nNo KPI file found — skipping stats (copy kpi.xml to data/ to enable)")
 
     print("\nWriting to DynamoDB...")
     write_match(match)

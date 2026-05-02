@@ -13,6 +13,10 @@ def handler(event, context):
         if method == 'GET' and path == '/matches':
             return _response(200, service.list_matches())
 
+        elif method == 'GET' and 'players' in path:
+            match_id = params['matchId']
+            return _response(200, service.get_match_players(match_id))
+
         elif method == 'GET' and 'events' in path:
             match_id = params['matchId']
             return _response(200, service.get_match_events(match_id))

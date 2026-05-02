@@ -2,9 +2,9 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: Claudiu Lambda Functions - Matches Feature
 
 Resources:
-        # ─────────────────────────────────────────
+        # 
         # EventBridge role to invoke event-processor
-        # ─────────────────────────────────────────
+        # 
 
         EventBridgeInvokeRole:
                 Type: AWS::IAM::Role
@@ -27,9 +27,9 @@ Resources:
                                                     Action: lambda:InvokeFunction
                                                     Resource: !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-event-processor
 
-        # ─────────────────────────────────────────
+        # 
         # Replay Emitter Role
-        # ─────────────────────────────────────────
+        # 
 
         ReplayEmitterRole:
                 Type: AWS::IAM::Role
@@ -88,9 +88,9 @@ Resources:
                                                     Resource:
                                                             - !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:*/@connections/*
 
-        # ─────────────────────────────────────────
+        # 
         # Event Processor Role
-        # ─────────────────────────────────────────
+        # 
 
         EventProcessorRole:
                 Type: AWS::IAM::Role
@@ -142,9 +142,17 @@ Resources:
                                                     Action:
                                                             - dynamodb:Query
                                                             - dynamodb:DeleteItem
+                                                            - dynamodb:UpdateItem
                                                     Resource:
                                                             - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-rooms
                                                             - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-rooms/index/*
+                                                  - Sid: PlayerLookupRead
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:Query
+                                                    Resource:
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-player-lookup
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-player-lookup/index/*
         MatchesLambdaRole:
                 Type: AWS::IAM::Role
                 Properties:
@@ -185,9 +193,9 @@ Resources:
                                                             - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-player-lookup
                                                             - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-player-lookup/index/*
 
-        # ─────────────────────────────────────────
+        # 
         # Replay Emitter Lambda
-        # ─────────────────────────────────────────
+        # 
 
         ReplayEmitterLambda:
                 Type: AWS::Lambda::Function
@@ -246,9 +254,9 @@ Resources:
                         Action: lambda:InvokeFunction
                         Principal: apigateway.amazonaws.com
                         SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:1jmrjvnbs5/*
-        # ─────────────────────────────────────────
+        # 
         # Event Processor Lambda
-        # ─────────────────────────────────────────
+        # 
 
         EventProcessorLambda:
                 Type: AWS::Lambda::Function
@@ -266,6 +274,7 @@ Resources:
                                         CONNECTIONS_TABLE: claudiu-ws-connections
                                         WEBSOCKET_ENDPOINT: !ImportValue claudiu-ws-endpoint
                                         ROOMS_TABLE: claudiu-rooms
+                                        PLAYER_LOOKUP_TABLE: claudiu-player-lookup
                         Code:
                                 ZipFile: |
                                         def handler(event, context):

@@ -1,8 +1,12 @@
 import EventItem from './EventItem'
-import { sortMatchEventsNewestFirst } from '../../utils/matchEvents'
+import { sortMatchEventsNewestFirst, gameTimeToSeconds } from '../../utils/matchEvents'
 
 export default function MatchFeed({ events }) {
   const ordered = sortMatchEventsNewestFirst(events ?? [])
+
+  // Find the halftime event's stored seconds so EventItem can compute football minutes
+  const htEvent = (events ?? []).find(e => e.eventType === 'halftime')
+  const htStoredSec = htEvent ? gameTimeToSeconds(htEvent.gameTime) : -1
 
   return (
     <div className="px-4 pt-4">
@@ -18,7 +22,7 @@ export default function MatchFeed({ events }) {
       ) : (
         <div className="flex flex-col gap-2">
           {ordered.map(event => (
-            <EventItem key={event.eventId} event={event} />
+            <EventItem key={event.eventId} event={event} htStoredSec={htStoredSec} />
           ))}
         </div>
       )}

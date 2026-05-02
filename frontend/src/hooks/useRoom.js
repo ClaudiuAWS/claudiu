@@ -6,12 +6,14 @@ import toast from 'react-hot-toast'
 
 const ROOM_CODE_KEY = 'fan_squad_room_code'
 
-export function useRoom(onChatMessage) {
-  const [room, setRoom] = useState(null)
-  const [loading, setLoading] = useState(true)
+export function useRoom(onChatMessage, currentUserId, initialRoom = null) {
+  const [room, setRoom] = useState(initialRoom)
+  const [loading, setLoading] = useState(initialRoom ? false : true)
 
-  // Restore room from localStorage on mount
+  // Restore room from localStorage on mount (skip if we already have room from nav state)
   useEffect(() => {
+    if (initialRoom) return
+
     const savedCode = localStorage.getItem(ROOM_CODE_KEY)
     if (!savedCode) {
       setLoading(false)
@@ -55,8 +57,23 @@ export function useRoom(onChatMessage) {
       logger.info('useRoom', 'WS match_ended', msg.finalResult)
     } else if (msg.type === 'chat_message') {
       onChatMessage?.(msg)
+    } else if (msg.type === 'score_update') {
+      const scoreMap = Object.fromEntries(msg.leaderboard.map(e => [e.userId, e.score]))
+      setRoom(prev => prev ? {
+        ...prev,
+        members: prev.members.map(m => ({ ...m, score: scoreMap[m.userId] ?? m.score }))
+      } : prev)
+      const myChange = msg.changes?.find(c => c.userId === currentUserId)
+      if (myChange) {
+        const sign = myChange.delta > 0 ? '+' : ''
+        toast(`${myChange.delta > 0 ? '⚽' : '🟨'} ${sign}${myChange.delta} pts`, {
+          duration: 4000,
+          style: { background: myChange.delta > 0 ? '#065f46' : '#7f1d1d', color: '#fff' },
+        })
+      }
+      logger.info('useRoom', 'WS score_update', msg.changes)
     }
-  }, [onChatMessage])
+  }, [onChatMessage, currentUserId])
 
   useWebSocket(room?.roomCode ? `room#${room.roomCode}` : null, handleMessage)
 

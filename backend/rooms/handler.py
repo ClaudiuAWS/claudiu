@@ -25,6 +25,12 @@ def handler(event, context):
             elif method == 'POST' and '/message' in path:
                 return _send_message(event, user_id, display_name)
 
+            elif method == 'POST' and '/team' in path:
+                return _select_team(event, user_id)
+
+            elif method == 'POST' and '/start' in path:
+                return _start_match(event, user_id)
+
             else:
                 return _response(404, {'error': 'Not found'})
         
@@ -70,6 +76,20 @@ def _send_message(event, user_id, display_name):
             return _response(400, {'error': 'message too long'})
         service.send_message(room_code, user_id, display_name, text)
         return _response(200, {'ok': True})
+
+def _select_team(event, user_id):
+        room_code = event['pathParameters']['code']
+        body = json.loads(event.get('body') or '{}')
+        player_ids = body.get('playerIds', [])
+        if not isinstance(player_ids, list):
+            return _response(400, {'error': 'playerIds must be a list'})
+        result = service.select_team(room_code, user_id, player_ids)
+        return _response(200, result)
+
+def _start_match(event, user_id):
+        room_code = event['pathParameters']['code']
+        result = service.start_match_for_room(room_code, user_id)
+        return _response(200, result)
 
 def _response(status_code: int, body: dict) -> dict:
         return {

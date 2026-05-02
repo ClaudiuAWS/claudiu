@@ -44,6 +44,26 @@ def get_match_events(match_id: str) -> list:
     return sorted(events, key=_event_feed_order_key)
 
 
+def get_match_players(match_id: str) -> list:
+    players = []
+    kwargs = {'KeyConditionExpression': Key('matchId').eq(match_id)}
+    while True:
+        resp = player_lookup_table.query(**kwargs)
+        players.extend(resp.get('Items', []))
+        lek = resp.get('LastEvaluatedKey')
+        if not lek:
+            break
+        kwargs['ExclusiveStartKey'] = lek
+
+    def sort_key(p):
+        return (
+            0 if p.get('teamRole') == 'home' else 1,
+            0 if p.get('starting') else 1,
+            int(p.get('shirtNumber', 99)),
+        )
+    return sorted(players, key=sort_key)
+
+
 def _game_clock_seconds(gt) -> int | None:
     """Match clock seconds from gameTime; handles MM:SS, Decimal, total seconds."""
     if gt is None:

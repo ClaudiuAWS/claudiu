@@ -1,3 +1,5 @@
+import { gameTimeToSeconds, formatFootballTime } from '../../utils/matchEvents'
+
 const EVENT_CONFIG = {
   goal: {
     icon: () => (
@@ -85,7 +87,7 @@ function getDescription(event) {
   }
 }
 
-export default function EventItem({ event }) {
+export default function EventItem({ event, htStoredSec = -1 }) {
   const cfg = EVENT_CONFIG[event.eventType] ?? {
     icon: () => <span className="text-sm">•</span>,
     bg: 'bg-gray-700',
@@ -96,6 +98,12 @@ export default function EventItem({ event }) {
 
   const { primary, secondary } = getDescription(event)
   const isGoal = event.eventType === 'goal'
+
+  // Football-convention time: "45+6'", "67'", etc.
+  const storedSec = gameTimeToSeconds(event.gameTime)
+  // Halftime / secondhalf / fulltime markers are boundary events — show them without a minute
+  const isBoundary = ['halftime', 'secondhalf', 'fulltime'].includes(event.eventType)
+  const displayTime = isBoundary ? null : formatFootballTime(storedSec, htStoredSec)
 
   return (
     <div
@@ -117,9 +125,11 @@ export default function EventItem({ event }) {
       </div>
 
       {/* Game time */}
-      <div className="flex-shrink-0 text-right">
-        <span className="text-gray-600 text-xs tabular-nums">{event.gameTime}</span>
-      </div>
+      {displayTime && (
+        <div className="flex-shrink-0 text-right">
+          <span className="text-gray-500 text-xs font-semibold tabular-nums">{displayTime}</span>
+        </div>
+      )}
     </div>
   )
 }

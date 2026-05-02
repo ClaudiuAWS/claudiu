@@ -1,25 +1,32 @@
 import { useState } from 'react'
-import { useParams, Navigate } from 'react-router-dom'
+import { useParams, Navigate, useLocation } from 'react-router-dom'
 import { useMatch } from '../hooks/useMatch'
 import { useRoom } from '../hooks/useRoom'
 import { useChat } from '../hooks/useChat'
+import { useAuth } from '../hooks/useAuth'
 import Scoreboard from '../components/match/Scoreboard'
 import MatchFeed from '../components/match/MatchFeed'
 import ChatPanel from '../components/match/ChatPanel'
 import ChatBubbles from '../components/match/ChatBubbles'
+import LeaderboardPanel from '../components/match/LeaderboardPanel'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 
 const AVATAR_COLORS = ['bg-violet-500','bg-blue-500','bg-emerald-500','bg-orange-500','bg-pink-500','bg-cyan-500']
 
 export default function MatchPage() {
   const { matchId } = useParams()
-  const [tab, setTab] = useState('feed') // 'feed' | 'chat'
+  const location = useLocation()
+  const [tab, setTab] = useState('feed') // 'feed' | 'squad' | 'chat'
 
+  const { user } = useAuth()
   const { messages, bubbles, onChatMessage, sendMessage } = useChat()
-  const { room, loading: roomLoading } = useRoom(onChatMessage)
+  // Use room from navigation state (instant, no API round-trip) or fall back to localStorage fetch
+  const { room, loading: roomLoading } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom)
   const { match, events, loading } = useMatch(matchId)
 
   if (loading || roomLoading) return <LoadingSpinner />
+
+  // Room gone (reset, kicked) — go back to lobby to rejoin
   if (!room) return <Navigate to={`/lobby/${matchId}`} replace />
 
   return (
@@ -45,7 +52,7 @@ export default function MatchPage() {
 
       {/* Tab bar */}
       <div className="flex border-b border-white/[0.04]">
-        {['feed', 'chat'].map(t => (
+        {['feed', 'squad', 'chat'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -66,10 +73,13 @@ export default function MatchPage() {
 
       {/* Content */}
       <div className="relative">
-        {tab === 'feed'
-          ? <MatchFeed events={events} />
-          : <ChatPanel messages={messages} onSend={(text) => sendMessage(room.roomCode, text)} room={room} />
-        }
+        {tab === 'feed' && <MatchFeed events={events} />}
+        {tab === 'squad' && (
+          <LeaderboardPanel members={room.members} currentUserId={user?.userId} />
+        )}
+        {tab === 'chat' && (
+          <ChatPanel messages={messages} onSend={(text) => sendMessage(room.roomCode, text)} room={room} />
+        )}
         {tab === 'feed' && bubbles.length > 0 && (
           <ChatBubbles bubbles={bubbles} />
         )}
