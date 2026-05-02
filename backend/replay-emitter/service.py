@@ -185,20 +185,26 @@ def _schedule_events(
     run_tag: str
 ) -> int:
     """
-    Space fires by **match-clock** deltas (gameTime), not XML wall time vs kickoff.
-    Feed gameTime is continuous across half-time (51:00 → 51:01); XML timestamps
-    can still be out of order, which used to schedule 2H subs before the second-half
-    row and left the board on half-time while late-clock events appeared.
+    Schedule each event at its **absolute** match-clock offset from kickoff
+    (sec / speed_multiplier), then enforce a 1-second monotonic floor so
+    EventBridge's one-shot `at(…:SS)` resolution never collapses two events
+    onto the same second (which would let them fire in arbitrary order).
 
-    EventBridge one-shot schedules use **second** resolution. Sub-second wall gaps
-    collapse to the same `at(…:SS)` so multiple Lambdas run together and **finish**
-    in arbitrary order — e.g. 67' goal before 51' half-time in Dynamo even when
-    gameTime order is correct.
+    Why absolute, not cumulative: the previous implementation accumulated
+    `max(1, ceil(delta/speed))` per event onto `last_fire_at`. At high
+    speedMultiplier (e.g. 60×), bursts of close events each rounded up to
+    +1 wall second, drifting fires several seconds (= several match-minutes)
+    late by the second half — e.g. a 60' sub firing when the live clock
+    already showed 69'. Computing each fire time from the absolute `sec`
+    eliminates rolling drift; bursts still get the +1s spread but every
+    subsequent sparse event snaps back to its true target.
+
+    Feed gameTime is continuous across half-time (51:00 → 51:01) thanks to
+    `_recalculate_second_half_match_clock` in the loader.
     """
     now = datetime.now(timezone.utc)
     schedules_created = 0
     last_fire_at = now
-    prev_match_sec = None
 
     for event in events:
         if event['eventType'] in SKIP_EVENT_TYPES:
@@ -206,27 +212,19 @@ def _schedule_events(
 
         sec = _game_clock_seconds(event.get('gameTime'))
         if sec is not None and speed_multiplier > 0:
-            if prev_match_sec is None:
-                delta_match = max(1, sec)
-            else:
-                delta_match = max(1, sec - prev_match_sec)
-            wall_seconds = delta_match / speed_multiplier
-            step = max(1, math.ceil(wall_seconds - 1e-12))
-            fire_at = last_fire_at + timedelta(seconds=step)
-            prev_match_sec = sec
+            offset_wall = math.ceil(sec / speed_multiplier - 1e-12)
+            target = now + timedelta(seconds=max(1, offset_wall))
         else:
             event_time = datetime.fromisoformat(
                 event['eventTime']
             ).astimezone(timezone.utc)
             offset_seconds = (event_time - kickoff_time).total_seconds()
-            wall_seconds = offset_seconds / speed_multiplier
-            ideal = now + timedelta(seconds=wall_seconds)
-            raw_gap = (ideal - last_fire_at).total_seconds()
-            step = max(1, math.ceil(raw_gap - 1e-12))
-            fire_at = last_fire_at + timedelta(seconds=step)
+            offset_wall = math.ceil(offset_seconds / speed_multiplier - 1e-12)
+            target = now + timedelta(seconds=max(1, offset_wall))
 
-        if fire_at <= now:
-            fire_at = last_fire_at + timedelta(seconds=1)
+        # Monotonic floor: ≥1s after previous so EventBridge schedules are
+        # all distinct seconds and fire in submission (gameTime-sorted) order.
+        fire_at = max(target, last_fire_at + timedelta(seconds=1))
 
         _create_schedule(match_id, event, fire_at, run_id, run_tag, schedules_created)
         schedules_created += 1
