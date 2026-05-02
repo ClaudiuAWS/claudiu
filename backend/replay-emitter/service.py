@@ -191,18 +191,26 @@ def _schedule_events(
 ) -> int:
     """
     Schedule each event at its **absolute** match-clock offset from kickoff
-    (sec / speed_multiplier), then enforce a 1-second monotonic floor so
-    EventBridge's one-shot `at(…:SS)` resolution never collapses two events
-    onto the same second (which would let them fire in arbitrary order).
+    (sec / speed_multiplier). Multiple non-boundary events may share a wall
+    second — that's fine: the event-processor handlers are order-tolerant
+    (`_handle_goal` max-merges scores, `_handle_minor_event` uses a monotonic
+    `_merge_minute_value` for currentMinute), and the frontend feed sorts by
+    `gameTime` then `eventTime` so display order stays stable regardless of
+    arrival order. Two parallel Lambda invocations on the same wall second
+    are well within Lambda concurrency limits.
 
-    Why absolute, not cumulative: the previous implementation accumulated
-    `max(1, ceil(delta/speed))` per event onto `last_fire_at`. At high
-    speedMultiplier (e.g. 60×), bursts of close events each rounded up to
-    +1 wall second, drifting fires several seconds (= several match-minutes)
-    late by the second half — e.g. a 60' sub firing when the live clock
-    already showed 69'. Computing each fire time from the absolute `sec`
-    eliminates rolling drift; bursts still get the +1s spread but every
-    subsequent sparse event snaps back to its true target.
+    Why we DON'T enforce a 1s monotonic floor here: at high speedMultiplier,
+    clusters of N events targeting the same handful of wall seconds get
+    smeared across N consecutive seconds, dragging events many game-minutes
+    past their true target (e.g. a 61' goal firing at wall 75 when the
+    on-screen clock shows 75:xx). Removing the floor makes events arrive on
+    time at the cost of ordering between same-second events, which doesn't
+    matter for this app — see handler analysis above.
+
+    Boundary events (`halftime` / `secondhalf` / `fulltime`) DO need ordering
+    because they flip `match.status`, so the pre-pass below still reserves
+    them their exact target wall-second with monotonicity enforced among
+    themselves; non-boundary events step over those reserved slots.
 
     Feed gameTime is continuous across half-time (51:00 → 51:01) thanks to
     `_recalculate_second_half_match_clock` in the loader.
@@ -245,28 +253,25 @@ def _schedule_events(
         boundary_last = slot
 
     schedules_created = 0
-    last_fire_at = now
 
     for idx, (event, target) in enumerate(zip(events, targets)):
         if target is None:
             continue
 
         if idx in boundary_fire_at:
-            # Boundary lands on its reserved slot, regardless of last_fire_at.
+            # Boundary lands on its reserved slot.
             fire_at = boundary_fire_at[idx]
         else:
-            candidate = max(target, last_fire_at + timedelta(seconds=1))
-            # Step over any second reserved for a boundary event.
+            # Fire at the natural target. Multiple non-boundary events on the
+            # same wall-second fire concurrently; this is intentional.
+            # Only step over seconds reserved for boundary events.
+            candidate = target
             while candidate in claimed:
                 candidate += timedelta(seconds=1)
             fire_at = candidate
 
         _create_schedule(match_id, event, fire_at, run_id, run_tag, schedules_created)
         schedules_created += 1
-        # Monotonic in submission order so subsequent non-boundary events
-        # don't snap backward onto earlier seconds.
-        if fire_at > last_fire_at:
-            last_fire_at = fire_at
 
     print(f"Created {schedules_created} schedules")
     return schedules_created
