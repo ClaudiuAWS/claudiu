@@ -24,6 +24,11 @@ SCHEDULE_GROUP       = os.environ['SCHEDULE_GROUP']
 # Events that should not be scheduled — they are anchors or irrelevant
 SKIP_EVENT_TYPES = {'kickoff'}
 
+# Boundary events — scheduled at their exact target second; minor neighbours
+# get pushed around them so the visible "Half Time / 2nd Half / Full Time"
+# transition lands on its true gameTime (no clock overshoot).
+BOUNDARY_EVENT_TYPES = {'halftime', 'secondhalf', 'fulltime'}
+
 
 def start_match(match_id: str, speed_multiplier: float) -> dict:
     match = _get_match(match_id)
@@ -185,52 +190,88 @@ def _schedule_events(
     run_tag: str
 ) -> int:
     """
-    Space fires by **match-clock** deltas (gameTime), not XML wall time vs kickoff.
-    Feed gameTime is continuous across half-time (51:00 → 51:01); XML timestamps
-    can still be out of order, which used to schedule 2H subs before the second-half
-    row and left the board on half-time while late-clock events appeared.
+    Schedule each event at its **absolute** match-clock offset from kickoff
+    (sec / speed_multiplier). Multiple non-boundary events may share a wall
+    second — that's fine: the event-processor handlers are order-tolerant
+    (`_handle_goal` max-merges scores, `_handle_minor_event` uses a monotonic
+    `_merge_minute_value` for currentMinute), and the frontend feed sorts by
+    `gameTime` then `eventTime` so display order stays stable regardless of
+    arrival order. Two parallel Lambda invocations on the same wall second
+    are well within Lambda concurrency limits.
 
-    EventBridge one-shot schedules use **second** resolution. Sub-second wall gaps
-    collapse to the same `at(…:SS)` so multiple Lambdas run together and **finish**
-    in arbitrary order — e.g. 67' goal before 51' half-time in Dynamo even when
-    gameTime order is correct.
+    Why we DON'T enforce a 1s monotonic floor here: at high speedMultiplier,
+    clusters of N events targeting the same handful of wall seconds get
+    smeared across N consecutive seconds, dragging events many game-minutes
+    past their true target (e.g. a 61' goal firing at wall 75 when the
+    on-screen clock shows 75:xx). Removing the floor makes events arrive on
+    time at the cost of ordering between same-second events, which doesn't
+    matter for this app — see handler analysis above.
+
+    Boundary events (`halftime` / `secondhalf` / `fulltime`) DO need ordering
+    because they flip `match.status`, so the pre-pass below still reserves
+    them their exact target wall-second with monotonicity enforced among
+    themselves; non-boundary events step over those reserved slots.
+
+    Feed gameTime is continuous across half-time (51:00 → 51:01) thanks to
+    `_recalculate_second_half_match_clock` in the loader.
     """
     now = datetime.now(timezone.utc)
-    schedules_created = 0
-    last_fire_at = now
-    prev_match_sec = None
 
+    # Compute each event's natural target wall-second once.
+    targets = []
     for event in events:
         if event['eventType'] in SKIP_EVENT_TYPES:
+            targets.append(None)
             continue
 
         sec = _game_clock_seconds(event.get('gameTime'))
         if sec is not None and speed_multiplier > 0:
-            if prev_match_sec is None:
-                delta_match = max(1, sec)
-            else:
-                delta_match = max(1, sec - prev_match_sec)
-            wall_seconds = delta_match / speed_multiplier
-            step = max(1, math.ceil(wall_seconds - 1e-12))
-            fire_at = last_fire_at + timedelta(seconds=step)
-            prev_match_sec = sec
+            offset_wall = math.ceil(sec / speed_multiplier - 1e-12)
         else:
             event_time = datetime.fromisoformat(
                 event['eventTime']
             ).astimezone(timezone.utc)
             offset_seconds = (event_time - kickoff_time).total_seconds()
-            wall_seconds = offset_seconds / speed_multiplier
-            ideal = now + timedelta(seconds=wall_seconds)
-            raw_gap = (ideal - last_fire_at).total_seconds()
-            step = max(1, math.ceil(raw_gap - 1e-12))
-            fire_at = last_fire_at + timedelta(seconds=step)
+            offset_wall = math.ceil(offset_seconds / speed_multiplier - 1e-12)
 
-        if fire_at <= now:
-            fire_at = last_fire_at + timedelta(seconds=1)
+        targets.append(now + timedelta(seconds=max(1, offset_wall)))
+
+    # Pre-pass: assign boundary events their own slots in gameTime order,
+    # enforcing monotonicity among themselves. Loader sets secondhalf
+    # gameTime = halftime + 1s, so they often share a target wall-second —
+    # without this, secondhalf could race ahead of halftime in EventBridge
+    # and leave status stuck on 'halftime'.
+    claimed = set()
+    boundary_fire_at = {}
+    boundary_last = now
+    for idx, (event, target) in enumerate(zip(events, targets)):
+        if target is None or event['eventType'] not in BOUNDARY_EVENT_TYPES:
+            continue
+        slot = max(target, boundary_last + timedelta(seconds=1)) if claimed else target
+        boundary_fire_at[idx] = slot
+        claimed.add(slot)
+        boundary_last = slot
+
+    schedules_created = 0
+
+    for idx, (event, target) in enumerate(zip(events, targets)):
+        if target is None:
+            continue
+
+        if idx in boundary_fire_at:
+            # Boundary lands on its reserved slot.
+            fire_at = boundary_fire_at[idx]
+        else:
+            # Fire at the natural target. Multiple non-boundary events on the
+            # same wall-second fire concurrently; this is intentional.
+            # Only step over seconds reserved for boundary events.
+            candidate = target
+            while candidate in claimed:
+                candidate += timedelta(seconds=1)
+            fire_at = candidate
 
         _create_schedule(match_id, event, fire_at, run_id, run_tag, schedules_created)
         schedules_created += 1
-        last_fire_at = fire_at
 
     print(f"Created {schedules_created} schedules")
     return schedules_created

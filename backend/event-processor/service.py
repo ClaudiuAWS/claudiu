@@ -7,9 +7,10 @@ import ws
 
 dynamodb = boto3.resource('dynamodb')
 
-matches_table      = dynamodb.Table(os.environ['MATCHES_TABLE'])
-match_events_table = dynamodb.Table(os.environ['MATCH_EVENTS_TABLE'])
-rooms_table        = dynamodb.Table(os.environ['ROOMS_TABLE'])
+matches_table       = dynamodb.Table(os.environ['MATCHES_TABLE'])
+match_events_table  = dynamodb.Table(os.environ['MATCH_EVENTS_TABLE'])
+rooms_table         = dynamodb.Table(os.environ['ROOMS_TABLE'])
+player_lookup_table = dynamodb.Table(os.environ['PLAYER_LOOKUP_TABLE'])
 
 
 def process_event(
@@ -51,7 +52,9 @@ def process_event(
         print(f"Unknown event type: {event_type}")
         return
 
-    # Push updated match state + the triggering event to all watching clients
+    # Push updated match state + the triggering event FIRST so the frontend
+    # receives events in strict chronological order. Room scoring happens after
+    # (it arrives separately via score_update messages on the room channel).
     match = matches_table.get_item(
         Key={'matchId': match_id}, ConsistentRead=True
     ).get('Item', {})
@@ -65,6 +68,9 @@ def process_event(
             'data':      data,
         },
     })
+
+    # Award/deduct fantasy points after the event is already on the client
+    _score_rooms_for_event(match_id, event_type, data)
 
 
 # ─────────────────────────────────────────
@@ -163,6 +169,103 @@ def _handle_minor_event(match_id: str, game_time: str) -> None:
 def _handle_clock_tick(match_id: str, game_time: str) -> None:
     # Legacy: ticks disabled in replay-emitter; ignore any in-flight schedules.
     return
+
+
+# ─────────────────────────────────────────
+# Fantasy scoring
+# ─────────────────────────────────────────
+
+def _score_rooms_for_event(match_id: str, event_type: str, data: dict) -> None:
+    if event_type not in ('goal', 'card'):
+        return
+    response = rooms_table.query(
+        IndexName='matchId-index',
+        KeyConditionExpression=Key('matchId').eq(match_id),
+    )
+    active_rooms = [r for r in response.get('Items', []) if r.get('status') != 'ended']
+    for room in active_rooms:
+        deltas = _calculate_deltas(room, event_type, data)
+        if any(v != 0 for v in deltas.values()):
+            _apply_score_deltas(room, deltas)
+
+
+def _calculate_deltas(room: dict, event_type: str, data: dict) -> dict:
+    deltas = {}
+    members = room.get('members', [])
+
+    if event_type == 'goal':
+        scoring_pid  = data.get('scoringPlayerId')
+        assist_pid   = data.get('assistPlayerId')
+        scoring_role = data.get('scoringTeamRole')
+
+        for m in members:
+            uid     = m['userId']
+            details = {d['playerId']: d for d in m.get('teamSelectionDetails', [])}
+            delta   = 0
+            if scoring_pid and scoring_pid in details:
+                delta += 5
+            if assist_pid and assist_pid in details:
+                delta += 3
+            if scoring_role:
+                opp_role = 'away' if scoring_role == 'home' else 'home'
+                has_beaten_gk = any(
+                    d.get('position') == 'TW' and d.get('teamRole') == opp_role
+                    for d in details.values()
+                )
+                if has_beaten_gk:
+                    delta -= 1
+                if scoring_pid and scoring_pid in details:
+                    delta += 2  # valid-opponent bonus stacked with +5 above
+            deltas[uid] = delta
+
+    elif event_type == 'card':
+        player_id  = data.get('playerId')
+        card_color = data.get('cardColor', '').lower()
+        if card_color not in ('yellow', 'red'):
+            return {}
+        for m in members:
+            uid       = m['userId']
+            selection = set(m.get('teamSelection', []))
+            delta     = 0
+            if player_id and player_id in selection:
+                delta = -1 if card_color == 'yellow' else -3
+            deltas[uid] = delta
+
+    return deltas
+
+
+def _apply_score_deltas(room: dict, deltas: dict) -> None:
+    members       = room.get('members', [])
+    score_changes = []
+
+    for m in members:
+        delta = deltas.get(m['userId'], 0)
+        if delta == 0:
+            continue
+        new_score  = int(m.get('score', 0)) + delta
+        m['score'] = new_score
+        score_changes.append({'userId': m['userId'], 'delta': delta, 'newScore': new_score})
+
+    if not score_changes:
+        return
+
+    rooms_table.update_item(
+        Key={'roomCode': room['roomCode']},
+        UpdateExpression='SET members = :members',
+        ExpressionAttributeValues={':members': members}
+    )
+
+    leaderboard = sorted(
+        [{'userId': m['userId'], 'displayName': m['displayName'], 'score': int(m.get('score', 0))} for m in members],
+        key=lambda x: x['score'],
+        reverse=True,
+    )
+    ws.push_to_channel(f"room#{room['roomCode']}", {
+        'type':        'score_update',
+        'leaderboard': leaderboard,
+        'changes':     score_changes,
+    })
+    print(f"Scored room {room['roomCode']}: {score_changes}")
 
 
 # ─────────────────────────────────────────

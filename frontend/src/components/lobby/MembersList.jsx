@@ -7,7 +7,7 @@ function avatar(name, index) {
   return COLORS[index % COLORS.length]
 }
 
-export default function MembersList({ members, hostUserId }) {
+export default function MembersList({ members, hostUserId, teamReadyIds = new Set() }) {
   return (
     <div className="rounded-3xl overflow-hidden"
       style={{ background: 'linear-gradient(145deg,#111827,#0d1117)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -24,6 +24,11 @@ export default function MembersList({ members, hostUserId }) {
               {member.displayName?.[0]?.toUpperCase() ?? '?'}
             </div>
             <span className="text-white text-sm flex-1">{member.displayName}</span>
+            {teamReadyIds.has(member.userId) && (
+              <span className="text-[10px] font-semibold tracking-widest uppercase text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
+                11 ✓
+              </span>
+            )}
             {member.userId === hostUserId && (
               <span className="text-[10px] font-semibold tracking-widest uppercase text-green-400 bg-green-400/10 px-2.5 py-1 rounded-full">
                 Host

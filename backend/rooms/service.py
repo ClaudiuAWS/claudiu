@@ -1,4 +1,5 @@
 import boto3
+import json
 import os
 import time
 import random
@@ -8,8 +9,10 @@ from boto3.dynamodb.conditions import Attr
 import ws
 
 dynamodb = boto3.resource('dynamodb')
+lambda_client = boto3.client('lambda', region_name='eu-central-1')
 rooms_table = dynamodb.Table(os.environ['ROOMS_TABLE'])
 matches_table = dynamodb.Table(os.environ['MATCHES_TABLE'])
+player_lookup_table = dynamodb.Table(os.environ['PLAYER_LOOKUP_TABLE'])
 
 
 def generate_room_code():
@@ -140,6 +143,83 @@ def send_message(room_code: str, user_id: str, display_name: str, text: str) -> 
         'text':        text,
         'ts':          int(time.time() * 1000),
     })
+
+
+def select_team(room_code: str, user_id: str, player_ids: list) -> dict:
+    if len(player_ids) != 11:
+        raise ValueError('You must select exactly 11 players')
+    if len(set(player_ids)) != 11:
+        raise ValueError('Duplicate players are not allowed')
+
+    room = rooms_table.get_item(Key={'roomCode': room_code}).get('Item')
+    if not room:
+        raise ValueError('Room not found')
+
+    match_id = room['matchId']
+    keys = [{'matchId': match_id, 'playerId': pid} for pid in player_ids]
+    resp = dynamodb.batch_get_item(
+        RequestItems={os.environ['PLAYER_LOOKUP_TABLE']: {'Keys': keys}}
+    )
+    fetched = {p['playerId']: p for p in resp['Responses'].get(os.environ['PLAYER_LOOKUP_TABLE'], [])}
+    if len(fetched) != 11:
+        raise ValueError('One or more player IDs are invalid for this match')
+
+    selection_details = [
+        {
+            'playerId':    pid,
+            'position':    fetched[pid].get('position', ''),
+            'teamRole':    fetched[pid].get('teamRole', ''),
+            'shirtNumber': fetched[pid].get('shirtNumber', ''),
+        }
+        for pid in player_ids
+    ]
+
+    members = room.get('members', [])
+    updated = False
+    for m in members:
+        if m['userId'] == user_id:
+            m['teamSelection'] = player_ids
+            m['teamSelectionDetails'] = selection_details
+            updated = True
+            break
+    if not updated:
+        raise ValueError('You are not in this room')
+
+    rooms_table.update_item(
+        Key={'roomCode': room_code},
+        UpdateExpression='SET members = :members',
+        ExpressionAttributeValues={':members': members}
+    )
+    room['members'] = members
+    _push_room_update(room)
+    return {'ok': True, 'playerCount': 11}
+
+
+def start_match_for_room(room_code: str, user_id: str) -> dict:
+    room = rooms_table.get_item(Key={'roomCode': room_code}).get('Item')
+    if not room:
+        raise ValueError('Room not found')
+    if room.get('hostUserId') != user_id:
+        raise ValueError('Only the host can start the match')
+    members = room.get('members', [])
+    if len(members) < 1:  # DEV: solo testing allowed; restore to < 2 for production
+        raise ValueError('At least 1 player is required to start the match')
+
+    match_id = room['matchId']
+    payload = json.dumps({
+        'pathParameters': {'matchId': match_id},
+        'body': json.dumps({'speedMultiplier': 30}),
+    })
+    response = lambda_client.invoke(
+        FunctionName=os.environ['REPLAY_EMITTER_FUNCTION'],
+        InvocationType='RequestResponse',
+        Payload=payload,
+    )
+    result = json.loads(response['Payload'].read())
+    if result.get('statusCode', 200) >= 400:
+        body = json.loads(result.get('body', '{}'))
+        raise ValueError(body.get('error', 'Failed to start match'))
+    return {'ok': True, 'matchId': match_id}
 
 
 def _push_room_update(room: dict) -> None:

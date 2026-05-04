@@ -40,10 +40,13 @@ export const roomsApi = {
   join:        (roomCode)           => request(`/rooms/${roomCode}/join`, 'POST'),
   leave:       (roomCode)           => request(`/rooms/${roomCode}/leave`, 'DELETE'),
   sendMessage: (roomCode, text)     => request(`/rooms/${roomCode}/message`, 'POST', { text }),
+  selectTeam:  (roomCode, playerIds) => request(`/rooms/${roomCode}/team`, 'POST', { playerIds }),
+  startMatch:  (roomCode)           => request(`/rooms/${roomCode}/start`, 'POST'),
 }
 
 export const matchesApi = {
-  list: () => request('/matches'),
-  get: (matchId) => request(`/matches/${matchId}`),
-  getEvents: (matchId) => request(`/matches/${matchId}/events`),
+  list:       ()        => request('/matches'),
+  get:        (matchId) => request(`/matches/${matchId}`),
+  getEvents:  (matchId) => request(`/matches/${matchId}/events`),
+  getPlayers: (matchId) => request(`/matches/${matchId}/players`),
 }

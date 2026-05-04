@@ -13,6 +13,15 @@ PLAYER_LOOKUP_TABLE = "claudiu-player-lookup"
 MATCH_ID = "DFL-MAT-111111"
 
 # -----------------------------------------
+# Team Name Overrides
+# The XML uses anonymised placeholders; set real names here.
+# Set to None to use whatever is in the XML.
+# -----------------------------------------
+
+HOME_TEAM_NAME = "Bayern Munich"
+AWAY_TEAM_NAME = "Hamburger SV"
+
+# -----------------------------------------
 # Kickoff Time
 # -----------------------------------------
 
@@ -97,7 +106,7 @@ POSITION_NAMES = {
 # Match TTL (7 days in seconds)
 # ─────────────────────────────────────────
 
-MATCH_TTL_SECONDS = 2 * 60 * 60
+MATCH_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days for dev
 
 # ─────────────────────────────────────────
 # AWS Region

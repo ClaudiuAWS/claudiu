@@ -34,7 +34,12 @@ export function useMatch(matchId) {
     ])
       .then(([matchData, eventsData]) => {
         setMatch(matchData)
-        setEvents(eventsData)
+        // Merge: keep any WS events that arrived before REST completed
+        setEvents(prev => {
+          const ids = new Set(eventsData.map(e => e.eventId))
+          const wsOnly = prev.filter(e => !ids.has(e.eventId))
+          return [...eventsData, ...wsOnly]
+        })
         logger.success('useMatch', 'Initial load', matchData)
       })
       .catch(err => {
