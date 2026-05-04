@@ -1,7 +1,1 @@
-export default function LoadingSpinner() {
-  return (
-    <div className="flex items-center justify-center min-h-64">
-      <div className="w-6 h-6 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" />
-    </div>
-  )
-}
+export default function LoadingSpinner() {   return (     <div       className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8"       style={{ background: 'linear-gradient(180deg, #0a0f1a 0%, #060a12 100%)' }}     >       {/* Equalizer bars */}       <div className="flex items-end gap-1.5" style={{ height: 48 }}>         {[32, 44, 48, 40, 28].map((h, i) => (           <div             key={i}             className="loading-bar w-2 rounded-full"             style={{               height: h,               background: 'linear-gradient(to top, #22c55e, #4ade80)',             }}           />         ))}       </div>        {/* Label */}       <div className="text-center">         <p className="text-white/80 text-sm font-semibold tracking-[0.2em] uppercase">           Loading         </p>         <p className="text-white/20 text-[11px] tracking-widest uppercase mt-1">           Claudiu         </p>       </div>     </div>   ) } 
