@@ -223,16 +223,22 @@ def _schedule_events(
         if event['eventType'] in SKIP_EVENT_TYPES:
             targets.append(None)
             continue
+        print(f"Scheduling event {event}")
 
         sec = _game_clock_seconds(event.get('gameTime'))
+        print(f"    The value of call _game_clock_seconds is {event.get('gameTime')}")
         if sec is not None and speed_multiplier > 0:
+            print(f"        We are in the if statement")
             offset_wall = math.ceil(sec / speed_multiplier - 1e-12)
+            print(f"        offset_wall = {offset_wall}")
         else:
+            print(f"        We are in the else statement")
             event_time = datetime.fromisoformat(
                 event['eventTime']
             ).astimezone(timezone.utc)
             offset_seconds = (event_time - kickoff_time).total_seconds()
             offset_wall = math.ceil(offset_seconds / speed_multiplier - 1e-12)
+            print(f"        offset_wall = {offset_wall}")
 
         targets.append(now + timedelta(seconds=max(1, offset_wall)))
 
