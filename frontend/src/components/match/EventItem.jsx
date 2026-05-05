@@ -57,6 +57,34 @@ const EVENT_CONFIG = {
     accent: 'text-gray-400',
     card: 'border-white/10 bg-white/[0.03]',
   },
+  saved_shot: {
+    icon: () => <span className="text-base">🧤</span>,
+    bg: 'bg-blue-600',
+    label: 'Save',
+    accent: 'text-blue-400',
+    card: 'border-blue-600/15 bg-blue-600/5',
+  },
+  nutmeg: {
+    icon: () => <span className="text-base">🤌</span>,
+    bg: 'bg-purple-500',
+    label: 'Nutmeg',
+    accent: 'text-purple-400',
+    card: 'border-purple-500/15 bg-purple-500/5',
+  },
+  spectacular_play: {
+    icon: () => <span className="text-base">✨</span>,
+    bg: 'bg-pink-500',
+    label: 'Skill',
+    accent: 'text-pink-400',
+    card: 'border-pink-500/15 bg-pink-500/5',
+  },
+  offside: {
+    icon: () => <span className="text-base">🚩</span>,
+    bg: 'bg-orange-500',
+    label: 'Offside',
+    accent: 'text-orange-400',
+    card: 'border-orange-500/15 bg-orange-500/5',
+  },
 }
 
 function getDescription(event) {
@@ -82,6 +110,14 @@ function getDescription(event) {
       return { primary: 'Full Time', secondary: event.finalResult ?? null }
     case 'secondhalf':
       return { primary: 'Second Half Kick-off', secondary: null }
+    case 'saved_shot':
+      return { primary: event.goalKeeperDisplay ?? 'Goalkeeper', secondary: event.saveResult ?? null }
+    case 'nutmeg':
+      return { primary: event.playerDisplay ?? 'Unknown', secondary: event.affectedDisplay ? `vs ${event.affectedDisplay}` : null }
+    case 'spectacular_play':
+      return { primary: event.playerDisplay ?? 'Unknown', secondary: event.playType ?? null }
+    case 'offside':
+      return { primary: event.playerDisplay ?? 'Unknown', secondary: 'caught offside' }
     default:
       return { primary: event.eventType, secondary: null }
   }

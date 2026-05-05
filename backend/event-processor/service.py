@@ -41,7 +41,11 @@ def process_event(
     elif event_type == 'fulltime':
         _handle_fulltime(match_id, game_time, data)
 
-    elif event_type in ('card', 'substitution'):
+    elif event_type in ('card', 'substitution', 'offside',
+                        'nutmeg', 'spectacular_play'):
+        _handle_minor_event(match_id, game_time)
+
+    elif event_type == 'saved_shot':
         _handle_minor_event(match_id, game_time)
 
     elif event_type == 'clocktick':
@@ -176,7 +180,7 @@ def _handle_clock_tick(match_id: str, game_time: str) -> None:
 # ─────────────────────────────────────────
 
 def _score_rooms_for_event(match_id: str, event_type: str, data: dict) -> None:
-    if event_type not in ('goal', 'card'):
+    if event_type not in ('goal', 'card', 'saved_shot'):
         return
     response = rooms_table.query(
         IndexName='matchId-index',
@@ -230,6 +234,13 @@ def _calculate_deltas(room: dict, event_type: str, data: dict) -> dict:
             if player_id and player_id in selection:
                 delta = -1 if card_color == 'yellow' else -3
             deltas[uid] = delta
+
+    elif event_type == 'saved_shot':
+        gk_id = data.get('goalKeeperId')
+        for m in members:
+            uid     = m['userId']
+            details = {d['playerId']: d for d in m.get('teamSelectionDetails', [])}
+            deltas[uid] = 3 if gk_id and gk_id in details else 0
 
     return deltas
 

@@ -7,6 +7,7 @@ from parsers.match import parse_match
 from parsers.events import parse_events
 from parsers.kpi import parse_kpi
 from loader.dynamodb import write_match, write_events, write_players
+from loader.images import upload_player_images
 from constants import MATCH_FILE, EVENTS_FILE, KPI_FILE
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..")
@@ -42,12 +43,15 @@ def main():
     else:
         print("\nNo KPI file found — skipping stats (copy kpi.xml to data/ to enable)")
 
+    print("\nUploading player images to S3...")
+    upload_player_images(players)
+
     print("\nWriting to DynamoDB...")
     write_match(match)
     write_events(events)
     write_players(players)
 
-    print("\nDone ✅")
+    print("\nDone.")
     print(f"  Match:   {match['matchId']}")
     print(f"  Events:  {len(events)}")
     print(f"  Players: {len(players)}")

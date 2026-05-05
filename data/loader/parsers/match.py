@@ -1,6 +1,6 @@
 import xmltodict
 import re
-from constants import POSITION_NAMES, MATCH_ID, KICKOFF_TIME, HOME_TEAM_NAME, AWAY_TEAM_NAME
+from constants import POSITION_NAMES, MATCH_ID, KICKOFF_TIME, HOME_TEAM_NAME, AWAY_TEAM_NAME, PLAYER_NAME_OVERRIDES
 
 def parse_match(xml_path: str) -> dict:
     with open(xml_path, "r", encoding="utf-8") as f:
@@ -75,6 +75,7 @@ def _parse_teams(teams_raw, match_id: str) -> dict:
         for p in raw_players:
             player_id = p["@PersonId"]
             position_code = p.get("@PlayingPosition", "")
+            override = PLAYER_NAME_OVERRIDES.get(player_id, {})
 
             players[player_id] = {
                 "matchId":       match_id,
@@ -82,12 +83,13 @@ def _parse_teams(teams_raw, match_id: str) -> dict:
                 "teamId":        team_id,
                 "teamName":      team_name,
                 "teamRole":      team_role,
-                "shirtNumber":   p["@ShirtNumber"],
+                "shirtNumber":   override.get("shirtNumber") or p["@ShirtNumber"],
                 "position":      position_code,
                 "positionName":  POSITION_NAMES.get(position_code, "Unknown"),
                 "starting":      p["@Starting"] == "true",
                 "captain":       p["@TeamLeader"] == "true",
-                "displayName":   _build_display_name(p, team_role),
+                "displayName":   _build_display_name(p, team_role, override),
+                "imageUrl":      override.get("imageUrl"),
             }
 
     return players, formations
@@ -105,14 +107,16 @@ def _normalize_formation(raw_formation: str) -> str:
     return match.group(0) if match else raw_formation
 
 
-def _build_display_name(player: dict, team_role: str) -> str:
-    """
-    Builds a human readable display name since real names are anonymized.
-    Example: "Home #9 (Centre Forward)"
-    """
-    shirt   = player["@ShirtNumber"]
-    pos     = player.get("@PlayingPosition", "")
-    pos_name = POSITION_NAMES.get(pos, pos)
-    side    = "Home" if team_role == "home" else "Away"
+def _build_display_name(player: dict, team_role: str, override: dict = None) -> str:
     captain = " ©" if player["@TeamLeader"] == "true" else ""
+    if override:
+        first = override.get("firstName", "")
+        last  = override.get("lastName", "")
+        name  = f"{first} {last}".strip() or override.get("shortName", "")
+        return f"{name}{captain}"
+    # Fallback for any player without an override
+    shirt    = player["@ShirtNumber"]
+    pos      = player.get("@PlayingPosition", "")
+    pos_name = POSITION_NAMES.get(pos, pos)
+    side     = "Home" if team_role == "home" else "Away"
     return f"{side} #{shirt} ({pos_name}){captain}"

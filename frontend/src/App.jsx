@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { Component } from 'react'
 import ProtectedRoute from './components/ProtectedRoute'
 import BottomNav from './components/BottomNav'
 import TopNav from './components/TopNav'
@@ -10,6 +11,26 @@ import HomePage from './pages/HomePage'
 import LobbyPage from './pages/LobbyPage'
 import MatchPage from './pages/MatchPage'
 import { useAuth } from './hooks/useAuth'
+
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6 gap-4">
+          <p className="text-red-400 font-bold text-sm tracking-widest uppercase">Something went wrong</p>
+          <p className="text-gray-500 text-xs text-center max-w-xs">{this.state.error.message}</p>
+          <button
+            onClick={() => { this.setState({ error: null }); window.location.href = '/' }}
+            className="mt-2 px-6 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold"
+          >Go Home</button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const Placeholder = ({ title }) => (
   <div className="px-6 pt-12">
@@ -34,6 +55,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-950">
       <ToastProvider />
+      <ErrorBoundary>
       <Routes>
         <Route
           path="/login"
@@ -81,6 +103,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </ErrorBoundary>
     </div>
   )
 }

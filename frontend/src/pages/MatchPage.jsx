@@ -1,39 +1,106 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, Navigate, useLocation } from 'react-router-dom'
 import { useMatch } from '../hooks/useMatch'
 import { useRoom } from '../hooks/useRoom'
 import { useChat } from '../hooks/useChat'
 import { useAuth } from '../hooks/useAuth'
+import { matchesApi } from '../services/api'
 import Scoreboard from '../components/match/Scoreboard'
 import MatchFeed from '../components/match/MatchFeed'
 import ChatPanel from '../components/match/ChatPanel'
 import ChatBubbles from '../components/match/ChatBubbles'
-import LeaderboardPanel from '../components/match/LeaderboardPanel'
+import { SquadVisualization } from '../components/match/SquadVisualization'
+import SkillFlashBadge from '../components/match/SkillFlashBadge'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 
 const AVATAR_COLORS = ['bg-violet-500','bg-blue-500','bg-emerald-500','bg-orange-500','bg-pink-500','bg-cyan-500']
 
 export default function MatchPage() {
   const { matchId } = useParams()
-  const location = useLocation()
-  const [tab, setTab] = useState('feed') // 'feed' | 'squad' | 'chat'
+  const location    = useLocation()
+  const [tab, setTab] = useState('feed')
 
-  const { user } = useAuth()
+  // Full player lookup: playerId → player object (has stats, displayName, etc.)
+  const [playerMap, setPlayerMap] = useState({})
+
+  const { user }                                = useAuth()
   const { messages, bubbles, onChatMessage, sendMessage } = useChat()
-  // Use room from navigation state (instant, no API round-trip) or fall back to localStorage fetch
-  const { room, loading: roomLoading } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom)
-  const { match, events, loading } = useMatch(matchId)
+  const { room, loading: roomLoading }          = useRoom(onChatMessage, user?.userId, location.state?.initialRoom)
+  const { match, events, loading, flashEvent }  = useMatch(matchId)
+
+  // Fetch full player roster once (for enriching teamSelectionDetails)
+  useEffect(() => {
+    if (!matchId) return
+    matchesApi.getPlayers(matchId)
+      .then(players => {
+        const map = {}
+        for (const p of players) map[p.playerId] = p
+        setPlayerMap(map)
+      })
+      .catch(() => {/* silently ignore — popup just shows less info */})
+  }, [matchId])
+
+  // Enrich teamSelectionDetails: localStorage draft picks (imageUrl) → playerMap (stats) → details (position/shirt)
+  const enrichPlayers = (details, localPicks = []) => {
+    if (!Array.isArray(details) || !details.length) return []
+    const localMap = {}
+    for (const p of localPicks) localMap[p.playerId] = p
+    return details.map(d => ({
+      ...localMap[d.playerId],
+      ...playerMap[d.playerId],
+      ...d,
+    }))
+  }
+
+  const homeLocalPicks = useMemo(() => {
+    try {
+      const s = localStorage.getItem(`draft_my_picks_${room?.roomCode}`)
+      return s ? JSON.parse(s) : []
+    } catch { return [] }
+  }, [room?.roomCode])
+
+  const awayLocalPicks = useMemo(() => {
+    try {
+      const s = localStorage.getItem(`draft_opponent_picks_${room?.roomCode}`)
+      return s ? JSON.parse(s) : []
+    } catch { return [] }
+  }, [room?.roomCode])
+
+  const homeTeamPlayers = useMemo(
+    () => enrichPlayers(room?.members?.[0]?.teamSelectionDetails, homeLocalPicks),
+    [room, playerMap, homeLocalPicks],
+  )
+  const awayTeamPlayers = useMemo(() => {
+    const member1 = room?.members?.[1]
+    if (member1?.teamSelectionDetails?.length) {
+      return enrichPlayers(member1.teamSelectionDetails, awayLocalPicks)
+    }
+    // Fallback: full draft picks from localStorage
+    if (awayLocalPicks.length) return awayLocalPicks.map(p => ({ ...p, ...playerMap[p.playerId] }))
+    return []
+  }, [room, playerMap, awayLocalPicks])
+
+  const homeBenchPlayers = useMemo(() => {
+    const starterIds = new Set(homeTeamPlayers.map(p => p.playerId))
+    return homeLocalPicks.filter(p => !starterIds.has(p.playerId))
+      .map(p => ({ ...p, ...playerMap[p.playerId] }))
+  }, [homeTeamPlayers, homeLocalPicks, playerMap])
+
+  const awayBenchPlayers = useMemo(() => {
+    const starterIds = new Set(awayTeamPlayers.map(p => p.playerId))
+    return awayLocalPicks.filter(p => !starterIds.has(p.playerId))
+      .map(p => ({ ...p, ...playerMap[p.playerId] }))
+  }, [awayTeamPlayers, awayLocalPicks, playerMap])
 
   if (loading || roomLoading) return <LoadingSpinner />
-
-  // Room gone (reset, kicked) — go back to lobby to rejoin
   if (!room) return <Navigate to={`/lobby/${matchId}`} replace />
 
   return (
-    <div className="flex flex-col pb-36">
+    <div className="flex flex-col">
+      <SkillFlashBadge event={flashEvent} />
       <Scoreboard match={match} events={events} />
 
-      {/* Squad strip */}
+      {/* Watchers strip */}
       <div className="px-4 py-3 flex items-center gap-3 border-b border-white/[0.04]">
         <div className="flex -space-x-2">
           {room.members?.slice(0, 5).map((m, i) => (
@@ -46,7 +113,9 @@ export default function MatchPage() {
           ))}
         </div>
         <p className="text-gray-500 text-xs">
-          {room.members?.length === 1 ? 'Just you watching' : `${room.members?.length} watching together`}
+          {room.members?.length === 1
+            ? 'Just you watching'
+            : `${room.members?.length} watching together`}
         </p>
       </div>
 
@@ -74,12 +143,30 @@ export default function MatchPage() {
       {/* Content */}
       <div className="relative">
         {tab === 'feed' && <MatchFeed events={events} />}
+
         {tab === 'squad' && (
-          <LeaderboardPanel members={room.members} currentUserId={user?.userId} />
+          <div className="px-2 py-3">
+            <SquadVisualization
+              match={match}
+              homeTeamPlayers={homeTeamPlayers}
+              awayTeamPlayers={awayTeamPlayers}
+              homeBenchPlayers={homeBenchPlayers}
+              awayBenchPlayers={awayBenchPlayers}
+              events={events}
+              homeMemberName={room?.members?.[0]?.displayName}
+              awayMemberName={room?.members?.[1]?.displayName}
+            />
+          </div>
         )}
+
         {tab === 'chat' && (
-          <ChatPanel messages={messages} onSend={(text) => sendMessage(room.roomCode, text)} room={room} />
+          <ChatPanel
+            messages={messages}
+            onSend={text => sendMessage(room.roomCode, text)}
+            room={room}
+          />
         )}
+
         {tab === 'feed' && bubbles.length > 0 && (
           <ChatBubbles bubbles={bubbles} />
         )}

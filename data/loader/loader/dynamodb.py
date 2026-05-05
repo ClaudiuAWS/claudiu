@@ -22,7 +22,7 @@ def write_match(match: dict) -> None:
     item = _clean(match)
     item["TTL"] = int(time.time()) + MATCH_TTL_SECONDS
     table.put_item(Item=item)
-    print(f"  ✅ Match written: {match['matchId']}")
+    print(f"  [OK] Match written: {match['matchId']}")
 
 
 def write_events(events: list) -> None:
@@ -46,7 +46,7 @@ def write_events(events: list) -> None:
             item["TTL"] = ttl
             batch.put_item(Item=item)
 
-    print(f"  ✅ {len(events)} events written")
+    print(f"  [OK] {len(events)} events written")
 
 
 def write_players(players: dict) -> None:
@@ -59,7 +59,7 @@ def write_players(players: dict) -> None:
             item["TTL"] = ttl
             batch.put_item(Item=item)
 
-    print(f"  ✅ {len(players)} players written")
+    print(f"  [OK] {len(players)} players written")
 
 
 # ─────────────────────────────────────────
@@ -103,4 +103,4 @@ def _delete_existing_events(table, match_id: str) -> None:
         query_kwargs["ExclusiveStartKey"] = last_key
 
     if deleted:
-        print(f"  🧹 Deleted {deleted} existing events for {match_id}")
+        print(f"  [DEL] Deleted {deleted} existing events for {match_id}")

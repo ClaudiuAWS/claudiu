@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { matchesApi } from '../services/api'
 import { logger } from '../services/logger'
 import { useWebSocket } from './useWebSocket'
+
+const FLASH_EVENT_TYPES = new Set(['nutmeg', 'spectacular_play'])
 
 export function useMatches() {
   const [matches, setMatches] = useState([])
@@ -23,6 +25,8 @@ export function useMatch(matchId) {
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [flashEvent, setFlashEvent] = useState(null)
+  const flashTimerRef = useRef(null)
 
   // Initial load
   useEffect(() => {
@@ -53,17 +57,25 @@ export function useMatch(matchId) {
   const handleMessage = useCallback((msg) => {
     if (msg.type === 'match_update') {
       setMatch(msg.match)
-      setEvents(prev => {
-        const flat = { ...msg.event.data, ...msg.event }
+      if (msg.event) {
+        const flat = { ...(msg.event.data ?? {}), ...msg.event }
         delete flat.data
-        const ids = new Set(prev.map(e => e.eventId))
-        return ids.has(flat.eventId) ? prev : [...prev, flat]
-      })
+        setEvents(prev => {
+          const ids = new Set(prev.map(e => e.eventId))
+          return ids.has(flat.eventId) ? prev : [...prev, flat]
+        })
+        // Trigger skill flash badge for nutmeg / spectacular_play
+        if (FLASH_EVENT_TYPES.has(flat.eventType)) {
+          clearTimeout(flashTimerRef.current)
+          setFlashEvent(flat)
+          flashTimerRef.current = setTimeout(() => setFlashEvent(null), 3000)
+        }
+      }
       logger.success('useMatch', 'WS match_update', msg.match)
     }
   }, [])
 
   useWebSocket(matchId ? `match#${matchId}` : null, handleMessage)
 
-  return { match, events, loading, error }
+  return { match, events, loading, error, flashEvent }
 }

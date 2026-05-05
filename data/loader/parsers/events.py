@@ -152,15 +152,23 @@ def _process_event(raw_event: dict, players: dict) -> Optional[dict]:
     if not event_id or not event_time:
         return None
 
-    # Check for ShotAtGoal nested inside Penalty
+    # Check for ShotAtGoal or SavedShot nested inside Penalty
     if "Penalty" in raw_event:
         penalty = raw_event["Penalty"]
         if "ShotAtGoal" in penalty:
-            return _handle_shot(
-                event_id, match_id, event_time,
-                penalty["ShotAtGoal"], players,
-                is_penalty=True
-            )
+            shot = penalty["ShotAtGoal"]
+            if "SuccessfulShot" in shot:
+                return _handle_shot(
+                    event_id, match_id, event_time,
+                    shot, players,
+                    is_penalty=True, penalty_data=penalty,
+                )
+            if "SavedShot" in shot:
+                return _handle_saved_shot(
+                    event_id, match_id, event_time,
+                    shot["SavedShot"], players,
+                )
+        return None
 
     for tag in RELEVANT_XML_TAGS:
         if tag not in raw_event:
@@ -169,7 +177,13 @@ def _process_event(raw_event: dict, players: dict) -> Optional[dict]:
         data = raw_event[tag]
 
         if tag == "ShotAtGoal":
-            return _handle_shot(event_id, match_id, event_time, data, players)
+            # Goal
+            if "SuccessfulShot" in data:
+                return _handle_shot(event_id, match_id, event_time, data, players)
+            # Goalkeeper save
+            if "SavedShot" in data:
+                return _handle_saved_shot(event_id, match_id, event_time, data["SavedShot"], players)
+            return None
 
         if tag == "FinalWhistle":
             return _handle_final_whistle(event_id, match_id, event_time, data)
@@ -183,14 +197,22 @@ def _process_event(raw_event: dict, players: dict) -> Optional[dict]:
         if tag == "Substitution":
             return _handle_substitution(event_id, match_id, event_time, data, players)
 
+        if tag == "Nutmeg":
+            return _handle_nutmeg(event_id, match_id, event_time, data, players)
+
+        if tag == "SpectacularPlay":
+            return _handle_spectacular_play(event_id, match_id, event_time, data, players)
+
+        if tag == "Offside":
+            return _handle_offside(event_id, match_id, event_time, data, players)
+
     return None
 
 
-def _handle_shot(event_id, match_id, event_time, data, players, is_penalty=False) -> Optional[dict]:
-    if "SuccessfulShot" not in data:
+def _handle_shot(event_id, match_id, event_time, data, players, is_penalty=False, penalty_data=None) -> Optional[dict]:
+    successful = data.get("SuccessfulShot")
+    if not successful:
         return None
-
-    successful = data["SuccessfulShot"]
     scorer_id  = data.get("@Player")
     assist_id  = successful.get("@Assist")
     scorer     = players.get(scorer_id, {})
@@ -222,6 +244,86 @@ def _handle_shot(event_id, match_id, event_time, data, players, is_penalty=False
             "assistPositionName": assister.get("positionName"),
             "assistType":         successful.get("@AssistType"),
             "isPenalty":          is_penalty,
+            # Penalty-specific fields
+            "penaltyTakerId":       penalty_data.get("@ProspectiveTaker") if penalty_data else None,
+            "goalkeeperMovement":   penalty_data.get("@GoalkeeperMovement") if penalty_data else None,
+            "goalkeeperBehaviour":  penalty_data.get("@GoalkeeperBehaviour") if penalty_data else None,
+        }
+    }
+
+
+def _handle_saved_shot(event_id, match_id, event_time, data, players) -> dict:
+    gk_id = data.get("@GoalKeeper")
+    gk    = players.get(gk_id, {})
+    return {
+        "eventId":   event_id,
+        "matchId":   match_id,
+        "eventType": EventType.SAVED_SHOT,
+        "eventTime": event_time,
+        "gameTime":  None,
+        "data": {
+            "goalKeeperId":      gk_id,
+            "goalKeeperDisplay": gk.get("displayName", gk_id),
+            "teamId":            gk.get("teamId"),
+            "teamRole":          gk.get("teamRole"),
+            "saveType":          data.get("@SaveType"),
+            "saveResult":        data.get("@SaveResult"),
+            "saveEvaluation":    data.get("@SaveEvaluation"),
+        }
+    }
+
+
+def _handle_nutmeg(event_id, match_id, event_time, data, players) -> dict:
+    pid = data.get("@Player")
+    aff = data.get("@AffectedPlayer")
+    return {
+        "eventId":   event_id,
+        "matchId":   match_id,
+        "eventType": EventType.NUTMEG,
+        "eventTime": event_time,
+        "gameTime":  None,
+        "data": {
+            "playerId":         pid,
+            "playerDisplay":    players.get(pid, {}).get("displayName", pid),
+            "teamId":           data.get("@Team"),
+            "teamRole":         players.get(pid, {}).get("teamRole"),
+            "affectedPlayerId": aff,
+            "affectedDisplay":  players.get(aff, {}).get("displayName", aff),
+        }
+    }
+
+
+def _handle_spectacular_play(event_id, match_id, event_time, data, players) -> dict:
+    pid = data.get("@Player")
+    return {
+        "eventId":   event_id,
+        "matchId":   match_id,
+        "eventType": EventType.SPECTACULAR_PLAY,
+        "eventTime": event_time,
+        "gameTime":  None,
+        "data": {
+            "playerId":      pid,
+            "playerDisplay": players.get(pid, {}).get("displayName", pid),
+            "teamId":        data.get("@Team"),
+            "teamRole":      players.get(pid, {}).get("teamRole"),
+            "playType":      data.get("@Type"),
+        }
+    }
+
+
+def _handle_offside(event_id, match_id, event_time, data, players) -> dict:
+    pid = data.get("@Player")
+    return {
+        "eventId":   event_id,
+        "matchId":   match_id,
+        "eventType": EventType.OFFSIDE,
+        "eventTime": event_time,
+        "gameTime":  None,
+        "data": {
+            "playerId":      pid,
+            "playerDisplay": players.get(pid, {}).get("displayName", pid),
+            "teamId":        data.get("@Team"),
+            "teamRole":      players.get(pid, {}).get("teamRole"),
         }
     }
 
