@@ -89,6 +89,10 @@ All event types extracted from `data/events.xml` (1,719 total `<Event>` elements
 - Away squad loads from `localStorage` fallback for solo testing.
 - Player stats popup on bubble tap.
 - Live leaderboard for room members.
+- Event feed supports 10 event types: `goal`, `card`, `substitution`, `halftime`, `secondhalf`, `fulltime`, `saved_shot`, `nutmeg`, `spectacular_play`, `offside`.
+- `SkillFlashBadge` component: corner badge animates in for 3 seconds on `nutmeg`/`spectacular_play` events (visual display only; multi-user tap race is a remaining feature — see R5c).
+- Squad pitch uses dynamic formation row spacing: row y-positions are computed from active positional tiers (GK/DEF/CDM/CAM/FWD present in the XI) so every formation renders with even gaps regardless of tier count.
+- Player photos served from S3/CloudFront CDN (`d1t5xvsturq92p.cloudfront.net`); SofaScore URL used as browser-side fallback when server-side download is blocked.
 
 ### 5. Position System
 
@@ -104,6 +108,12 @@ All event types extracted from `data/events.xml` (1,719 total `<Event>` elements
 - Team selection (11 player IDs) persisted per room/user.
 - Player data: Bayern Munich vs HSV, Bundesliga API.
 - Match events scheduled by absolute game-time offset (no second-half drift).
+- Event-processor handles all 10 feed event types including `nutmeg`, `spectacular_play`, `offside`, and `saved_shot`.
+- Passive fantasy scoring (applied immediately on event fire, no mini-game needed):
+  - `goal` scorer: **+5 pts**; assist: **+3 pts**; valid-opponent bonus (scorer vs. opponent GK): **+2 pts extra**; opponent GK who conceded: **−1 pt**.
+  - `card` yellow: **−1 pt**; red: **−3 pts**.
+  - `saved_shot` GK: **+3 pts**.
+- Player images loaded idempotently to S3 (skips re-upload if already present via `head_object` check).
 
 ---
 
@@ -274,6 +284,8 @@ Ownership context: if `TeamChallenged` maps to a player in one user's XI, show "
 
 ### Feature R5c: Skill Flash (`SKILL_FLASH`)
 
+> **Status: Partially implemented.** The `SkillFlashBadge` UI component exists and displays automatically for 3 seconds on `nutmeg`/`spectacular_play` events via the existing `match_update` WebSocket message. What remains: multi-user tap race, server-side first-tap resolution, dedicated `SKILL_FLASH_START` / `SKILL_FLASH_RESULT` WebSocket message types, and the point awards below.
+
 **XML triggers**: `<Nutmeg>` (3x) and `<SpectacularPlay>` (2x). Fires every time — not subject to full mini-game cooldown.
 
 **UI**: Non-modal. A small badge slides in from the right edge of the screen — 120px wide, dark background, e.g. "NUTMEG! TAP!" or "BACKHEEL! TAP!". First user to tap within 2 seconds wins. Badge disappears automatically whether tapped or not. Never blocks the match feed or pitch view.
@@ -403,9 +415,17 @@ Example point breakdown displayed to user:
 ```
 
 Direct scoring events (not mini-games) applied to leaderboard:
-- `<SuccessfulShot>`: +100 to user who owns `Player`; +50 to user who owns `Assist`.
-- `<SavedShot>`: +50 to user who owns `GoalKeeper`.
-- `<Caution>`: -20 from user who owns `Player`.
+
+> **Implemented values** (live in `event-processor/service.py`):
+> - `<SuccessfulShot>` (goal): **+5** scorer, **+3** assist, **+2** valid-opponent bonus, **−1** beaten GK.
+> - `<SavedShot>`: **+3** GK owner.
+> - `<Caution>`: **−1** yellow card, **−3** red card.
+
+> **Target values** (to scale up as mini-game system matures):
+> - `<SuccessfulShot>`: +100 to user who owns `Player`; +50 to user who owns `Assist`.
+> - `<SavedShot>`: +50 to user who owns `GoalKeeper`.
+> - `<Caution>`: −20 from user who owns `Player`.
+
 - `<PlayerNotSentOff>`: no deduction (call was reversed); +10 curiosity bonus if owned.
 - `<Substitution>`: no points; update starting XI tracking.
 
