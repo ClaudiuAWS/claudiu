@@ -103,11 +103,14 @@ def _recalculate_second_half_match_clock(processed: list) -> None:
     events get inflated MM:SS (e.g. 68:30) while earlier subs look earlier (66:22).
     From the second-half kickoff onward, use: halftime clock + elapsed since 2H kickoff.
     """
-    halftime_sec = None
+    halftime_event = None
     for e in processed:
         if e.get("eventType") == EventType.HALFTIME:
-            halftime_sec = _mmss_to_seconds(e.get("gameTime"))
+            halftime_event = e
             break
+    if halftime_event is None:
+        return
+    halftime_sec = _mmss_to_seconds(halftime_event.get("gameTime"))
     if halftime_sec is None:
         return
 
@@ -123,6 +126,29 @@ def _recalculate_second_half_match_clock(processed: list) -> None:
         sh_dt = datetime.fromisoformat(sh["eventTime"]).astimezone(timezone.utc)
     except Exception:
         return
+
+    # Push halftime's gameTime past any 1st-half event whose wall-clock time falls
+    # before the 2nd-half kickoff. XML can stamp halftime at the scheduled minute
+    # (e.g. 50:00) while a stoppage save's wall-clock event time is later (52:30);
+    # without this, the save's gameTime > halftime's gameTime, causing the frontend
+    # to treat the save as a 2nd-half event ("46'" instead of "45+7'") and to sort
+    # halftime before the save in the feed.
+    max_first_half_sec = halftime_sec
+    for e in processed:
+        if e is halftime_event or e is sh:
+            continue
+        try:
+            et = datetime.fromisoformat(e["eventTime"]).astimezone(timezone.utc)
+        except Exception:
+            continue
+        if et >= sh_dt:
+            continue
+        sec = _mmss_to_seconds(e.get("gameTime"))
+        if sec is not None and sec > max_first_half_sec:
+            max_first_half_sec = sec
+    if max_first_half_sec > halftime_sec:
+        halftime_sec = max_first_half_sec + 1
+        halftime_event["gameTime"] = _seconds_to_mmss(halftime_sec)
 
     # Second-half kickoff must sit right after halftime on the match clock. Do not
     # rely on the loop below — rare et < sh_dt edge cases could skip this row and

@@ -8,6 +8,19 @@ function formatMmSs(totalSeconds) {
   return `${mm}:${ss.toString().padStart(2, '0')}`
 }
 
+/**
+ * Football-clock formatter. After halftime fires, the 2nd-half clock should
+ * resume from 45:00 (the football convention) instead of continuing to climb
+ * from wall-clock-from-kickoff (~51:00). Before halftime, raw seconds are fine
+ * — the 1st-half clock counts up to 45+N normally.
+ */
+function formatFootballClock(rawSec, halftimeSec) {
+  if (halftimeSec >= 0 && rawSec > halftimeSec) {
+    return formatMmSs(45 * 60 + (rawSec - halftimeSec))
+  }
+  return formatMmSs(rawSec)
+}
+
 function parseReplaySpeed(match) {
   if (match?.speedMultiplier == null || match?.speedMultiplier === '') return 1
   const n = parseFloat(String(match.speedMultiplier))
@@ -55,7 +68,9 @@ export function useMatchClock(match, events) {
     lastServerMinuteRef.current = srv
     lastAcceptedServerSecRef.current = gs
     anchorRef.current = { gameSec: gs, wallMs: Date.now() }
-    setDisplay(formatMmSs(gs))
+    const ht = (eventsRef.current ?? []).find(e => e.eventType === 'halftime')
+    const htSec = ht ? gameTimeToSeconds(ht.gameTime) : -1
+    setDisplay(formatFootballClock(gs, htSec))
   }, [match?.currentMinute, match?.status, match?.speedMultiplier])
 
   useEffect(() => {
@@ -85,7 +100,8 @@ export function useMatchClock(match, events) {
       if (ht && !sh) cap = gameTimeToSeconds(ht.gameTime)
       else if (ft)   cap = gameTimeToSeconds(ft.gameTime)
       if (cap >= 0 && fromServer > cap) fromServer = cap
-      setDisplay(formatMmSs(fromServer))
+      const htSec = ht ? gameTimeToSeconds(ht.gameTime) : -1
+      setDisplay(formatFootballClock(fromServer, htSec))
     }
 
     const id = setInterval(tick, 250)

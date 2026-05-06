@@ -100,9 +100,17 @@ export function useMatch(matchId) {
       return additions.length ? [...prev, ...additions] : prev
     })
 
-    // Latest gameTime in the batch wins for the scoreboard snapshot.
-    const latestMatch = batch[batch.length - 1]?.match
-    if (latestMatch) setMatch(latestMatch)
+    // Latest-arriving event's snapshot wins, NOT the highest-gameTime event's.
+    // Backend processes events in SQS-FIFO arrival order, so the most-recently-
+    // arrived snapshot is the most up-to-date. Picking by highest gameTime can
+    // pin status='halftime' if a 1st-half stoppage event (with gameTime > the
+    // halftime event's gameTime) arrives after halftime in SQS — its snapshot
+    // would still say 'halftime' and overwrite the secondhalf 'live' snapshot.
+    let latestArrival = batch[0]
+    for (const m of batch) {
+      if ((m._receivedAt ?? 0) > (latestArrival._receivedAt ?? 0)) latestArrival = m
+    }
+    if (latestArrival?.match) setMatch(latestArrival.match)
 
     // Skill flash on the most-recent qualifying event in the batch.
     for (let i = batch.length - 1; i >= 0; i--) {
