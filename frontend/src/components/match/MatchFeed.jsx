@@ -1,8 +1,23 @@
 import EventItem from './EventItem'
 import { sortMatchEventsNewestFirst, gameTimeToSeconds } from '../../utils/matchEvents'
 
+// Events surfaced in the live feed list. Goal/card/saved_shot drive scoring;
+// offside/halftime/fulltime trigger mini-games; future: penalty, var.
+// `nutmeg` and `spectacular_play` still flash via SkillFlashBadge.
+// `substitution` lives in the Squad tab. `secondhalf` is a backend boundary
+// marker only — the halftime row already conveys the half break.
+const FEED_EVENT_TYPES = new Set([
+  'goal',
+  'card',
+  'saved_shot',
+  'offside',
+  'halftime',
+  'fulltime',
+])
+
 export default function MatchFeed({ events }) {
-  const ordered = sortMatchEventsNewestFirst(events ?? [])
+  const filtered = (events ?? []).filter(e => FEED_EVENT_TYPES.has(e.eventType))
+  const ordered  = sortMatchEventsNewestFirst(filtered)
 
   // Find the halftime event's stored seconds so EventItem can compute football minutes
   const htEvent = (events ?? []).find(e => e.eventType === 'halftime')
