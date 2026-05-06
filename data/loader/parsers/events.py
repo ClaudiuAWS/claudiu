@@ -127,12 +127,17 @@ def _recalculate_second_half_match_clock(processed: list) -> None:
     except Exception:
         return
 
-    # Push halftime's gameTime past any 1st-half event whose wall-clock time falls
-    # before the 2nd-half kickoff. XML can stamp halftime at the scheduled minute
-    # (e.g. 50:00) while a stoppage save's wall-clock event time is later (52:30);
-    # without this, the save's gameTime > halftime's gameTime, causing the frontend
-    # to treat the save as a 2nd-half event ("46'" instead of "45+7'") and to sort
-    # halftime before the save in the feed.
+    try:
+        ht_dt = datetime.fromisoformat(halftime_event["eventTime"]).astimezone(timezone.utc)
+    except Exception:
+        return
+
+    # Push halftime's gameTime past any 1st-half stoppage event whose wall-clock
+    # time falls before the halftime whistle. Boundary is ht_dt (FinalWhistle of
+    # firstHalf), NOT sh_dt: events between ht_dt and sh_dt are halftime-break
+    # announcements (substitutions), and their wall-clock-from-kickoff gameTime
+    # (e.g. 67:59) would otherwise inflate halftime to 68:00 and delay its
+    # EventBridge schedule by ~3 min real time at 5x speed.
     max_first_half_sec = halftime_sec
     for e in processed:
         if e is halftime_event or e is sh:
@@ -141,7 +146,7 @@ def _recalculate_second_half_match_clock(processed: list) -> None:
             et = datetime.fromisoformat(e["eventTime"]).astimezone(timezone.utc)
         except Exception:
             continue
-        if et >= sh_dt:
+        if et >= ht_dt:
             continue
         sec = _mmss_to_seconds(e.get("gameTime"))
         if sec is not None and sec > max_first_half_sec:
@@ -149,6 +154,22 @@ def _recalculate_second_half_match_clock(processed: list) -> None:
     if max_first_half_sec > halftime_sec:
         halftime_sec = max_first_half_sec + 1
         halftime_event["gameTime"] = _seconds_to_mmss(halftime_sec)
+
+    # Halftime-break events (ht_dt <= et < sh_dt) — typically substitution
+    # announcements during the break. Pin to halftime_sec so they schedule
+    # alongside halftime instead of at random late wall-seconds. Subs are
+    # filtered from the live feed; this only affects scheduling order and the
+    # Squad-tab Subs section, where they're conventionally "HT subs" anyway.
+    for e in processed:
+        if e is halftime_event or e is sh:
+            continue
+        try:
+            et = datetime.fromisoformat(e["eventTime"]).astimezone(timezone.utc)
+        except Exception:
+            continue
+        if et < ht_dt or et >= sh_dt:
+            continue
+        e["gameTime"] = _seconds_to_mmss(halftime_sec)
 
     # Second-half kickoff must sit right after halftime on the match clock. Do not
     # rely on the loop below — rare et < sh_dt edge cases could skip this row and
