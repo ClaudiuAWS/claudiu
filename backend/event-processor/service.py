@@ -21,6 +21,14 @@ def process_event(
     game_time: str,
     data: dict,
 ) -> None:
+    # Warmup invocation from replay-emitter at match start: short-circuit so the
+    # Lambda execution context becomes hot before the first real EventBridge
+    # schedule fires. Without this, the first 1-2 events of a match eat ~5s of
+    # cold-start latency, which surfaces as a 25-30s match-clock lag at 5x speed.
+    if event_type == '__warmup__' or match_id == '__warmup__':
+        print("Warmup invocation, no-op")
+        return
+
     if not _is_active_run(match_id, run_id):
         print(f"Skipping stale event {event_id} for run {run_id}")
         return

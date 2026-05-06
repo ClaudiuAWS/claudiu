@@ -13,6 +13,7 @@ _MAX_TICK_SCHEDULES = 4000
 
 dynamodb = boto3.resource('dynamodb')
 scheduler = boto3.client('scheduler')
+lambda_client = boto3.client('lambda')
 
 match_events_table = dynamodb.Table(os.environ['MATCH_EVENTS_TABLE'])
 matches_table      = dynamodb.Table(os.environ['MATCHES_TABLE'])
@@ -54,6 +55,14 @@ def start_match(match_id: str, speed_multiplier: float) -> dict:
             'type':  'match_update',
             'match': live_match,
         })
+
+        # Pre-warm event-processor synchronously: pays the ~5s Lambda cold-start
+        # cost here (on the /start request) instead of on the first EventBridge
+        # schedule firing 1s later. Without this, the first 1-2 events arrive
+        # ~25s late on the match clock at 5x speed (cold-start × speedMultiplier),
+        # making early-match events visibly bunch around minute 5-6.
+        _prewarm_event_processor()
+
         # Do not schedule per-second clock ticks: they advance time through half-time
         # and race with event updates (causing random jumps). Match clock is driven by
         # events on the server + smooth client-side display in the UI.
@@ -77,6 +86,32 @@ def start_match(match_id: str, speed_multiplier: float) -> dict:
 # ─────────────────────────────────────────
 # Private helpers
 # ─────────────────────────────────────────
+
+def _prewarm_event_processor() -> None:
+    """Synchronously invoke event-processor with a no-op payload so its
+    execution context is hot before EventBridge fires the first scheduled
+    event ~1s from now. The handler short-circuits on `eventType=__warmup__`
+    before doing any DynamoDB reads, so the call cost is just the cold-start
+    itself (~5s once, then warm thereafter for the rest of the match).
+    """
+    try:
+        lambda_client.invoke(
+            FunctionName=EVENT_PROCESSOR_ARN,
+            InvocationType='RequestResponse',
+            Payload=json.dumps({
+                'matchId':   '__warmup__',
+                'runId':     '__warmup__',
+                'eventId':   '__warmup__',
+                'eventType': '__warmup__',
+                'gameTime':  '00:00',
+                'data':      {},
+            }).encode('utf-8'),
+        )
+        print("Event-processor pre-warmed")
+    except Exception as e:
+        # Pre-warm is a best-effort optimization — never fail match start over it.
+        print(f"Event-processor pre-warm failed (non-fatal): {e}")
+
 
 def _get_match(match_id: str) -> dict:
     match = matches_table.get_item(
