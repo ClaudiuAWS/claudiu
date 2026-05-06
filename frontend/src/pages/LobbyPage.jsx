@@ -20,6 +20,7 @@ export default function LobbyPage() {
   const [error, setError] = useState('')
   const [teamModalOpen, setTeamModalOpen] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [speedMultiplier, setSpeedMultiplier] = useState(5)
   const navigate = useNavigate()
 
   const myMember = room?.members?.find(m => m.userId === user?.userId)
@@ -46,7 +47,7 @@ export default function LobbyPage() {
     setError('')
     setStarting(true)
     try {
-      await roomsApi.startMatch(room.roomCode)
+      await roomsApi.startMatch(room.roomCode, speedMultiplier)
       navigate(`/match/${matchId}`, { state: { initialRoom: room } })
     } catch (e) {
       setError(e.message)
@@ -113,16 +114,37 @@ export default function LobbyPage() {
               Watch Live →
             </button>
           ) : isHost ? (
-            <button
-              onClick={handleStart}
-              disabled={!canStart}
-              className={`w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
-                ${canStart
-                  ? 'bg-white text-black hover:bg-gray-100 active:bg-gray-200'
-                  : 'bg-white/10 text-white/30 cursor-not-allowed'}`}
-            >
-              {starting ? 'Starting…' : 'Start Match'}
-            </button>
+            <>
+              {/* Replay speed (dev/testing). 1× = real time; higher = compressed playback. */}
+              <div className="flex items-center justify-between px-1">
+                <label htmlFor="speed-select" className="text-gray-500 text-xs uppercase tracking-widest font-semibold">
+                  Replay speed
+                </label>
+                <select
+                  id="speed-select"
+                  value={speedMultiplier}
+                  onChange={(e) => setSpeedMultiplier(Number(e.target.value))}
+                  disabled={starting}
+                  className="bg-white/5 border border-white/10 text-white text-xs font-semibold rounded-lg px-3 py-1.5 focus:outline-none focus:border-white/30"
+                >
+                  <option value={1}>1× — real time (90 min)</option>
+                  <option value={2}>2× (~45 min)</option>
+                  <option value={5}>5× (~18 min) — recommended</option>
+                  <option value={10}>10× (~9 min)</option>
+                  <option value={30}>30× (~3 min) — stress test</option>
+                </select>
+              </div>
+              <button
+                onClick={handleStart}
+                disabled={!canStart}
+                className={`w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
+                  ${canStart
+                    ? 'bg-white text-black hover:bg-gray-100 active:bg-gray-200'
+                    : 'bg-white/10 text-white/30 cursor-not-allowed'}`}
+              >
+                {starting ? 'Starting…' : 'Start Match'}
+              </button>
+            </>
           ) : null}
 
           {error && (

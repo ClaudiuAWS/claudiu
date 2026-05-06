@@ -41,7 +41,7 @@ export const roomsApi = {
   leave:       (roomCode)           => request(`/rooms/${roomCode}/leave`, 'DELETE'),
   sendMessage: (roomCode, text)     => request(`/rooms/${roomCode}/message`, 'POST', { text }),
   selectTeam:  (roomCode, playerIds) => request(`/rooms/${roomCode}/team`, 'POST', { playerIds }),
-  startMatch:  (roomCode)           => request(`/rooms/${roomCode}/start`, 'POST'),
+  startMatch:  (roomCode, speedMultiplier = 5) => request(`/rooms/${roomCode}/start`, 'POST', { speedMultiplier }),
 }
 
 export const matchesApi = {

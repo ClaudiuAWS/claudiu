@@ -88,7 +88,14 @@ def _select_team(event, user_id):
 
 def _start_match(event, user_id):
         room_code = event['pathParameters']['code']
-        result = service.start_match_for_room(room_code, user_id)
+        body = json.loads(event.get('body') or '{}')
+        # Optional speed multiplier from lobby UI; backend clamps to [1, 30].
+        try:
+            speed_multiplier = float(body.get('speedMultiplier', 5))
+        except (TypeError, ValueError):
+            speed_multiplier = 5.0
+        speed_multiplier = max(1.0, min(30.0, speed_multiplier))
+        result = service.start_match_for_room(room_code, user_id, speed_multiplier)
         return _response(200, result)
 
 def _response(status_code: int, body: dict) -> dict:
