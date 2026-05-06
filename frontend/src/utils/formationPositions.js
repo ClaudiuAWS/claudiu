@@ -304,10 +304,13 @@ function findCanonicalEntry(defC, cdmC, camC, fwdC) {
   const defCandidates = CANONICAL_FORMATIONS.filter(f => f.def === defC)
   const pool = defCandidates.length > 0 ? defCandidates : CANONICAL_FORMATIONS
 
-  let best = pool[0], bestDist = Infinity
+  let best = pool[0], bestDist = Infinity, bestFwdDist = Infinity
   for (const f of pool) {
     const d = Math.abs(f.cdm - cdmC) + Math.abs(f.cam - camC) + Math.abs(f.fwd - fwdC)
-    if (d < bestDist) { bestDist = d; best = f }
+    const fd = Math.abs(f.fwd - fwdC)
+    if (d < bestDist || (d === bestDist && fd < bestFwdDist)) {
+      bestDist = d; bestFwdDist = fd; best = f
+    }
   }
   return best
 }
