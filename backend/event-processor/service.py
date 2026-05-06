@@ -190,7 +190,7 @@ def _score_rooms_for_event(match_id: str, event_type: str, data: dict) -> None:
     for room in active_rooms:
         deltas = _calculate_deltas(room, event_type, data)
         if any(v != 0 for v in deltas.values()):
-            _apply_score_deltas(room, deltas)
+            _apply_score_deltas(room, deltas, event_type)
 
 
 def _calculate_deltas(room: dict, event_type: str, data: dict) -> dict:
@@ -245,7 +245,7 @@ def _calculate_deltas(room: dict, event_type: str, data: dict) -> dict:
     return deltas
 
 
-def _apply_score_deltas(room: dict, deltas: dict) -> None:
+def _apply_score_deltas(room: dict, deltas: dict, event_type: str) -> None:
     members       = room.get('members', [])
     score_changes = []
 
@@ -255,7 +255,12 @@ def _apply_score_deltas(room: dict, deltas: dict) -> None:
             continue
         new_score  = int(m.get('score', 0)) + delta
         m['score'] = new_score
-        score_changes.append({'userId': m['userId'], 'delta': delta, 'newScore': new_score})
+        score_changes.append({
+            'userId':    m['userId'],
+            'delta':     delta,
+            'newScore':  new_score,
+            'eventType': event_type,  # so the frontend toast can pick the right label
+        })
 
     if not score_changes:
         return

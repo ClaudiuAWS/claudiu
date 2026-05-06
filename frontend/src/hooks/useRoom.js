@@ -6,6 +6,15 @@ import toast from 'react-hot-toast'
 
 const ROOM_CODE_KEY = 'fan_squad_room_code'
 
+const TOAST_BY_EVENT = {
+  goal:             { emoji: '⚽',  label: 'GOAL'  },
+  saved_shot:       { emoji: '🧤', label: 'SAVE'  },
+  card:             { emoji: '🟨', label: 'CARD'  },
+  nutmeg:           { emoji: '🤌', label: 'NUTMEG' },
+  spectacular_play: { emoji: '✨', label: 'SKILL' },
+}
+const TOAST_FALLBACK = { emoji: '🏟️', label: 'POINTS' }
+
 export function useRoom(onChatMessage, currentUserId, initialRoom = null) {
   const [room, setRoom] = useState(initialRoom)
   const [loading, setLoading] = useState(initialRoom ? false : true)
@@ -65,8 +74,11 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null) {
       } : prev)
       const myChange = msg.changes?.find(c => c.userId === currentUserId)
       if (myChange) {
-        const sign = myChange.delta > 0 ? '+' : ''
-        toast(`${myChange.delta > 0 ? '⚽' : '🟨'} ${sign}${myChange.delta} pts`, {
+        const sign  = myChange.delta > 0 ? '+' : ''
+        // Pick the toast label/emoji from the event type, not from the sign
+        // of the delta — a saved_shot delivers +3 too, but it's not a goal.
+        const cfg = TOAST_BY_EVENT[myChange.eventType] ?? TOAST_FALLBACK
+        toast(`${cfg.emoji} ${cfg.label} ${sign}${myChange.delta} pts`, {
           duration: 4000,
           style: { background: myChange.delta > 0 ? '#065f46' : '#7f1d1d', color: '#fff' },
         })
