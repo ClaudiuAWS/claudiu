@@ -158,29 +158,22 @@ export function useMatch(matchId) {
   }, [])
 
   // ── Reveal clock ──────────────────────────────────────────────────────────
-  // Drives at what gameTime-second the feed should reveal events. Mirrors the
-  // useMatchClock display logic for boundaries:
-  //   • upcoming / no startedAt          → no reveals (everything hidden until
-  //                                         the match begins)
-  //   • live phase (1H or 2H)             → tick at speed × wall-elapsed
-  //   • halftime fired, secondhalf hasn't → freeze at halftime gameTime
-  //   • fulltime fired                    → reveal everything (post-match view)
-  const ht = useMemo(() => allEvents.find(e => e.eventType === 'halftime'), [allEvents])
-  const sh = useMemo(() => allEvents.find(e => e.eventType === 'secondhalf'), [allEvents])
-  const ft = useMemo(() => allEvents.find(e => e.eventType === 'fulltime'), [allEvents])
-
+  // Reveal threshold is just elapsed × speed since /start.
+  //   • no startedAt (upcoming) → -1, nothing revealed
+  //   • live or post-match     → ticks forward; events become visible once
+  //                              their gameTime ≤ revealSec
+  // Boundaries (halftime/secondhalf/fulltime) fall out of this naturally —
+  // halftime is revealed when elapsed*speed crosses 51:00, secondhalf at
+  // 51:01, fulltime at 98:04, etc. We deliberately do NOT pre-clamp using the
+  // mere presence of those events in allEvents: with the REST endpoint
+  // returning all events upfront, `events.some(eventType==='fulltime')` is
+  // true from page load, which would otherwise force revealSec to MAX before
+  // the match has even started.
   useEffect(() => {
-    if (!match?.startedAt) return
-
-    if (ft) {
-      setRevealSec(Number.MAX_SAFE_INTEGER)
+    if (!match?.startedAt) {
+      setRevealSec(-1)
       return
     }
-    if (ht && !sh) {
-      setRevealSec(gameTimeToSeconds(ht.gameTime))
-      return
-    }
-
     const speed = parseReplaySpeed(match)
     const startMs = new Date(match.startedAt).getTime()
     const tick = () => {
@@ -190,7 +183,7 @@ export function useMatch(matchId) {
     tick()
     const id = setInterval(tick, REVEAL_TICK_MS)
     return () => clearInterval(id)
-  }, [match?.startedAt, match?.speedMultiplier, ht?.eventId, ht?.gameTime, sh?.eventId, ft?.eventId])
+  }, [match?.startedAt, match?.speedMultiplier])
 
   // Filter: an event is visible once the reveal clock reaches its gameTime.
   // Late-arriving events (backend dispatched late) still appear immediately
