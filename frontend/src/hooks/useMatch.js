@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { matchesApi } from '../services/api'
 import { logger } from '../services/logger'
 import { useWebSocket } from './useWebSocket'
@@ -12,6 +12,16 @@ const FLASH_EVENT_TYPES = new Set(['nutmeg', 'spectacular_play'])
 // gameTime order. 500 ms is invisible UX-wise (the match clock keeps
 // interpolating) and large enough to swallow normal API-Gateway fan-out lag.
 const REORDER_BUFFER_MS = 500
+
+// Cadence for advancing the reveal clock. 250 ms is ~1.25 game-seconds at 5x —
+// imperceptible delay between an event's true gameTime and when it appears.
+const REVEAL_TICK_MS = 250
+
+function parseReplaySpeed(match) {
+  if (match?.speedMultiplier == null || match?.speedMultiplier === '') return 1
+  const n = parseFloat(String(match.speedMultiplier))
+  return Number.isFinite(n) && n > 0 ? n : 1
+}
 
 export function useMatches() {
   const [matches, setMatches] = useState([])
@@ -30,11 +40,18 @@ export function useMatches() {
 
 export function useMatch(matchId) {
   const [match, setMatch] = useState(null)
-  const [events, setEvents] = useState([])
+  // allEvents = everything received from REST + WS. Consumers see the filtered
+  // `events` (below) which only includes events whose gameTime has been
+  // reached by the displayed clock — so events appear in the feed at the
+  // moment the timer hits their minute, giving mini-game triggers a
+  // deterministic match-clock alignment regardless of backend dispatch jitter.
+  const [allEvents, setAllEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [flashEvent, setFlashEvent] = useState(null)
+  const [revealSec, setRevealSec] = useState(-1)
   const flashTimerRef = useRef(null)
+  const revealedIdsRef = useRef(new Set())
   // Reordering buffer: holds incoming match_update messages until the next
   // drain tick, then flushes them in ascending-gameTime order. Even with
   // SQS FIFO upstream, parallel WS fan-out across many connection IDs can
@@ -53,7 +70,7 @@ export function useMatch(matchId) {
       .then(([matchData, eventsData]) => {
         setMatch(matchData)
         // Merge: keep any WS events that arrived before REST completed
-        setEvents(prev => {
+        setAllEvents(prev => {
           const ids = new Set(eventsData.map(e => e.eventId))
           const wsOnly = prev.filter(e => !ids.has(e.eventId))
           return [...eventsData, ...wsOnly]
@@ -68,9 +85,11 @@ export function useMatch(matchId) {
   }, [matchId])
 
   // Drain the reorder buffer: sort all queued WS messages by gameTime, then
-  // apply event additions, the latest match snapshot, and any skill flash —
-  // so what the user sees follows true match-clock order rather than
-  // Lambda-cold-start arrival order.
+  // apply event additions and the latest match snapshot — so what the user
+  // sees follows true match-clock order rather than Lambda-cold-start
+  // arrival order. Skill flashes are NOT triggered here; that runs from a
+  // separate effect on the *revealed* events list so flash UX aligns with the
+  // displayed clock instead of WS arrival.
   const drainBuffer = useCallback(() => {
     drainTimerRef.current = null
     const batch = wsBufferRef.current
@@ -84,7 +103,7 @@ export function useMatch(matchId) {
       return (a._receivedAt ?? 0) - (b._receivedAt ?? 0)
     })
 
-    setEvents(prev => {
+    setAllEvents(prev => {
       const ids = new Set(prev.map(e => e.eventId))
       const additions = []
       for (const msg of batch) {
@@ -111,19 +130,6 @@ export function useMatch(matchId) {
       if ((m._receivedAt ?? 0) > (latestArrival._receivedAt ?? 0)) latestArrival = m
     }
     if (latestArrival?.match) setMatch(latestArrival.match)
-
-    // Skill flash on the most-recent qualifying event in the batch.
-    for (let i = batch.length - 1; i >= 0; i--) {
-      const ev = batch[i].event
-      if (ev && FLASH_EVENT_TYPES.has(ev.eventType)) {
-        const flat = { ...(ev.data ?? {}), ...ev }
-        delete flat.data
-        clearTimeout(flashTimerRef.current)
-        setFlashEvent(flat)
-        flashTimerRef.current = setTimeout(() => setFlashEvent(null), 3000)
-        break
-      }
-    }
   }, [])
 
   // Real-time updates via WebSocket
@@ -150,6 +156,78 @@ export function useMatch(matchId) {
       flashTimerRef.current = null
     }
   }, [])
+
+  // ── Reveal clock ──────────────────────────────────────────────────────────
+  // Drives at what gameTime-second the feed should reveal events. Mirrors the
+  // useMatchClock display logic for boundaries:
+  //   • upcoming / no startedAt          → no reveals (everything hidden until
+  //                                         the match begins)
+  //   • live phase (1H or 2H)             → tick at speed × wall-elapsed
+  //   • halftime fired, secondhalf hasn't → freeze at halftime gameTime
+  //   • fulltime fired                    → reveal everything (post-match view)
+  const ht = useMemo(() => allEvents.find(e => e.eventType === 'halftime'), [allEvents])
+  const sh = useMemo(() => allEvents.find(e => e.eventType === 'secondhalf'), [allEvents])
+  const ft = useMemo(() => allEvents.find(e => e.eventType === 'fulltime'), [allEvents])
+
+  useEffect(() => {
+    if (!match?.startedAt) return
+
+    if (ft) {
+      setRevealSec(Number.MAX_SAFE_INTEGER)
+      return
+    }
+    if (ht && !sh) {
+      setRevealSec(gameTimeToSeconds(ht.gameTime))
+      return
+    }
+
+    const speed = parseReplaySpeed(match)
+    const startMs = new Date(match.startedAt).getTime()
+    const tick = () => {
+      const elapsed = (Date.now() - startMs) / 1000
+      setRevealSec(elapsed * speed)
+    }
+    tick()
+    const id = setInterval(tick, REVEAL_TICK_MS)
+    return () => clearInterval(id)
+  }, [match?.startedAt, match?.speedMultiplier, ht?.eventId, ht?.gameTime, sh?.eventId, ft?.eventId])
+
+  // Filter: an event is visible once the reveal clock reaches its gameTime.
+  // Late-arriving events (backend dispatched late) still appear immediately
+  // when they reach us — the reveal floor only delays *early* arrivals.
+  const events = useMemo(() => {
+    if (revealSec < 0) return []
+    return allEvents.filter(e => {
+      const sec = gameTimeToSeconds(e.gameTime)
+      return sec >= 0 && sec <= revealSec
+    })
+  }, [allEvents, revealSec])
+
+  // Skill-flash and (future) mini-game triggers fire when an event becomes
+  // newly revealed — i.e. the moment it appears in the feed. This guarantees
+  // mini-games are timed to the displayed match clock, not to backend WS
+  // arrival timing (which can be tens of seconds off due to dispatch jitter).
+  useEffect(() => {
+    if (!events.length) return
+    const newlyRevealed = events.filter(e => !revealedIdsRef.current.has(e.eventId))
+    if (!newlyRevealed.length) return
+    for (const e of newlyRevealed) revealedIdsRef.current.add(e.eventId)
+
+    // Pick the latest-by-gameTime flash-eligible event in this batch.
+    let pick = null
+    for (const ev of newlyRevealed) {
+      if (FLASH_EVENT_TYPES.has(ev.eventType)) {
+        if (!pick || gameTimeToSeconds(ev.gameTime) > gameTimeToSeconds(pick.gameTime)) {
+          pick = ev
+        }
+      }
+    }
+    if (pick) {
+      clearTimeout(flashTimerRef.current)
+      setFlashEvent(pick)
+      flashTimerRef.current = setTimeout(() => setFlashEvent(null), 3000)
+    }
+  }, [events])
 
   return { match, events, loading, error, flashEvent }
 }
