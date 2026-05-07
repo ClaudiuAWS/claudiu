@@ -1,6 +1,6 @@
 import boto3
 import os
-from boto3.dynamodb.conditions import Key, Attr
+from boto3.dynamodb.conditions import Key
 
 dynamodb = boto3.resource('dynamodb')
 
@@ -27,11 +27,13 @@ def get_match(match_id: str) -> dict:
 
 
 def get_match_events(match_id: str) -> list:
-    """Return fired events sorted by match clock (gameTime), then eventTime."""
+    """Return all events for a match, sorted by match clock (gameTime), then eventTime.
+    The frontend reveal-on-clock filter shows each event at the moment the displayed
+    timer reaches its gameTime, so returning unfired events here is safe and
+    eliminates the frontend's dependency on backend Lambda dispatch jitter."""
     events = []
     kwargs = {
         'KeyConditionExpression': Key('matchId').eq(match_id),
-        'FilterExpression': Attr('firedAt').exists(),
     }
     while True:
         response = match_events_table.query(**kwargs)
