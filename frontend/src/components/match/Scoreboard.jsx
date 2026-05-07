@@ -97,7 +97,7 @@ export default function Scoreboard({ match, events }) {
               <span className={`text-[9px] font-bold tracking-widest ${s.dot ? 'text-green-400' : 'text-gray-500'}`}>
                 {s.label}
               </span>
-              {match.currentMinute && s.clockColor && (
+              {(match.startedAt || match.currentMinute) && s.clockColor && (
                 <span className={`text-[9px] tabular-nums ${s.clockColor}`}>{clock}</span>
               )}
             </div>
