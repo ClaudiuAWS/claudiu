@@ -123,7 +123,25 @@ def _handle_goal(match_id: str, game_time: str, data: dict) -> None:
     print(f"Goal processed — {current_result} at {game_time} (board {home_score}:{away_score})")
 
 
+def _is_already_past(match_id: str, game_time: str) -> bool:
+    """True if the match record's currentMinute is already past `game_time`.
+    Boundary events (halftime/secondhalf/fulltime) call this to refuse regressing
+    state when SQS / EventBridge delivers them out of order — e.g. secondhalf
+    processed before halftime due to scheduler jitter, then halftime arriving
+    later must NOT reset status to 'halftime' or rewind currentMinute to 51:00.
+    """
+    existing = matches_table.get_item(
+        Key={'matchId': match_id}, ConsistentRead=True
+    ).get('Item') or {}
+    existing_sec = _game_time_seconds(existing.get('currentMinute'))
+    new_sec      = _game_time_seconds(game_time)
+    return existing_sec > new_sec >= 0
+
+
 def _handle_halftime(match_id: str, game_time: str, data: dict) -> None:
+    if _is_already_past(match_id, game_time):
+        print(f"Skipping halftime at {game_time} — match already advanced past it (out-of-order arrival)")
+        return
     matches_table.update_item(
         Key={'matchId': match_id},
         UpdateExpression='SET #s = :s, currentMinute = :m',
@@ -137,6 +155,16 @@ def _handle_halftime(match_id: str, game_time: str, data: dict) -> None:
 
 
 def _handle_second_half(match_id: str, game_time: str) -> None:
+    if _is_already_past(match_id, game_time):
+        # 2H state is already further along; just ensure status reflects 'live'.
+        matches_table.update_item(
+            Key={'matchId': match_id},
+            UpdateExpression='SET #s = :s',
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={':s': 'live'},
+        )
+        print(f"Second-half marker at {game_time} — match already past, status pinned 'live'")
+        return
     matches_table.update_item(
         Key={'matchId': match_id},
         UpdateExpression='SET #s = :s, currentMinute = :m',
@@ -150,6 +178,11 @@ def _handle_second_half(match_id: str, game_time: str) -> None:
 
 
 def _handle_fulltime(match_id: str, game_time: str, data: dict) -> None:
+    if _is_already_past(match_id, game_time):
+        # Defensive: shouldn't happen since fulltime has the highest gameTime,
+        # but if it does, never regress.
+        print(f"Skipping fulltime at {game_time} — match already advanced past it")
+        return
     matches_table.update_item(
         Key={'matchId': match_id},
         UpdateExpression='SET #s = :s, currentMinute = :m, finishedAt = :f',
