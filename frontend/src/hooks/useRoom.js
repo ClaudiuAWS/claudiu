@@ -6,15 +6,6 @@ import toast from 'react-hot-toast'
 
 const ROOM_CODE_KEY = 'fan_squad_room_code'
 
-const TOAST_BY_EVENT = {
-  goal:             { emoji: '⚽',  label: 'GOAL'  },
-  saved_shot:       { emoji: '🧤', label: 'SAVE'  },
-  card:             { emoji: '🟨', label: 'CARD'  },
-  nutmeg:           { emoji: '🤌', label: 'NUTMEG' },
-  spectacular_play: { emoji: '✨', label: 'SKILL' },
-}
-const TOAST_FALLBACK = { emoji: '🏟️', label: 'POINTS' }
-
 export function useRoom(onChatMessage, currentUserId, initialRoom = null) {
   const [room, setRoom] = useState(initialRoom)
   const [loading, setLoading] = useState(initialRoom ? false : true)
@@ -67,22 +58,15 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null) {
     } else if (msg.type === 'chat_message') {
       onChatMessage?.(msg)
     } else if (msg.type === 'score_update') {
+      // Keep the leaderboard in sync — but no toast. Score deltas now
+      // surface through the per-event mini-games rather than a popup
+      // tied to backend WS arrival (which had inconsistent timing
+      // relative to the displayed match clock).
       const scoreMap = Object.fromEntries(msg.leaderboard.map(e => [e.userId, e.score]))
       setRoom(prev => prev ? {
         ...prev,
         members: prev.members.map(m => ({ ...m, score: scoreMap[m.userId] ?? m.score }))
       } : prev)
-      const myChange = msg.changes?.find(c => c.userId === currentUserId)
-      if (myChange) {
-        const sign  = myChange.delta > 0 ? '+' : ''
-        // Pick the toast label/emoji from the event type, not from the sign
-        // of the delta — a saved_shot delivers +3 too, but it's not a goal.
-        const cfg = TOAST_BY_EVENT[myChange.eventType] ?? TOAST_FALLBACK
-        toast(`${cfg.emoji} ${cfg.label} ${sign}${myChange.delta} pts`, {
-          duration: 4000,
-          style: { background: myChange.delta > 0 ? '#065f46' : '#7f1d1d', color: '#fff' },
-        })
-      }
       logger.info('useRoom', 'WS score_update', msg.changes)
     }
   }, [onChatMessage, currentUserId])
