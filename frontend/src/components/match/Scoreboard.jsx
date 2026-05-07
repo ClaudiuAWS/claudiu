@@ -45,8 +45,21 @@ export default function Scoreboard({ match, events }) {
   const clock = useMatchClock(match, events)
   if (!match) return null
 
-  const s = STATUS[match.status]
-  const isLive = match.status === 'live'
+  // Effective status: derive 2H 'live' from events list because the WS
+  // reorder race can leave match.status pinned to 'halftime' even after
+  // secondhalf has fired. Once secondhalf is in events (and fulltime isn't),
+  // we're back in a live phase regardless of what the snapshot says.
+  const evs = events ?? []
+  const hasSh = evs.some(e => e.eventType === 'secondhalf')
+  const hasFt = evs.some(e => e.eventType === 'fulltime')
+  const effectiveStatus = hasFt
+    ? 'fulltime'
+    : (hasSh && match.status !== 'fulltime')
+      ? 'live'
+      : match.status
+
+  const s = STATUS[effectiveStatus]
+  const isLive = effectiveStatus === 'live'
 
   return (
     <div

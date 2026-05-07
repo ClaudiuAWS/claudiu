@@ -83,9 +83,20 @@ export function useMatchClock(match, events) {
     setDisplay(formatFootballClock(gs, htSec))
   }, [match?.currentMinute, match?.status, match?.speedMultiplier])
 
+  // True 'live' phases: 1H (status='live' before halftime fires) and 2H. Detect
+  // 2H from the events list rather than match.status alone — the WS reorder
+  // race occasionally lets a stale 'halftime' snapshot win after secondhalf
+  // has fired, leaving match.status='halftime' for the rest of the match.
+  // Falling back to events guarantees the clock keeps ticking and the badge
+  // turns green once 2H has visibly started.
+  const evs = events ?? []
+  const hasSecondHalf = evs.some(e => e.eventType === 'secondhalf')
+  const hasFullTime   = evs.some(e => e.eventType === 'fulltime')
+  const inLivePhase   = match?.status === 'live' || (hasSecondHalf && !hasFullTime)
+
   useEffect(() => {
     if (!match) return
-    if (match.status !== 'live') return
+    if (!inLivePhase) return
 
     const speed = parseReplaySpeed(match)
 
@@ -118,7 +129,7 @@ export function useMatchClock(match, events) {
     tick()
 
     return () => clearInterval(id)
-  }, [match?.status, match?.matchId, match?.speedMultiplier])
+  }, [match?.matchId, match?.speedMultiplier, inLivePhase])
 
   return display
 }
