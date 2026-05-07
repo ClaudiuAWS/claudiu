@@ -9,7 +9,7 @@ def handler(event, context):
     try:
         match_id = event['pathParameters']['matchId']
         body = json.loads(event.get('body') or '{}')
-        speed_multiplier = float(body.get('speedMultiplier', 30))
+        speed_multiplier = float(body.get('speedMultiplier', 5))
 
         result = start_match(match_id, speed_multiplier)
         return _response(200, result)

@@ -2,7 +2,8 @@ import { formatFootballTime, gameTimeToSeconds } from '../../utils/matchEvents'
 import { POS_TO_TYPE } from '../../utils/formationPositions'
 
 // ─── Points rules ─────────────────────────────────────────────────────────────
-const POINTS = { goal: 5, assist: 3, yellow: -1, red: -3 }
+// Mirror of the values applied server-side in event-processor/service.py.
+const POINTS = { goal: 5, assist: 3, yellow: -1, red: -3, save: 3 }
 
 // 5-tier group colour config (ATM renamed to CAM)
 const GROUP_ACCENT = {
@@ -64,6 +65,13 @@ function getPlayerMatchEvents(player, events, htStoredSec) {
           eventId: e.eventId + '_assist',
         })
       }
+    } else if (e.eventType === 'saved_shot' && e.goalKeeperId === pid) {
+      result.push({
+        type: 'save', icon: '🧤', label: 'Save', points: POINTS.save,
+        time: formatFootballTime(gameTimeToSeconds(e.gameTime), htStoredSec),
+        detail: e.saveResult ? String(e.saveResult) : null,
+        eventId: e.eventId,
+      })
     } else if (e.eventType === 'card' && e.playerId === pid) {
       const isRed = e.cardColor === 'red'
       result.push({
@@ -209,7 +217,19 @@ export function PlayerStatsPopup({ player, isOpen, onClose, events = [], htStore
 
   const playerEvents = getPlayerMatchEvents(player, events, htStoredSec)
   const totalPoints  = playerEvents.reduce((s, e) => s + e.points, 0)
-  const stats        = player.stats || {}
+  // Live overrides on top of the season stats: count match events involving
+  // this player so the card reflects what's happening right now (especially
+  // saves for goalkeepers — KPI XML never refreshes mid-match).
+  const liveSaves = playerEvents.reduce((n, e) => n + (e.type === 'save' ? 1 : 0), 0)
+  const liveGoals = playerEvents.reduce((n, e) => n + (e.type === 'goal' ? 1 : 0), 0)
+  const baseStats = player.stats || {}
+  const stats = {
+    ...baseStats,
+    // Take whichever is higher — preserves season totals when live count is 0
+    // and bumps up immediately as match events fire.
+    saves: Math.max(Number(baseStats.saves) || 0, liveSaves),
+    goals: Math.max(Number(baseStats.goals) || 0, liveGoals),
+  }
 
   const displayName = player.displayName
     || (player.shirtNumber ? `#${player.shirtNumber} · ${player.positionName || player.position}` : 'Player')
@@ -318,7 +338,7 @@ export function PlayerStatsPopup({ player, isOpen, onClose, events = [], htStore
         {/* ── Footer ── */}
         <div className="flex-shrink-0 border-t border-white/[0.06] px-4 py-2.5 flex items-center justify-between">
           <p className="text-[9px] text-gray-600 uppercase tracking-widest">
-            Points: Goal +5 · Assist +3 · Yellow −1 · Red −3
+            Points: Goal +5 · Assist +3 · Save +3 · Yellow −1 · Red −3
           </p>
         </div>
       </div>

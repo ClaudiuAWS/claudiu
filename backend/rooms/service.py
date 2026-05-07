@@ -195,7 +195,7 @@ def select_team(room_code: str, user_id: str, player_ids: list) -> dict:
     return {'ok': True, 'playerCount': 11}
 
 
-def start_match_for_room(room_code: str, user_id: str) -> dict:
+def start_match_for_room(room_code: str, user_id: str, speed_multiplier: float = 5.0) -> dict:
     room = rooms_table.get_item(Key={'roomCode': room_code}).get('Item')
     if not room:
         raise ValueError('Room not found')
@@ -208,7 +208,7 @@ def start_match_for_room(room_code: str, user_id: str) -> dict:
     match_id = room['matchId']
     payload = json.dumps({
         'pathParameters': {'matchId': match_id},
-        'body': json.dumps({'speedMultiplier': 30}),
+        'body': json.dumps({'speedMultiplier': speed_multiplier}),
     })
     response = lambda_client.invoke(
         FunctionName=os.environ['REPLAY_EMITTER_FUNCTION'],

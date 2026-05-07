@@ -73,6 +73,11 @@ Resources:
                                                     Action:
                                                             - iam:PassRole
                                                     Resource: !GetAtt EventBridgeInvokeRole.Arn
+                                                  - Sid: InvokeEventProcessorForWarmup
+                                                    Effect: Allow
+                                                    Action:
+                                                            - lambda:InvokeFunction
+                                                    Resource: !GetAtt EventProcessorLambda.Arn
                                                   - Sid: WsConnectionsRead
                                                     Effect: Allow
                                                     Action:

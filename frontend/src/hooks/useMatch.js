@@ -2,8 +2,16 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { matchesApi } from '../services/api'
 import { logger } from '../services/logger'
 import { useWebSocket } from './useWebSocket'
+import { gameTimeToSeconds } from '../utils/matchEvents'
 
 const FLASH_EVENT_TYPES = new Set(['nutmeg', 'spectacular_play'])
+
+// How long to hold incoming `match_update` messages before flushing to state.
+// Backend SQS FIFO already serializes events in scheduled order; this window
+// absorbs residual WS / network jitter so events surface to the user in
+// gameTime order. 500 ms is invisible UX-wise (the match clock keeps
+// interpolating) and large enough to swallow normal API-Gateway fan-out lag.
+const REORDER_BUFFER_MS = 500
 
 export function useMatches() {
   const [matches, setMatches] = useState([])
@@ -27,6 +35,12 @@ export function useMatch(matchId) {
   const [error, setError] = useState('')
   const [flashEvent, setFlashEvent] = useState(null)
   const flashTimerRef = useRef(null)
+  // Reordering buffer: holds incoming match_update messages until the next
+  // drain tick, then flushes them in ascending-gameTime order. Even with
+  // SQS FIFO upstream, parallel WS fan-out across many connection IDs can
+  // briefly invert arrival; this collapses that window.
+  const wsBufferRef    = useRef([])
+  const drainTimerRef  = useRef(null)
 
   // Initial load
   useEffect(() => {
@@ -53,29 +67,89 @@ export function useMatch(matchId) {
       .finally(() => setLoading(false))
   }, [matchId])
 
-  // Real-time updates via WebSocket
-  const handleMessage = useCallback((msg) => {
-    if (msg.type === 'match_update') {
-      setMatch(msg.match)
-      if (msg.event) {
+  // Drain the reorder buffer: sort all queued WS messages by gameTime, then
+  // apply event additions, the latest match snapshot, and any skill flash —
+  // so what the user sees follows true match-clock order rather than
+  // Lambda-cold-start arrival order.
+  const drainBuffer = useCallback(() => {
+    drainTimerRef.current = null
+    const batch = wsBufferRef.current
+    wsBufferRef.current = []
+    if (!batch.length) return
+
+    batch.sort((a, b) => {
+      const ka = gameTimeToSeconds(a.event?.gameTime)
+      const kb = gameTimeToSeconds(b.event?.gameTime)
+      if (ka !== kb) return ka - kb
+      return (a._receivedAt ?? 0) - (b._receivedAt ?? 0)
+    })
+
+    setEvents(prev => {
+      const ids = new Set(prev.map(e => e.eventId))
+      const additions = []
+      for (const msg of batch) {
+        if (!msg.event) continue
         const flat = { ...(msg.event.data ?? {}), ...msg.event }
         delete flat.data
-        setEvents(prev => {
-          const ids = new Set(prev.map(e => e.eventId))
-          return ids.has(flat.eventId) ? prev : [...prev, flat]
-        })
-        // Trigger skill flash badge for nutmeg / spectacular_play
-        if (FLASH_EVENT_TYPES.has(flat.eventType)) {
-          clearTimeout(flashTimerRef.current)
-          setFlashEvent(flat)
-          flashTimerRef.current = setTimeout(() => setFlashEvent(null), 3000)
+        delete flat._receivedAt
+        if (!ids.has(flat.eventId)) {
+          additions.push(flat)
+          ids.add(flat.eventId)
         }
       }
-      logger.success('useMatch', 'WS match_update', msg.match)
+      return additions.length ? [...prev, ...additions] : prev
+    })
+
+    // Latest-arriving event's snapshot wins, NOT the highest-gameTime event's.
+    // Backend processes events in SQS-FIFO arrival order, so the most-recently-
+    // arrived snapshot is the most up-to-date. Picking by highest gameTime can
+    // pin status='halftime' if a 1st-half stoppage event (with gameTime > the
+    // halftime event's gameTime) arrives after halftime in SQS — its snapshot
+    // would still say 'halftime' and overwrite the secondhalf 'live' snapshot.
+    let latestArrival = batch[0]
+    for (const m of batch) {
+      if ((m._receivedAt ?? 0) > (latestArrival._receivedAt ?? 0)) latestArrival = m
+    }
+    if (latestArrival?.match) setMatch(latestArrival.match)
+
+    // Skill flash on the most-recent qualifying event in the batch.
+    for (let i = batch.length - 1; i >= 0; i--) {
+      const ev = batch[i].event
+      if (ev && FLASH_EVENT_TYPES.has(ev.eventType)) {
+        const flat = { ...(ev.data ?? {}), ...ev }
+        delete flat.data
+        clearTimeout(flashTimerRef.current)
+        setFlashEvent(flat)
+        flashTimerRef.current = setTimeout(() => setFlashEvent(null), 3000)
+        break
+      }
     }
   }, [])
 
+  // Real-time updates via WebSocket
+  const handleMessage = useCallback((msg) => {
+    if (msg.type === 'match_update') {
+      wsBufferRef.current.push({ ...msg, _receivedAt: Date.now() })
+      if (drainTimerRef.current == null) {
+        drainTimerRef.current = setTimeout(drainBuffer, REORDER_BUFFER_MS)
+      }
+      logger.success('useMatch', 'WS match_update buffered', msg.match)
+    }
+  }, [drainBuffer])
+
   useWebSocket(matchId ? `match#${matchId}` : null, handleMessage)
+
+  // Flush buffer on unmount so we never leak a setTimeout.
+  useEffect(() => () => {
+    if (drainTimerRef.current != null) {
+      clearTimeout(drainTimerRef.current)
+      drainTimerRef.current = null
+    }
+    if (flashTimerRef.current != null) {
+      clearTimeout(flashTimerRef.current)
+      flashTimerRef.current = null
+    }
+  }, [])
 
   return { match, events, loading, error, flashEvent }
 }

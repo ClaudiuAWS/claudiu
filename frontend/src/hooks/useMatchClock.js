@@ -8,6 +8,19 @@ function formatMmSs(totalSeconds) {
   return `${mm}:${ss.toString().padStart(2, '0')}`
 }
 
+/**
+ * Football-clock formatter. After halftime fires, the 2nd-half clock should
+ * resume from 45:00 (the football convention) instead of continuing to climb
+ * from wall-clock-from-kickoff (~51:00). Before halftime, raw seconds are fine
+ * — the 1st-half clock counts up to 45+N normally.
+ */
+function formatFootballClock(rawSec, halftimeSec) {
+  if (halftimeSec >= 0 && rawSec > halftimeSec) {
+    return formatMmSs(45 * 60 + (rawSec - halftimeSec))
+  }
+  return formatMmSs(rawSec)
+}
+
 function parseReplaySpeed(match) {
   if (match?.speedMultiplier == null || match?.speedMultiplier === '') return 1
   const n = parseFloat(String(match.speedMultiplier))
@@ -35,32 +48,56 @@ export function useMatchClock(match, events) {
     anchorRef.current = { gameSec: 0, wallMs: Date.now() }
   }, [match?.matchId, match?.startedAt])
 
+  // True 'live' phases: 1H (status='live' before halftime fires) and 2H. Detect
+  // 2H from the events list rather than match.status alone — the WS reorder
+  // race occasionally lets a stale 'halftime' snapshot win after secondhalf
+  // has fired, leaving match.status='halftime' for the rest of the match.
+  // The rewind guards below and the tick loop further down both rely on this:
+  // we want forward-only snaps any time the user is *visibly* in a live phase,
+  // even if the snapshot disagrees.
+  const evs = events ?? []
+  const hasSecondHalf = evs.some(e => e.eventType === 'secondhalf')
+  const hasFullTime   = evs.some(e => e.eventType === 'fulltime')
+  const inLivePhase   = match?.status === 'live' || (hasSecondHalf && !hasFullTime)
+
   useEffect(() => {
     if (!match?.currentMinute) return
     const srv = String(match.currentMinute).trim()
     if (srv === lastServerMinuteRef.current) return
+    lastServerMinuteRef.current = srv
     const raw = gameTimeToSeconds(srv)
     const gs = raw >= 0 ? raw : 0
-    // Reject only when server minute moves backward vs last accepted (out-of-order write).
-    // Do not compare to local extrapolation — with speedMultiplier>1 the client can run
-    // ahead of discrete server updates until the next poll; that must not block valid snaps.
+    // Reject out-of-order writes that go backward vs the last accepted server value.
     if (
-      match.status === 'live' &&
+      inLivePhase &&
       lastAcceptedServerSecRef.current >= 0 &&
       gs < lastAcceptedServerSecRef.current
     ) {
-      lastServerMinuteRef.current = srv
       return
     }
-    lastServerMinuteRef.current = srv
     lastAcceptedServerSecRef.current = gs
+    // Don't rewind the visible clock past where the local extrapolation has reached.
+    // Out-of-order events (e.g. an 8' goal landing while the client is showing 10:00
+    // due to speedMultiplier-driven extrapolation) push currentMinute backward from
+    // the *displayed* value even though it's a valid forward step from the server's
+    // last-known state. Keep ticking forward from the existing anchor; the new event's
+    // gameTime is metadata for the badge, not a clock reset. Boundary status
+    // transitions (halftime/fulltime) bypass this — those are authoritative snaps.
+    if (inLivePhase) {
+      const speed = parseReplaySpeed(match)
+      const local = anchorRef.current.gameSec +
+        ((Date.now() - anchorRef.current.wallMs) / 1000) * speed
+      if (gs < local) return
+    }
     anchorRef.current = { gameSec: gs, wallMs: Date.now() }
-    setDisplay(formatMmSs(gs))
-  }, [match?.currentMinute, match?.status, match?.speedMultiplier])
+    const ht = (eventsRef.current ?? []).find(e => e.eventType === 'halftime')
+    const htSec = ht ? gameTimeToSeconds(ht.gameTime) : -1
+    setDisplay(formatFootballClock(gs, htSec))
+  }, [match?.currentMinute, match?.status, match?.speedMultiplier, inLivePhase])
 
   useEffect(() => {
     if (!match) return
-    if (match.status !== 'live') return
+    if (!inLivePhase) return
 
     const speed = parseReplaySpeed(match)
 
@@ -85,14 +122,15 @@ export function useMatchClock(match, events) {
       if (ht && !sh) cap = gameTimeToSeconds(ht.gameTime)
       else if (ft)   cap = gameTimeToSeconds(ft.gameTime)
       if (cap >= 0 && fromServer > cap) fromServer = cap
-      setDisplay(formatMmSs(fromServer))
+      const htSec = ht ? gameTimeToSeconds(ht.gameTime) : -1
+      setDisplay(formatFootballClock(fromServer, htSec))
     }
 
     const id = setInterval(tick, 250)
     tick()
 
     return () => clearInterval(id)
-  }, [match?.status, match?.matchId, match?.speedMultiplier])
+  }, [match?.matchId, match?.speedMultiplier, inLivePhase])
 
   return display
 }

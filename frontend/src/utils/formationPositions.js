@@ -265,7 +265,7 @@ const CANONICAL_FORMATIONS = [
   { label: '4-4-2',   template: '4-2-2-2', def: 4, cdm: 4, cam: 0, fwd: 2 },
   { label: '4-1-4-1', template: '4-2-3-1', def: 4, cdm: 1, cam: 4, fwd: 1 },
   { label: '4-5-1',   template: '4-2-3-1', def: 4, cdm: 5, cam: 0, fwd: 1 },
-  { label: '4-5-1',   template: '4-2-3-1', def: 4, cdm: 3, cam: 2, fwd: 1 },
+  { label: '4-3-2-1', template: '4-2-3-1', def: 4, cdm: 3, cam: 2, fwd: 1 },
   { label: '3-5-2',   template: '3-5-2',   def: 3, cdm: 4, cam: 1, fwd: 2 }, // LM+CDM+CDM+RM / CAM
   { label: '3-5-2',   template: '3-5-2',   def: 3, cdm: 5, cam: 0, fwd: 2 }, // flat 5-mid line
   { label: '3-4-3',   template: '3-4-3',   def: 3, cdm: 2, cam: 2, fwd: 3 },
@@ -304,10 +304,13 @@ function findCanonicalEntry(defC, cdmC, camC, fwdC) {
   const defCandidates = CANONICAL_FORMATIONS.filter(f => f.def === defC)
   const pool = defCandidates.length > 0 ? defCandidates : CANONICAL_FORMATIONS
 
-  let best = pool[0], bestDist = Infinity
+  let best = pool[0], bestDist = Infinity, bestFwdDist = Infinity
   for (const f of pool) {
     const d = Math.abs(f.cdm - cdmC) + Math.abs(f.cam - camC) + Math.abs(f.fwd - fwdC)
-    if (d < bestDist) { bestDist = d; best = f }
+    const fd = Math.abs(f.fwd - fwdC)
+    if (d < bestDist || (d === bestDist && fd < bestFwdDist)) {
+      bestDist = d; bestFwdDist = fd; best = f
+    }
   }
   return best
 }
@@ -337,6 +340,7 @@ function resolveTemplate(formation) {
     '4-3-3': '4-3-3',
     '4-4-2': '4-2-2-2',
     '4-5-1': '4-2-3-1',
+    '4-3-2-1': '4-2-3-1',
     '4-1-4-1': '4-2-3-1',
     '3-5-2': '3-2-3-2',
     '3-4-3': '3-4-3',

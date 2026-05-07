@@ -21,6 +21,14 @@ def process_event(
     game_time: str,
     data: dict,
 ) -> None:
+    # Warmup invocation from replay-emitter at match start: short-circuit so the
+    # Lambda execution context becomes hot before the first real EventBridge
+    # schedule fires. Without this, the first 1-2 events of a match eat ~5s of
+    # cold-start latency, which surfaces as a 25-30s match-clock lag at 5x speed.
+    if event_type == '__warmup__' or match_id == '__warmup__':
+        print("Warmup invocation, no-op")
+        return
+
     if not _is_active_run(match_id, run_id):
         print(f"Skipping stale event {event_id} for run {run_id}")
         return
@@ -115,7 +123,25 @@ def _handle_goal(match_id: str, game_time: str, data: dict) -> None:
     print(f"Goal processed — {current_result} at {game_time} (board {home_score}:{away_score})")
 
 
+def _is_already_past(match_id: str, game_time: str) -> bool:
+    """True if the match record's currentMinute is already past `game_time`.
+    Boundary events (halftime/secondhalf/fulltime) call this to refuse regressing
+    state when SQS / EventBridge delivers them out of order — e.g. secondhalf
+    processed before halftime due to scheduler jitter, then halftime arriving
+    later must NOT reset status to 'halftime' or rewind currentMinute to 51:00.
+    """
+    existing = matches_table.get_item(
+        Key={'matchId': match_id}, ConsistentRead=True
+    ).get('Item') or {}
+    existing_sec = _game_time_seconds(existing.get('currentMinute'))
+    new_sec      = _game_time_seconds(game_time)
+    return existing_sec > new_sec >= 0
+
+
 def _handle_halftime(match_id: str, game_time: str, data: dict) -> None:
+    if _is_already_past(match_id, game_time):
+        print(f"Skipping halftime at {game_time} — match already advanced past it (out-of-order arrival)")
+        return
     matches_table.update_item(
         Key={'matchId': match_id},
         UpdateExpression='SET #s = :s, currentMinute = :m',
@@ -129,6 +155,16 @@ def _handle_halftime(match_id: str, game_time: str, data: dict) -> None:
 
 
 def _handle_second_half(match_id: str, game_time: str) -> None:
+    if _is_already_past(match_id, game_time):
+        # 2H state is already further along; just ensure status reflects 'live'.
+        matches_table.update_item(
+            Key={'matchId': match_id},
+            UpdateExpression='SET #s = :s',
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={':s': 'live'},
+        )
+        print(f"Second-half marker at {game_time} — match already past, status pinned 'live'")
+        return
     matches_table.update_item(
         Key={'matchId': match_id},
         UpdateExpression='SET #s = :s, currentMinute = :m',
@@ -142,6 +178,11 @@ def _handle_second_half(match_id: str, game_time: str) -> None:
 
 
 def _handle_fulltime(match_id: str, game_time: str, data: dict) -> None:
+    if _is_already_past(match_id, game_time):
+        # Defensive: shouldn't happen since fulltime has the highest gameTime,
+        # but if it does, never regress.
+        print(f"Skipping fulltime at {game_time} — match already advanced past it")
+        return
     matches_table.update_item(
         Key={'matchId': match_id},
         UpdateExpression='SET #s = :s, currentMinute = :m, finishedAt = :f',
@@ -190,7 +231,7 @@ def _score_rooms_for_event(match_id: str, event_type: str, data: dict) -> None:
     for room in active_rooms:
         deltas = _calculate_deltas(room, event_type, data)
         if any(v != 0 for v in deltas.values()):
-            _apply_score_deltas(room, deltas)
+            _apply_score_deltas(room, deltas, event_type)
 
 
 def _calculate_deltas(room: dict, event_type: str, data: dict) -> dict:
@@ -245,7 +286,7 @@ def _calculate_deltas(room: dict, event_type: str, data: dict) -> dict:
     return deltas
 
 
-def _apply_score_deltas(room: dict, deltas: dict) -> None:
+def _apply_score_deltas(room: dict, deltas: dict, event_type: str) -> None:
     members       = room.get('members', [])
     score_changes = []
 
@@ -255,7 +296,12 @@ def _apply_score_deltas(room: dict, deltas: dict) -> None:
             continue
         new_score  = int(m.get('score', 0)) + delta
         m['score'] = new_score
-        score_changes.append({'userId': m['userId'], 'delta': delta, 'newScore': new_score})
+        score_changes.append({
+            'userId':    m['userId'],
+            'delta':     delta,
+            'newScore':  new_score,
+            'eventType': event_type,  # so the frontend toast can pick the right label
+        })
 
     if not score_changes:
         return
