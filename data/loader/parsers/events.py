@@ -1,7 +1,7 @@
 import xmltodict
 from datetime import datetime, timezone
 from typing import Optional
-from constants import EventType, RELEVANT_XML_TAGS
+from constants import EventType, RELEVANT_XML_TAGS, KICKOFF_TIME
 
 
 def parse_events(xml_path: str, players: dict) -> list:
@@ -18,9 +18,12 @@ def parse_events(xml_path: str, players: dict) -> list:
     if isinstance(raw_events, dict):
         raw_events = [raw_events]
 
-    kickoff_dt = _find_kickoff(raw_events)
-    if not kickoff_dt:
-        raise ValueError("No first half kickoff event found in events.xml")
+    # Use the canonical kickoff from constants — the same value parse_match
+    # writes to the match record's kickoffTime field. Iterating raw_events for
+    # the first firstHalf KickOff used to win a pre-match marker (~17 min
+    # before ball-rolling kickoff), inflating every gameTime by 17 min and
+    # making halftime schedule at 68:00 instead of 51:01.
+    kickoff_dt = datetime.fromisoformat(KICKOFF_TIME).astimezone(timezone.utc)
 
 
     processed = []
@@ -48,19 +51,6 @@ def parse_events(xml_path: str, players: dict) -> list:
 # ─────────────────────────────────────────
 # Private helpers
 # ─────────────────────────────────────────
-
-def _find_kickoff(raw_events: list) -> Optional[datetime]:
-    """Find the first half kickoff event and return its time in UTC."""
-    for raw_event in raw_events:
-        if "KickOff" not in raw_event:
-            continue
-        data = raw_event["KickOff"]
-        if data.get("@GameSection") == "firstHalf":
-            return datetime.fromisoformat(
-                raw_event["@EventTime"]
-            ).astimezone(timezone.utc)
-    return None
-
 
 def _calculate_game_time(event_time_str: str, kickoff_dt: datetime) -> Optional[str]:
     """
