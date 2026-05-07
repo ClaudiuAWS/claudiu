@@ -48,6 +48,18 @@ export function useMatchClock(match, events) {
     anchorRef.current = { gameSec: 0, wallMs: Date.now() }
   }, [match?.matchId, match?.startedAt])
 
+  // True 'live' phases: 1H (status='live' before halftime fires) and 2H. Detect
+  // 2H from the events list rather than match.status alone — the WS reorder
+  // race occasionally lets a stale 'halftime' snapshot win after secondhalf
+  // has fired, leaving match.status='halftime' for the rest of the match.
+  // The rewind guards below and the tick loop further down both rely on this:
+  // we want forward-only snaps any time the user is *visibly* in a live phase,
+  // even if the snapshot disagrees.
+  const evs = events ?? []
+  const hasSecondHalf = evs.some(e => e.eventType === 'secondhalf')
+  const hasFullTime   = evs.some(e => e.eventType === 'fulltime')
+  const inLivePhase   = match?.status === 'live' || (hasSecondHalf && !hasFullTime)
+
   useEffect(() => {
     if (!match?.currentMinute) return
     const srv = String(match.currentMinute).trim()
@@ -57,7 +69,7 @@ export function useMatchClock(match, events) {
     const gs = raw >= 0 ? raw : 0
     // Reject out-of-order writes that go backward vs the last accepted server value.
     if (
-      match.status === 'live' &&
+      inLivePhase &&
       lastAcceptedServerSecRef.current >= 0 &&
       gs < lastAcceptedServerSecRef.current
     ) {
@@ -69,9 +81,9 @@ export function useMatchClock(match, events) {
     // due to speedMultiplier-driven extrapolation) push currentMinute backward from
     // the *displayed* value even though it's a valid forward step from the server's
     // last-known state. Keep ticking forward from the existing anchor; the new event's
-    // gameTime is metadata for the badge, not a clock reset. Status transitions
-    // (halftime/fulltime) bypass this — they're authoritative snap points.
-    if (match.status === 'live') {
+    // gameTime is metadata for the badge, not a clock reset. Boundary status
+    // transitions (halftime/fulltime) bypass this — those are authoritative snaps.
+    if (inLivePhase) {
       const speed = parseReplaySpeed(match)
       const local = anchorRef.current.gameSec +
         ((Date.now() - anchorRef.current.wallMs) / 1000) * speed
@@ -81,18 +93,7 @@ export function useMatchClock(match, events) {
     const ht = (eventsRef.current ?? []).find(e => e.eventType === 'halftime')
     const htSec = ht ? gameTimeToSeconds(ht.gameTime) : -1
     setDisplay(formatFootballClock(gs, htSec))
-  }, [match?.currentMinute, match?.status, match?.speedMultiplier])
-
-  // True 'live' phases: 1H (status='live' before halftime fires) and 2H. Detect
-  // 2H from the events list rather than match.status alone — the WS reorder
-  // race occasionally lets a stale 'halftime' snapshot win after secondhalf
-  // has fired, leaving match.status='halftime' for the rest of the match.
-  // Falling back to events guarantees the clock keeps ticking and the badge
-  // turns green once 2H has visibly started.
-  const evs = events ?? []
-  const hasSecondHalf = evs.some(e => e.eventType === 'secondhalf')
-  const hasFullTime   = evs.some(e => e.eventType === 'fulltime')
-  const inLivePhase   = match?.status === 'live' || (hasSecondHalf && !hasFullTime)
+  }, [match?.currentMinute, match?.status, match?.speedMultiplier, inLivePhase])
 
   useEffect(() => {
     if (!match) return
