@@ -148,12 +148,14 @@ def send_message(room_code: str, user_id: str, display_name: str, text: str) -> 
 def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, game_type: str, deltas: list, result: dict) -> dict:
     """Resolve a mini-game's score deltas onto the room's leaderboard.
 
-    Mini-games run client-side for v1 (timing UI + bot all in browser). When
-    they finish, the resolving client posts the per-user deltas here so the
-    leaderboard stays consistent across users / survives refresh. Idempotent
-    on (roomCode, gameId): a second resolve with the same gameId is silently
-    ignored, so duplicate POSTs from network retries or both clients posting
-    don't double-score.
+    Mini-games run client-side for v1 (timing UI + bot all in browser). Each
+    user posts only their OWN tap result here; backend applies just that
+    user's delta and broadcasts. Other clients receive each user's broadcast
+    and accumulate the panel locally.
+
+    Idempotent per (gameId, userId): a single user can only score once for a
+    given game (retries are no-ops), but multiple users in the same game
+    each get their own resolution + broadcast.
     """
     room = rooms_table.get_item(Key={'roomCode': room_code}).get('Item')
     if not room:
@@ -162,34 +164,40 @@ def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, g
         raise ValueError('You are not in this room')
 
     resolved = set(room.get('resolvedMinigames') or [])
-    if game_id and game_id in resolved:
+    submitter_key = f"{game_id}:{submitter_user_id}" if game_id else None
+    if submitter_key and submitter_key in resolved:
         return {'ok': True, 'duplicate': True}
 
     members = room.get('members', [])
-    delta_by_uid = {d['userId']: d for d in deltas}
+    # Apply ONLY the submitter's delta. Trust the submitter to score themselves
+    # but never to score other users — that prevents one client from inflating
+    # a roommate's score.
+    submitter_delta = next((d for d in deltas if d.get('userId') == submitter_user_id), None)
     score_changes = []
-    for m in members:
-        d = delta_by_uid.get(m['userId'])
-        if not d or d['delta'] == 0:
-            continue
-        new_score = int(m.get('score', 0)) + int(d['delta'])
-        m['score'] = new_score
-        score_changes.append({
-            'userId':    m['userId'],
-            'delta':     int(d['delta']),
-            'newScore':  new_score,
-            'eventType': game_type or 'minigame',
-            'reason':    d.get('reason') or game_type,
-        })
+    if submitter_delta and submitter_delta.get('delta'):
+        for m in members:
+            if m['userId'] != submitter_user_id:
+                continue
+            new_score = int(m.get('score', 0)) + int(submitter_delta['delta'])
+            m['score'] = new_score
+            score_changes.append({
+                'userId':      submitter_user_id,
+                'displayName': m.get('displayName'),
+                'delta':       int(submitter_delta['delta']),
+                'newScore':    new_score,
+                'eventType':   game_type or 'minigame',
+                'reason':      submitter_delta.get('reason') or game_type,
+            })
+            break
 
     update_kwargs = {
         'Key': {'roomCode': room_code},
         'UpdateExpression': 'SET members = :members',
         'ExpressionAttributeValues': {':members': members},
     }
-    if game_id:
+    if submitter_key:
         update_kwargs['UpdateExpression'] += ' ADD resolvedMinigames :gid'
-        update_kwargs['ExpressionAttributeValues'][':gid'] = {game_id}
+        update_kwargs['ExpressionAttributeValues'][':gid'] = {submitter_key}
     rooms_table.update_item(**update_kwargs)
 
     if score_changes:

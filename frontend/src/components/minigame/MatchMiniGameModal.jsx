@@ -89,8 +89,8 @@ function ResultBanner({ state, onClose }) {
       ) : (
         <div className="space-y-1.5">
           {deltas.map((d, i) => (
-            <div key={i} className="flex items-baseline justify-between text-sm">
-              <span className="text-gray-300 truncate flex-1 mr-3">{d.userId}</span>
+            <div key={d.userId || i} className="flex items-baseline justify-between text-sm">
+              <span className="text-gray-300 truncate flex-1 mr-3">{d.displayName || d.userId}</span>
               <span className={`font-black tabular-nums ${d.delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {d.delta > 0 ? '+' : ''}{d.delta}
               </span>
