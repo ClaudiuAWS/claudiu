@@ -38,11 +38,7 @@ def _ask_claude(snapshot: dict) -> dict:
         request = {
             'anthropic_version': 'bedrock-2023-05-31',
             'max_tokens': 200,
-            'system': [{
-                'type': 'text',
-                'text': SYSTEM_PROMPT,
-                'cache_control': {'type': 'ephemeral'},
-            }],
+            'system': SYSTEM_PROMPT,
             'messages': [{
                 'role': 'user',
                 'content': build_user_message(snapshot),

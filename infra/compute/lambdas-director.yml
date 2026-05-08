@@ -28,18 +28,11 @@ Resources:
                                                     Effect: Allow
                                                     Action:
                                                             - bedrock:InvokeModel
-                                                    # Cross-region inference profile (eu.*) routes calls
-                                                    # across EU regions automatically. IAM needs BOTH the
-                                                    # inference profile ARN and every foundation-model ARN
-                                                    # the profile may route to.
+                                                    # Direct foundation-model invocation in eu-central-1 only.
+                                                    # Avoids the cross-region inference profile (eu.anthropic.*)
+                                                    # which routes to regions blocked by the org SCP.
                                                     Resource:
-                                                            - !Sub arn:aws:bedrock:eu-central-1:${AWS::AccountId}:inference-profile/eu.anthropic.*
                                                             - !Sub arn:aws:bedrock:eu-central-1::foundation-model/anthropic.*
-                                                            - !Sub arn:aws:bedrock:eu-west-1::foundation-model/anthropic.*
-                                                            - !Sub arn:aws:bedrock:eu-west-3::foundation-model/anthropic.*
-                                                            - !Sub arn:aws:bedrock:eu-north-1::foundation-model/anthropic.*
-                                                            - !Sub arn:aws:bedrock:eu-south-1::foundation-model/anthropic.*
-                                                            - !Sub arn:aws:bedrock:eu-south-2::foundation-model/anthropic.*
                                                   - Sid: WsManageConnections
                                                     Effect: Allow
                                                     Action:
@@ -77,7 +70,7 @@ Resources:
                                         ROOMS_TABLE: claudiu-rooms
                                         CONNECTIONS_TABLE: claudiu-ws-connections
                                         WEBSOCKET_ENDPOINT: !ImportValue claudiu-ws-endpoint
-                                        BEDROCK_MODEL_ID: eu.anthropic.claude-haiku-4-5-20251001-v1:0
+                                        BEDROCK_MODEL_ID: anthropic.claude-3-haiku-20240307-v1:0
                                         BEDROCK_REGION: eu-central-1
                         Code:
                                 ZipFile: |
