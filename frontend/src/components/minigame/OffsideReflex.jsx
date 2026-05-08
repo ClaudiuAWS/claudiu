@@ -28,6 +28,11 @@ export default function OffsideReflex({ config, startedAtMs, durationMs, onSubmi
   // elapsed === offsideMomentMs.
   const [attackerX, setAttackerX] = useState(4)
   useEffect(() => {
+    // Freeze the attacker dot at its tap position so the user can see how
+    // close they were to the defender line. Without this guard, the dot
+    // keeps gliding to x=95% after submission and the visual feedback is
+    // disconnected from the "26ms early" / "150ms late" verdict.
+    if (submitted) return
     let raf
     const tick = () => {
       const elapsed = Date.now() - startMs.current
@@ -46,7 +51,7 @@ export default function OffsideReflex({ config, startedAtMs, durationMs, onSubmi
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [durationMs, offsideMomentMs])
+  }, [durationMs, offsideMomentMs, submitted])
 
   const handleTap = () => {
     if (submitted) return
