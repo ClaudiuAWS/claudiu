@@ -22,7 +22,7 @@ import { runSoloBot, computeScoreDeltas } from '../utils/minigameBot'
  * to ±200. Backend will own scoring in a follow-up plan along with the
  * `claudiu-minigames` DDB table.
  */
-export function useMiniGame(room, currentUserId) {
+export function useMiniGame(room, currentUserId, events) {
   const [state, setState] = useState(null)
   const submittedRef = useRef(false)
   const resolvedRef = useRef(false)
@@ -37,6 +37,18 @@ export function useMiniGame(room, currentUserId) {
       userPayloadRef.current = null
     }
   }, [state?.gameId])
+
+  // Pending → active: flip when the related event becomes visible in the
+  // reveal-on-clock feed, re-anchoring startedAtMs to the moment of reveal so
+  // the user gets the full duration to react.
+  useEffect(() => {
+    if (state?.status !== 'pending' || !state.relatedEventId) return
+    const visible = (events || []).some(e => e.eventId === state.relatedEventId)
+    if (!visible) return
+    setState(s => s && s.status === 'pending'
+      ? { ...s, status: 'active', startedAtMs: Date.now() }
+      : s)
+  }, [events, state?.status, state?.relatedEventId])
 
   // Auto-expire timer: when no one submits before durationMs, post empty
   // deltas so the modal closes and the room moves on.
@@ -117,16 +129,23 @@ export function useMiniGame(room, currentUserId) {
   // Handle WS messages forwarded by useRoom.
   const onMinigameMessage = useCallback((msg) => {
     if (msg.type === 'minigame_start') {
+      // Backend pushes this when it processes the trigger event (subject to
+      // EventBridge dispatch jitter), but the related event row only appears
+      // in the feed when the displayed match-clock catches up. Park the game
+      // as 'pending' until the row is visible, then re-anchor startedAtMs to
+      // "now" so the user always gets the full duration to react. See plan:
+      // .claude/plans/agile-tinkering-spark.md.
       setState({
         gameId:           msg.gameId,
         gameType:         msg.gameType,
         title:            msg.title,
         prompt:           msg.prompt,
         config:           msg.config,
-        startedAtMs:      msg.startedAtMs ?? Date.now(),
+        startedAtMs:      null,
         durationMs:       msg.durationMs ?? 8000,
         ownershipContext: msg.ownershipContext || {},
-        status:           'active',
+        relatedEventId:   msg.relatedEventId,
+        status:           msg.relatedEventId ? 'pending' : 'active',
       })
     } else if (msg.type === 'minigame_result') {
       setState(s => s && s.gameId === msg.gameId ? {

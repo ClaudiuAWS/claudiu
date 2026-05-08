@@ -33,7 +33,7 @@ export default function MatchPage() {
   const minigameMsgHandler = useCallback((msg) => minigameMsgRef.current?.(msg), [])
   const { room, loading: roomLoading }          = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler)
   const { match, events, loading, flashEvent }  = useMatch(matchId)
-  const minigame = useMiniGame(room, user?.userId)
+  const minigame = useMiniGame(room, user?.userId, events)
   minigameMsgRef.current = minigame.onMinigameMessage
 
   // Fetch full player roster once (for enriching teamSelectionDetails)
