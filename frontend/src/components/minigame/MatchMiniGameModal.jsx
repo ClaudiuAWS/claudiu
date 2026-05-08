@@ -20,6 +20,9 @@ export default function MatchMiniGameModal({ state, onSubmit, onClose }) {
   }, [state?.status])
 
   if (!state) return null
+  // Pending: backend pushed the start but the related event hasn't appeared
+  // in the feed yet. Stay invisible to avoid showing the modal before the play.
+  if (state.status === 'pending') return null
 
   const remainingMs = Math.max(0, (state.startedAtMs ?? Date.now()) + (state.durationMs ?? 8000) - now)
   const remainingSec = Math.ceil(remainingMs / 1000)
