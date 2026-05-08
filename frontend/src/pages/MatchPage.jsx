@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useParams, Navigate, useLocation } from 'react-router-dom'
 import { useMatch } from '../hooks/useMatch'
 import { useRoom } from '../hooks/useRoom'
@@ -12,6 +12,8 @@ import ChatBubbles from '../components/match/ChatBubbles'
 import { SquadVisualization } from '../components/match/SquadVisualization'
 import SkillFlashBadge from '../components/match/SkillFlashBadge'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
+import MatchMiniGameModal from '../components/minigame/MatchMiniGameModal'
+import { useMiniGame } from '../hooks/useMiniGame'
 
 const AVATAR_COLORS = ['bg-violet-500','bg-blue-500','bg-emerald-500','bg-orange-500','bg-pink-500','bg-cyan-500']
 
@@ -25,8 +27,14 @@ export default function MatchPage() {
 
   const { user }                                = useAuth()
   const { messages, bubbles, onChatMessage, sendMessage } = useChat()
-  const { room, loading: roomLoading }          = useRoom(onChatMessage, user?.userId, location.state?.initialRoom)
+  // useRoom's WS handler will forward minigame messages via the optional 4th
+  // arg. We construct a ref-stable forwarder here and feed it both ways.
+  const minigameMsgRef = useRef(null)
+  const minigameMsgHandler = useCallback((msg) => minigameMsgRef.current?.(msg), [])
+  const { room, loading: roomLoading }          = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler)
   const { match, events, loading, flashEvent }  = useMatch(matchId)
+  const minigame = useMiniGame(room, user?.userId)
+  minigameMsgRef.current = minigame.onMinigameMessage
 
   // Fetch full player roster once (for enriching teamSelectionDetails)
   useEffect(() => {
@@ -98,6 +106,11 @@ export default function MatchPage() {
   return (
     <div className="flex flex-col">
       <SkillFlashBadge event={flashEvent} />
+      <MatchMiniGameModal
+        state={minigame.state}
+        onSubmit={minigame.submit}
+        onClose={minigame.close}
+      />
       <Scoreboard match={match} events={events} />
 
       {/* Watchers strip */}

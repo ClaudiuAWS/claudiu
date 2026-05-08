@@ -42,6 +42,7 @@ export const roomsApi = {
   sendMessage: (roomCode, text)     => request(`/rooms/${roomCode}/message`, 'POST', { text }),
   selectTeam:  (roomCode, playerIds) => request(`/rooms/${roomCode}/team`, 'POST', { playerIds }),
   startMatch:  (roomCode, speedMultiplier = 5) => request(`/rooms/${roomCode}/start`, 'POST', { speedMultiplier }),
+  postMinigameScore: (roomCode, payload) => request(`/rooms/${roomCode}/minigame-score`, 'POST', payload),
 }
 
 export const matchesApi = {
