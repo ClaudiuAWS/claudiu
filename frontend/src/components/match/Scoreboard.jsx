@@ -61,6 +61,22 @@ export default function Scoreboard({ match, events }) {
   const s = STATUS[effectiveStatus]
   const isLive = effectiveStatus === 'live'
 
+  // Derive displayed score from revealed goal events. The match record's
+  // homeScore/awayScore is updated by the backend event-processor on its own
+  // wall-clock (subject to EventBridge dispatch jitter), so a goal can sit
+  // visible in the feed for ~2 wall-min before the header catches up. Each
+  // goal event carries `currentResult` like "2:0" — taking the max across
+  // visible goals + the match record keeps the header in lockstep with the
+  // feed without ever going backwards.
+  let homeScore = match.homeScore ?? 0
+  let awayScore = match.awayScore ?? 0
+  for (const e of evs) {
+    if (e.eventType !== 'goal' || !e.currentResult) continue
+    const [h, a] = String(e.currentResult).split(':').map(n => parseInt(n, 10))
+    if (Number.isFinite(h) && h > homeScore) homeScore = h
+    if (Number.isFinite(a) && a > awayScore) awayScore = a
+  }
+
   return (
     <div
       className="relative overflow-hidden px-4 py-3"
@@ -86,9 +102,9 @@ export default function Scoreboard({ match, events }) {
             <p className="text-gray-600 text-sm font-medium tracking-widest">VS</p>
           ) : (
             <p className={`font-black tabular-nums leading-none tracking-tight ${isLive ? 'text-white text-5xl' : 'text-gray-300 text-4xl'}`}>
-              {match.homeScore ?? 0}
+              {homeScore}
               <span className="text-gray-700 mx-1 font-light">:</span>
-              {match.awayScore ?? 0}
+              {awayScore}
             </p>
           )}
           {s && (
