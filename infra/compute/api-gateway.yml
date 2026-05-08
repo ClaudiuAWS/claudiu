@@ -320,6 +320,13 @@ Resources:
                         ParentId: !Ref RoomsCodeResource
                         PathPart: minigame-score
 
+        RoomsDirectorTickResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !Ref RoomsCodeResource
+                        PathPart: director-tick
+
 
         PostRoomsMessageMethod:
                 Type: AWS::ApiGateway::Method
@@ -594,6 +601,45 @@ Resources:
                                           method.response.header.Access-Control-Allow-Methods: true
                                           method.response.header.Access-Control-Allow-Origin: true
 
+        PostRoomsDirectorTickMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref RoomsDirectorTickResource
+                        HttpMethod: POST
+                        AuthorizationType: COGNITO_USER_POOLS
+                        AuthorizerId: !Ref CognitoAuthorizer
+                        Integration:
+                                Type: AWS_PROXY
+                                IntegrationHttpMethod: POST
+                                Uri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-director-handler/invocations
+
+        RoomsDirectorTickOptionsMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref RoomsDirectorTickResource
+                        HttpMethod: OPTIONS
+                        AuthorizationType: NONE
+                        Integration:
+                                Type: MOCK
+                                IntegrationResponses:
+                                        - StatusCode: 200
+                                          ResponseParameters:
+                                                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+                                                  method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+                                                  method.response.header.Access-Control-Allow-Origin: "'*'"
+                                          ResponseTemplates:
+                                                  application/json: ""
+                                RequestTemplates:
+                                        application/json: '{"statusCode": 200}'
+                        MethodResponses:
+                                - StatusCode: 200
+                                  ResponseParameters:
+                                          method.response.header.Access-Control-Allow-Headers: true
+                                          method.response.header.Access-Control-Allow-Methods: true
+                                          method.response.header.Access-Control-Allow-Origin: true
+
         GetMatchesPlayersMethod:
                 Type: AWS::ApiGateway::Method
                 Properties:
@@ -711,9 +757,11 @@ Resources:
                         - RoomsStartOptionsMethod
                         - PostRoomsMinigameScoreMethod
                         - RoomsMinigameScoreOptionsMethod
+                        - PostRoomsDirectorTickMethod
+                        - RoomsDirectorTickOptionsMethod
                 Properties:
                         RestApiId: !Ref RestApi
-                        Description: "2026-05-07-minigame-score"
+                        Description: "2026-05-09-director-tick"
 
         RestApiStage:
                 Type: AWS::ApiGateway::Stage
