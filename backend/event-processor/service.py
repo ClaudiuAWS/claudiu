@@ -84,6 +84,14 @@ def process_event(
     # Award/deduct fantasy points after the event is already on the client
     _score_rooms_for_event(match_id, event_type, data)
 
+    # Open a mini-game if this event type qualifies. Runs after the WS push
+    # of the event itself, so feed display is never delayed; if this fails
+    # for any reason, the match continues.
+    try:
+        _trigger_minigame_for_event(match_id, event_id, event_type, game_time, data)
+    except Exception as e:
+        print(f"Mini-game trigger failed (non-fatal): {e}")
+
 
 # ─────────────────────────────────────────
 # Event handlers
@@ -323,6 +331,136 @@ def _apply_score_deltas(room: dict, deltas: dict, event_type: str) -> None:
         'changes':     score_changes,
     })
     print(f"Scored room {room['roomCode']}: {score_changes}")
+
+
+# ─────────────────────────────────────────
+# Mini-game triggers
+# ─────────────────────────────────────────
+
+# Match-event types that open a mini-game in active rooms. Each entry maps to
+# a (gameType, durationSec) the frontend modal recognises. Add a new entry +
+# implement the matching child component to add a new game vertical.
+MINIGAME_TRIGGERS = {
+    'offside': ('OFFSIDE_REFLEX', 8),
+    # 'penalty':           ('PENALTY_SHOOTOUT', 10),  # follow-up
+    # 'fulltime':          ('QUIZ_BATTLE',      15),  # follow-up
+    # 'halftime':          ('QUIZ_BATTLE',      15),  # follow-up
+}
+
+
+def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, game_time: str, data: dict) -> None:
+    """Push a `minigame_start` WS message to active rooms when an event qualifies.
+
+    Per FEATURES.md: each event type opens at most one mini-game per room per match
+    (e.g. only the *first* offside fires the modal; subsequent ones stay feed-only).
+    Tracked via `triggeredMinigames` (string set) on each room record. We never
+    block the match flow — caller wraps this in try/except.
+    """
+    trigger = MINIGAME_TRIGGERS.get(event_type)
+    if not trigger:
+        return
+    game_type, duration_sec = trigger
+
+    response = rooms_table.query(
+        IndexName='matchId-index',
+        KeyConditionExpression=Key('matchId').eq(match_id),
+    )
+    for room in response.get('Items', []):
+        if room.get('status') == 'ended':
+            continue
+        room_code = room['roomCode']
+        already = room.get('triggeredMinigames') or set()
+        # DynamoDB returns string sets as Python sets when read; make tolerant.
+        already_set = set(already) if not isinstance(already, set) else already
+        if event_type in already_set:
+            continue
+
+        # Mark BEFORE pushing so a retry can't re-open the modal.
+        try:
+            rooms_table.update_item(
+                Key={'roomCode': room_code},
+                UpdateExpression='ADD triggeredMinigames :v',
+                ExpressionAttributeValues={':v': {event_type}},
+            )
+        except Exception as e:
+            print(f"Failed to mark minigame trigger on room {room_code}: {e}")
+            continue
+
+        ownership = _compute_ownership_context(room, event_type, data)
+        config = {
+            'durationMs': duration_sec * 1000,
+            'gameTime':   game_time,
+            'eventType':  event_type,
+            'eventData':  data,
+        }
+        if game_type == 'OFFSIDE_REFLEX':
+            # The "offside moment" is when the attacker's marker hits the defender
+            # line. Pin it midway through the countdown so users can tap before
+            # OR after; the bracket scores absolute delta from this moment.
+            config['offsideMomentMs'] = duration_sec * 1000 // 2
+            config['playerName'] = data.get('playerDisplay') or data.get('playerName')
+            config['teamRole']   = data.get('teamRole')
+
+        payload = {
+            'type':                'minigame_start',
+            'gameId':              f"{event_id}#{room_code}",
+            'gameType':            game_type,
+            'title':               _minigame_title(game_type, data),
+            'prompt':              _minigame_prompt(game_type, ownership),
+            'config':              config,
+            'startedAtMs':         int(datetime.now(timezone.utc).timestamp() * 1000),
+            'durationMs':          duration_sec * 1000,
+            'relatedEventId':      event_id,
+            'ownershipContext':    ownership,
+        }
+        ws.push_to_channel(f"room#{room_code}", payload)
+        print(f"Mini-game {game_type} started for room {room_code} on {event_type} event")
+
+
+def _compute_ownership_context(room: dict, event_type: str, data: dict) -> dict:
+    """Identify which member's XI contains the involved player.
+
+    Returns the full FEATURES.md §R1 context shape so per-game scoring can
+    award ownership bonuses without re-querying.
+    """
+    members = room.get('members', [])
+    involved_player_id = (
+        data.get('playerId')
+        or data.get('scoringPlayerId')
+        or data.get('goalKeeperId')
+    )
+    owners = []
+    if involved_player_id:
+        for m in members:
+            details = {d['playerId']: d for d in m.get('teamSelectionDetails', [])}
+            if involved_player_id in details:
+                owners.append(m['userId'])
+    return {
+        'matchEventType':     event_type,
+        'involvedPlayerId':   involved_player_id,
+        'involvedPlayerName': data.get('playerDisplay') or data.get('playerName'),
+        'ownerUserIds':       owners,
+        'neutralEvent':       len(owners) != 1,
+        'advantagedUserId':   owners[0] if len(owners) == 1 else None,
+    }
+
+
+def _minigame_title(game_type: str, data: dict) -> str:
+    if game_type == 'OFFSIDE_REFLEX':
+        return 'Offside Reflex'
+    if game_type == 'PENALTY_SHOOTOUT':
+        return 'Penalty Shootout'
+    if game_type == 'QUIZ_BATTLE':
+        return 'Quiz Battle'
+    return 'Mini-game'
+
+
+def _minigame_prompt(game_type: str, ownership: dict) -> str:
+    if game_type == 'OFFSIDE_REFLEX':
+        if ownership.get('advantagedUserId'):
+            return f"{ownership.get('involvedPlayerName') or 'A player'} caught offside — tap when they cross the line."
+        return 'Tap when the attacker crosses the offside line.'
+    return ''
 
 
 # ─────────────────────────────────────────

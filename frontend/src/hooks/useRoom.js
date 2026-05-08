@@ -6,7 +6,11 @@ import toast from 'react-hot-toast'
 
 const ROOM_CODE_KEY = 'fan_squad_room_code'
 
-export function useRoom(onChatMessage, currentUserId, initialRoom = null) {
+// Listeners for mini-game lifecycle messages. Hooks like useMiniGame can
+// subscribe via useRoom's `onMinigameMessage` callback so the WS connection
+// stays single (one channel subscription per room).
+
+export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMinigameMessage = null) {
   const [room, setRoom] = useState(initialRoom)
   const [loading, setLoading] = useState(initialRoom ? false : true)
 
@@ -68,8 +72,14 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null) {
         members: prev.members.map(m => ({ ...m, score: scoreMap[m.userId] ?? m.score }))
       } : prev)
       logger.info('useRoom', 'WS score_update', msg.changes)
+    } else if (msg.type === 'minigame_start' || msg.type === 'minigame_result' || msg.type === 'minigame_expired') {
+      // Mini-game lifecycle messages — forward to the dedicated useMiniGame
+      // hook via the optional callback. Keeping the room WS connection
+      // single-purpose for state sync; mini-game UI lives elsewhere.
+      onMinigameMessage?.(msg)
+      logger.info('useRoom', `WS ${msg.type}`, msg)
     }
-  }, [onChatMessage, currentUserId])
+  }, [onChatMessage, currentUserId, onMinigameMessage])
 
   useWebSocket(room?.roomCode ? `room#${room.roomCode}` : null, handleMessage)
 

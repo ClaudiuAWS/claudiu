@@ -31,6 +31,9 @@ def handler(event, context):
             elif method == 'POST' and '/start' in path:
                 return _start_match(event, user_id)
 
+            elif method == 'POST' and '/minigame-score' in path:
+                return _post_minigame_score(event, user_id)
+
             else:
                 return _response(404, {'error': 'Not found'})
         
@@ -97,6 +100,36 @@ def _start_match(event, user_id):
         speed_multiplier = max(1.0, min(30.0, speed_multiplier))
         result = service.start_match_for_room(room_code, user_id, speed_multiplier)
         return _response(200, result)
+
+
+def _post_minigame_score(event, user_id):
+        # Frontend resolves a mini-game locally (or via solo bot) and posts the
+        # score deltas here so the leaderboard stays consistent across users.
+        # Body shape: {gameId, gameType, deltas: [{userId, delta, reason}], result}
+        room_code = event['pathParameters']['code']
+        body = json.loads(event.get('body') or '{}')
+        game_id   = body.get('gameId') or ''
+        game_type = body.get('gameType') or ''
+        deltas    = body.get('deltas') or []
+        result    = body.get('result') or {}
+        if not isinstance(deltas, list):
+            return _response(400, {'error': 'deltas must be a list'})
+        # Validation: each delta has userId + integer delta + reason. Cap |delta|
+        # to prevent client tampering from awarding huge point swings.
+        clean = []
+        for d in deltas:
+            try:
+                uid = str(d.get('userId') or '')
+                amt = int(d.get('delta') or 0)
+                rsn = str(d.get('reason') or game_type)[:80]
+                if not uid:
+                    continue
+                amt = max(-200, min(200, amt))
+                clean.append({'userId': uid, 'delta': amt, 'reason': rsn})
+            except (TypeError, ValueError):
+                continue
+        out = service.apply_minigame_score(room_code, user_id, game_id, game_type, clean, result)
+        return _response(200, out)
 
 def _response(status_code: int, body: dict) -> dict:
         return {
