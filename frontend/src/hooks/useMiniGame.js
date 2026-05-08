@@ -80,6 +80,7 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
   const submittedRef = useRef(false)
   const resolvedRef = useRef(false)
   const expireTimerRef = useRef(null)
+  const resultDismissTimerRef = useRef(null)
   const userPayloadRef = useRef(null)
 
   // Reset per-game refs when a new game starts.
@@ -239,14 +240,28 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
         }
       })
     } else if (msg.type === 'minigame_result') {
-      setState(s => s && s.gameId === msg.gameId ? {
-        ...s,
-        status:  'resolved',
-        result:  msg.result,
-        deltas:  msg.deltas,
-      } : s)
-      // Auto-dismiss after a few seconds so the user can see the points.
-      setTimeout(() => setState(s => s && s.gameId === msg.gameId ? null : s), 3500)
+      // Multi-user: each user's POST broadcasts only their own delta. Accumulate
+      // across messages, deduping by userId so retries don't double-count. The
+      // modal stays open longer so both users have time to land in the panel
+      // (timer reset on each new result message).
+      setState(s => {
+        if (!s || s.gameId !== msg.gameId) return s
+        const existingByUid = new Map((s.deltas || []).map(d => [d.userId, d]))
+        for (const d of msg.deltas || []) existingByUid.set(d.userId, d)
+        return {
+          ...s,
+          status:  'resolved',
+          result:  msg.result,
+          deltas:  Array.from(existingByUid.values()),
+        }
+      })
+      // Reset auto-dismiss timer on each new result (so the second arrival
+      // doesn't get truncated to half a second of view time).
+      if (resultDismissTimerRef.current) clearTimeout(resultDismissTimerRef.current)
+      resultDismissTimerRef.current = setTimeout(
+        () => setState(s => s && s.gameId === msg.gameId ? null : s),
+        4500,
+      )
     } else if (msg.type === 'minigame_expired') {
       setState(s => s && s.gameId === msg.gameId ? { ...s, status: 'expired' } : s)
       setTimeout(() => setState(s => s && s.gameId === msg.gameId ? null : s), 2000)
