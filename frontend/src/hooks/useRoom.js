@@ -62,15 +62,27 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     } else if (msg.type === 'chat_message') {
       onChatMessage?.(msg)
     } else if (msg.type === 'score_update') {
-      // Keep the leaderboard in sync — but no toast. Score deltas now
-      // surface through the per-event mini-games rather than a popup
-      // tied to backend WS arrival (which had inconsistent timing
-      // relative to the displayed match clock).
       const scoreMap = Object.fromEntries(msg.leaderboard.map(e => [e.userId, e.score]))
       setRoom(prev => prev ? {
         ...prev,
         members: prev.members.map(m => ({ ...m, score: scoreMap[m.userId] ?? m.score }))
       } : prev)
+
+      // Show a per-event toast for the current user's own deltas. We rely on
+      // the backend to populate `playerName` + `reason` so the message reads
+      // like "+6 — Olise scored for your squad". Mini-game results have their
+      // own modal already so we suppress them here to avoid double-surfacing.
+      const myChange = (msg.changes || []).find(c => c.userId === currentUserId && c.delta !== 0)
+      // Mini-game deltas already surface in the modal's result panel; skip toast.
+      if (myChange && myChange.source !== 'minigame') {
+        const sign  = myChange.delta > 0 ? '+' : '−'
+        const value = Math.abs(myChange.delta)
+        const who   = myChange.playerName || ''
+        const verb  = myChange.reason || (myChange.delta > 0 ? 'awarded' : 'penalty')
+        const text  = who ? `${sign}${value} — ${who} ${verb}` : `${sign}${value} — ${verb}`
+        const icon  = myChange.delta > 0 ? '⚽' : '🟨'
+        toast(text, { icon, duration: 3000 })
+      }
       logger.info('useRoom', 'WS score_update', msg.changes)
     } else if (msg.type === 'minigame_start' || msg.type === 'minigame_result' || msg.type === 'minigame_expired') {
       // Mini-game lifecycle messages — forward to the dedicated useMiniGame

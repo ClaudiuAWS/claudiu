@@ -187,6 +187,10 @@ def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, g
                 'newScore':    new_score,
                 'eventType':   game_type or 'minigame',
                 'reason':      submitter_delta.get('reason') or game_type,
+                # Lets the frontend score_update handler suppress its toast
+                # for mini-game deltas — the modal's result panel already
+                # surfaces these.
+                'source':      'minigame',
             })
             break
 
@@ -220,6 +224,74 @@ def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, g
         'gameType': game_type,
         'result':   result,
         'deltas':   score_changes,
+    })
+
+    return {'ok': True, 'changes': score_changes}
+
+
+# ─── Reaction taps (nutmeg / spectacular_play bonus) ──────────────────────────
+#
+# Match feed surfaces a 1.5s tappable badge on nutmeg / spectacular_play events.
+# First-tap-per-(eventId,userId) wins +2. Idempotent via a string-set field on
+# the room: any subsequent tap returns ok+duplicate without bumping the score.
+# No window enforcement server-side — the frontend owns the timing and just
+# stops sending taps once the window closes; that's fine because the only cost
+# of a late-tap accept is a +2 the user has earned by being clicky.
+
+REACTION_BONUS = 2
+
+
+def claim_reaction(room_code: str, user_id: str, event_id: str, reaction_type: str) -> dict:
+    if not event_id:
+        raise ValueError('eventId is required')
+
+    room = rooms_table.get_item(Key={'roomCode': room_code}).get('Item')
+    if not room:
+        raise ValueError('Room not found')
+    member = next((m for m in room.get('members', []) if m['userId'] == user_id), None)
+    if not member:
+        raise ValueError('You are not in this room')
+
+    claim_key = f"{event_id}:{user_id}"
+    claimed = set(room.get('reactionsClaimed') or [])
+    if claim_key in claimed:
+        return {'ok': True, 'duplicate': True}
+
+    members = room.get('members', [])
+    new_score = int(member.get('score', 0)) + REACTION_BONUS
+    for m in members:
+        if m['userId'] == user_id:
+            m['score'] = new_score
+            break
+
+    rooms_table.update_item(
+        Key={'roomCode': room_code},
+        UpdateExpression='SET members = :m ADD reactionsClaimed :v',
+        ExpressionAttributeValues={
+            ':m': members,
+            ':v': {claim_key},
+        },
+    )
+
+    label = 'nutmeg' if reaction_type == 'nutmeg' else 'spectacular play'
+    score_changes = [{
+        'userId':     user_id,
+        'delta':      REACTION_BONUS,
+        'newScore':   new_score,
+        'eventType':  reaction_type or 'reaction',
+        'reason':     f'reacted to {label}',
+        'playerName': member.get('displayName') or '',
+    }]
+
+    leaderboard = sorted(
+        [{'userId': m['userId'], 'displayName': m['displayName'], 'score': int(m.get('score', 0))} for m in members],
+        key=lambda x: x['score'],
+        reverse=True,
+    )
+    ws.push_to_channel(f"room#{room_code}", {
+        'type':        'score_update',
+        'leaderboard': leaderboard,
+        'changes':     score_changes,
     })
 
     return {'ok': True, 'changes': score_changes}

@@ -85,9 +85,10 @@ export function useDirector(room, events, currentUserId, match) {
         playerDisplay: latest.playerDisplay || null,
         teamRole:      latest.teamRole || null,
         teamName:      teamNameOf(latest.teamRole),
-        gameTime:      latest.gameTime || null,
-        // Goals carry currentResult (e.g. "3:0") — passing it explicitly
-        // avoids the AI having to parse the score string for the trigger.
+        // Intentionally do NOT pass gameTime here. It's "MM:SS" raw seconds
+        // since kickoff and the AI was quoting it as if it were the displayed
+        // minute (e.g. "5:19" while the scoreboard read 9'). The snapshot's
+        // top-level `minute` field is the single source of clock truth.
         currentResult: latest.currentResult || null,
       },
       score:     `${derivedHome}:${derivedAway}`,
