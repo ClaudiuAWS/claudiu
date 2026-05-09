@@ -49,7 +49,12 @@ export function computeScoreDeltas({ gameType, config, ownership, userId, userPa
 }
 
 function _offsideReflexDeltas({ config, ownership, userId, userPayload, botPayload, members }) {
-  const moment = config?.offsideMomentMs ?? 0
+  // Fall back to the same default OffsideReflex.jsx uses for the dot
+  // animation. Without this, AI-driven games where Nova Micro omitted
+  // offsideMomentMs from its config would compute moment=0, making every
+  // tap "thousands of ms late" against an unrealistic reference and
+  // awarding 0 points even on perfect taps.
+  const moment = config?.offsideMomentMs ?? Math.floor((config?.durationMs ?? 8000) / 2)
   const ownsOffsidePlayer = ownership?.advantagedUserId === userId
 
   const userDelta = userPayload

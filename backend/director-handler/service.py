@@ -103,7 +103,13 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                                 decision = {**decision, 'action': 'wait', 'reason': 'gameType-event mismatch'}
 
         if action == 'start_minigame':
-                config = decision.get('config') or {}
+                config = dict(decision.get('config') or {})
+                # Defensive defaults — Nova Micro sometimes omits the timing
+                # config fields. Fill in OFFSIDE_REFLEX-shaped defaults so the
+                # frontend's scoring computation references a valid moment.
+                config.setdefault('durationMs', 8000)
+                if decision.get('gameType') == 'OFFSIDE_REFLEX':
+                        config.setdefault('offsideMomentMs', config['durationMs'] // 2)
                 ws.push_to_channel(f"room#{room_code}", {
                     'type':             'minigame_start',
                     'gameId':           f"director-{related_event_id}-{room_code}",
