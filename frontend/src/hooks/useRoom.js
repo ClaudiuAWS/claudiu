@@ -78,6 +78,30 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       // single-purpose for state sync; mini-game UI lives elsewhere.
       onMinigameMessage?.(msg)
       logger.info('useRoom', `WS ${msg.type}`, msg)
+    } else if (
+      msg.type === 'draft_state_update' ||
+      msg.type === 'draft_started' ||
+      msg.type === 'draft_pair_resolved' ||
+      msg.type === 'draft_complete'
+    ) {
+      // Coordinated draft state lives on the room record. Folding the draft
+      // payload into room.draft means every consumer (TeamSelectionModal,
+      // LobbyPage's "Ready Up" button) reads from a single source of truth.
+      // Stash the resolved-pair metadata on `lastResolved` so the UI can
+      // animate the reveal even though the backend is already on the next
+      // pair.
+      setRoom(prev => prev ? {
+        ...prev,
+        draft: msg.draft,
+        lastDraftReveal: msg.type === 'draft_pair_resolved' ? {
+          pairIndex: msg.pairIndex,
+          pair:      msg.pair,
+          resolved:  msg.resolved,
+          tiebreak:  msg.tiebreak,
+          ts:        Date.now(),
+        } : prev.lastDraftReveal,
+      } : prev)
+      logger.info('useRoom', `WS ${msg.type}`, msg)
     }
   }, [onChatMessage, currentUserId, onMinigameMessage])
 
