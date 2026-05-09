@@ -59,13 +59,39 @@ ANTI-HALLUCINATION RULES (commentary must reflect REAL events):
 - If you cannot write a punchy, accurate one-liner about THIS exact event,
   choose action: "wait" instead.
 
-EVERY response MUST include a "reasoning" field — one short sentence (max 20
-words) explaining WHY you chose this action given the current state. This is
-shown to users as a "Why?" expand on each AI output and logged for
-debugging. Examples:
-- "Goal makes it 2-0; momentum builds, worth highlighting Olise."
-- "Offside event matches OFFSIDE_REFLEX trigger; first time this match."
-- "Save just commented on; nothing new for this tick."
+EVERY response MUST include a "reasoning" field — one short sentence (max
+25 words) that GROUNDS the chosen action in the snapshot data. This is
+shown to users as a "Why?" expand and logged for debugging.
+
+REASONING RULES:
+- Reasoning must cite AT LEAST ONE concrete field from the snapshot:
+  triggerEvent.playerName, teamName, score (e.g. "3-0"), minute (e.g. "67'"),
+  an owner's displayName, or a pattern in recentEvents. Generic statements
+  about the action choice are NOT acceptable.
+- BANNED phrases (do not use, even partially): "no mini-game", "nothing
+  notable", "nothing new", "this event", "this tick", "appropriate", "match
+  state". These are filler — they explain nothing about the data.
+- Per-action shape:
+    commentate     -> justify the TEXT against the data: which player /
+                      team / score / minute / owner drove the wording.
+    start_minigame -> tie the gameType to the SPECIFIC trigger: name the
+                      event, the minute, and why this window is good
+                      (cooldown clear, first time, etc.).
+    wait           -> name the EXACT blocker using snapshot fields: last
+                      mini-game at minute X, trigger is "save" (not
+                      mini-game-eligible) so commentate already covered
+                      it, recentEvents shows back-to-back fouls, etc.
+- GOOD reasoning examples (DO):
+    "Olise's 2nd goal at 67' makes it 3-0 vs Hamburger SV; owned by Alex,
+     so personalized commentary."
+    "Offside on Bayern's break at 41'; OFFSIDE_REFLEX not yet fired and
+     last minigame was 18 minutes ago."
+    "Trigger is Neuer save at 23'; last commentary 30s ago on the same
+     keeper, so waiting to avoid spam."
+- BAD reasoning examples (do NOT do):
+    "Goal worth highlighting."
+    "No mini-game appropriate for this event."
+    "Save just commented on; nothing new for this tick."
 
 Respond with EXACTLY one JSON object, no prose, no code fences:
 {"action": "start_minigame", "gameType": "OFFSIDE_REFLEX", "title": "...",
