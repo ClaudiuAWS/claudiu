@@ -359,12 +359,19 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
     if len(ready) >= 2 and len(members) >= 2:
         # Both users ready — generate pairs and start the draft.
         pairs, auto_picks = _generate_draft_pairs(room['matchId'])
-        # Auto-picks all go to the host (matches the existing solo-mode
-        # behaviour where unpaired-zone players land in `myPicks`). Spread
-        # across both users in a future iteration if needed.
+        # Auto-picks come from odd-numbered zones (e.g. 7 CBs → 3 pairs + 1
+        # leftover). Distribute them ALTERNATELY between the two users so the
+        # final squad sizes are balanced (equal if auto-picks count is even,
+        # off-by-one if odd). Shuffle first so the per-zone bias (GK auto-pick
+        # always going to the same user, etc.) doesn't materialise.
         host_id = room.get('hostUserId') or members[0]['userId']
-        picks_per_user = {m['userId']: [] for m in members}
-        picks_per_user[host_id].extend(auto_picks)
+        member_ids = [m['userId'] for m in members]
+        ordered = sorted(member_ids, key=lambda mid: 0 if mid == host_id else 1)
+        picks_per_user = {mid: [] for mid in member_ids}
+        shuffled_auto = list(auto_picks)
+        random.shuffle(shuffled_auto)
+        for i, pid in enumerate(shuffled_auto):
+            picks_per_user[ordered[i % len(ordered)]].append(pid)
 
         draft = {
             'status':            'active',
@@ -374,6 +381,7 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
             'pendingChoices':    {},
             'picks':             picks_per_user,
             'totalPairs':        len(pairs),
+            'tiebreakWinsByUser': {mid: 0 for mid in member_ids},
             'startedAt':         int(time.time() * 1000),
         }
         rooms_table.update_item(
@@ -463,15 +471,43 @@ def submit_draft_pick(room_code: str, user_id: str, pair_index: int, player_id: 
 
     tiebreak = None
     if my_pick == other_pick:
-        # Conflict — random tiebreak. The "winner" gets the picked player,
-        # the "loser" gets the other one in the pair.
-        winner_id = random.choice([user_id, other_id])
-        loser_id = other_id if winner_id == user_id else user_id
+        # Conflict — capped random. The "winner" gets the picked player, the
+        # "loser" gets the other one in the pair.
+        #
+        # User wants luck back (deterministic alternation killed the gamble),
+        # but also wants to avoid the small-sample streaks that made the
+        # tiebreak feel rigged. Solution: real coin flip every tiebreak,
+        # except when one user is already 1 ahead — in that case force the
+        # trailing user to win, keeping the gap in [0, 1] across the draft.
+        host_id = room.get('hostUserId') or members[0]['userId']
+        ordered = sorted(member_ids, key=lambda mid: 0 if mid == host_id else 1)
+        ties_won = dict(draft.get('tiebreakWinsByUser') or {})
+        wins_a = int(ties_won.get(ordered[0], 0))
+        wins_b = int(ties_won.get(ordered[1], 0))
+        forced = None
+        if wins_a - wins_b >= 1:
+            winner_id = ordered[1]    # trailing
+            forced = 'capped'
+        elif wins_b - wins_a >= 1:
+            winner_id = ordered[0]    # trailing
+            forced = 'capped'
+        else:
+            winner_id = random.choice([ordered[0], ordered[1]])
+        loser_id = ordered[1] if winner_id == ordered[0] else ordered[0]
+
         other_player = pair[0] if pair[1] == my_pick else pair[1]
         winner_player = my_pick
         loser_player = other_player
-        tiebreak = {'winnerUserId': winner_id, 'contestedPlayerId': my_pick}
+        tiebreak = {
+            'winnerUserId':       winner_id,
+            'contestedPlayerId':  my_pick,
+            'capped':             forced == 'capped',
+        }
         resolved = {winner_id: winner_player, loser_id: loser_player}
+        # Bump the winner's running total so the next tiebreak's cap check
+        # sees the updated gap.
+        ties_won[winner_id] = int(ties_won.get(winner_id, 0)) + 1
+        draft = {**draft, 'tiebreakWinsByUser': ties_won}
     else:
         # Distinct picks — each gets what they chose.
         resolved = {user_id: my_pick, other_id: other_pick}
