@@ -34,6 +34,12 @@ def handler(event, context):
             elif method == 'POST' and '/minigame-score' in path:
                 return _post_minigame_score(event, user_id)
 
+            elif method == 'POST' and '/draft-ready' in path:
+                return _post_draft_ready(event, user_id)
+
+            elif method == 'POST' and '/draft-pick' in path:
+                return _post_draft_pick(event, user_id)
+
             else:
                 return _response(404, {'error': 'Not found'})
         
@@ -130,6 +136,31 @@ def _post_minigame_score(event, user_id):
                 continue
         out = service.apply_minigame_score(room_code, user_id, game_id, game_type, clean, result)
         return _response(200, out)
+
+def _post_draft_ready(event, user_id):
+        # Toggle the user into the draft 'ready' set. Once 2 users are ready,
+        # backend generates pairs and broadcasts draft_started.
+        room_code = event['pathParameters']['code']
+        out = service.mark_draft_ready(room_code, user_id)
+        return _response(200, out)
+
+
+def _post_draft_pick(event, user_id):
+        # Submit a pick for the current pair. Backend buffers until both users
+        # have submitted, then resolves (with random tiebreak on conflict).
+        # Body shape: {pairIndex: int, playerId: str}
+        room_code = event['pathParameters']['code']
+        body = json.loads(event.get('body') or '{}')
+        try:
+            pair_index = int(body.get('pairIndex'))
+        except (TypeError, ValueError):
+            return _response(400, {'error': 'pairIndex must be an integer'})
+        player_id = body.get('playerId')
+        if not player_id:
+            return _response(400, {'error': 'playerId is required'})
+        out = service.submit_draft_pick(room_code, user_id, pair_index, player_id)
+        return _response(200, out)
+
 
 def _response(status_code: int, body: dict) -> dict:
         return {
