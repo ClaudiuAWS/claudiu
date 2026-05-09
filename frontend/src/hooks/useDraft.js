@@ -23,13 +23,18 @@ export function useDraft(room, currentUserId) {
   const readyUserIds = draft?.readyUserIds || []
   const isReady = !!currentUserId && readyUserIds.includes(currentUserId)
 
+  // DDB returns numbers as Decimal which get serialized as strings via
+  // json.dumps(default=str). Coerce to Number here so React deps and JS
+  // arithmetic both stay numeric (otherwise `decisionsMade + 1` becomes
+  // string concatenation: "8" + 1 = "81").
+  const currentPairIndex = Number(draft?.currentPairIndex ?? 0)
+  const totalPairs = Number(draft?.totalPairs ?? draft?.pairs?.length ?? 0)
+
   // Current pair (if active). The pair is just an array of two playerIds —
   // the modal enriches with full player metadata via matchesApi.getPlayers().
-  const currentPair = (status === 'active' && draft.pairs && draft.currentPairIndex < draft.pairs.length)
-    ? draft.pairs[draft.currentPairIndex]
+  const currentPair = (status === 'active' && draft?.pairs && currentPairIndex < draft.pairs.length)
+    ? draft.pairs[currentPairIndex]
     : null
-  const currentPairIndex = draft?.currentPairIndex ?? 0
-  const totalPairs = draft?.totalPairs ?? draft?.pairs?.length ?? 0
 
   // Has the current user already picked for this pair? (Lock UI accordingly.)
   const myPendingPick = currentUserId ? (draft?.pendingChoices?.[currentUserId] || null) : null

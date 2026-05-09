@@ -268,6 +268,23 @@ _TYPE_TO_ZONE = {
 _ZONE_ORDER = ['GK', 'DEF', 'CDM', 'WIDE', 'ATK']
 
 
+def _normalize_draft(draft: dict) -> dict:
+    """Coerce DDB numeric fields to native ints before WS push.
+
+    DynamoDB returns numbers as Decimal, which json.dumps(default=str)
+    serializes as strings. mark_draft_ready builds with native ints, but
+    submit_draft_pick reads back from DDB — so the wire format flip-flops
+    between number and string for the same field. Frontend coerces too,
+    but a clean wire format prevents debugging headaches and keeps
+    React's dep comparisons type-stable.
+    """
+    return {
+        **draft,
+        'currentPairIndex': int(draft.get('currentPairIndex', 0)),
+        'totalPairs':       int(draft.get('totalPairs', 0)),
+    }
+
+
 def _generate_draft_pairs(match_id: str) -> tuple[list, list]:
     """Build the pair list + auto-picks-for-host from the match's player roster.
 
@@ -366,7 +383,7 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
         )
         ws.push_to_channel(f"room#{room_code}", {
             'type':  'draft_started',
-            'draft': draft,
+            'draft': _normalize_draft(draft),
         })
         return {'ok': True, 'status': 'active'}
 
@@ -383,7 +400,7 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
     )
     ws.push_to_channel(f"room#{room_code}", {
         'type':  'draft_state_update',
-        'draft': draft,
+        'draft': _normalize_draft(draft),
     })
     return {'ok': True, 'status': 'waiting'}
 
@@ -435,7 +452,7 @@ def submit_draft_pick(room_code: str, user_id: str, pair_index: int, player_id: 
         )
         ws.push_to_channel(f"room#{room_code}", {
             'type':  'draft_state_update',
-            'draft': draft,
+            'draft': _normalize_draft(draft),
         })
         return {'ok': True, 'waiting': True}
 
@@ -487,12 +504,12 @@ def submit_draft_pick(room_code: str, user_id: str, pair_index: int, player_id: 
         'pair':           pair,
         'resolved':       resolved,
         'tiebreak':       tiebreak,
-        'draft':          draft,
+        'draft':          _normalize_draft(draft),
     })
     if is_last:
         ws.push_to_channel(f"room#{room_code}", {
             'type':  'draft_complete',
-            'draft': draft,
+            'draft': _normalize_draft(draft),
         })
 
     return {'ok': True, 'resolved': resolved, 'tiebreak': tiebreak}
