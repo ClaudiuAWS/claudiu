@@ -10,6 +10,7 @@ import ConfirmPage from './pages/ConfirmPage'
 import HomePage from './pages/HomePage'
 import LobbyPage from './pages/LobbyPage'
 import MatchPage from './pages/MatchPage'
+import ProfilePage from './pages/ProfilePage'
 import { useAuth } from './hooks/useAuth'
 
 class ErrorBoundary extends Component {
@@ -97,7 +98,7 @@ export default function App() {
         }/>
         <Route path="/profile" element={
           <ProtectedRoute>
-            <Layout><Placeholder title="Profile" /></Layout>
+            <Layout><ProfilePage /></Layout>
           </ProtectedRoute>
         }/>
 
