@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { roomsApi } from '../services/api'
 import { logger } from './../services/logger'
+import { gameTimeToSeconds } from '../utils/matchEvents'
 
 /**
  * AI Match Director frontend ticker.
@@ -77,6 +78,27 @@ export function useDirector(room, events, currentUserId, match) {
                               : role === 'away' ? (match?.awayTeamName || 'Away')
                               : null
 
+    // Compute the displayed match minute from the trigger event's gameTime —
+    // NOT from match.currentMinute, which lags because events reveal locally
+    // on the clock while currentMinute only updates when a match_update WS
+    // message arrives. Without this, the AI was citing a stale earlier
+    // minute (e.g. saying "8'" for a save that the feed showed at 13').
+    //
+    // Mirrors `formatFootballTime` (utils/matchEvents.js): first-half is
+    // ceil(sec/60); past halftime, it's 45 + ceil((sec - htSec)/60). We
+    // cap at 45 / 90 so the AI never produces a 4-figure minute, and the
+    // stoppage-time prefix is left implicit.
+    const triggerMinute = (() => {
+      const sec = gameTimeToSeconds(latest.gameTime)
+      if (sec < 0) return null
+      const halftime = events.find(e => e.eventType === 'halftime')
+      const htSec = halftime ? gameTimeToSeconds(halftime.gameTime) : -1
+      if (htSec < 0 || sec <= htSec) {
+        return Math.min(45, Math.ceil(sec / 60))
+      }
+      return Math.min(90, 45 + Math.ceil((sec - htSec) / 60))
+    })()
+
     const snapshot = {
       triggerEvent: {
         eventId:       latest.eventId,
@@ -96,7 +118,7 @@ export function useDirector(room, events, currentUserId, match) {
       awayScore: derivedAway,
       homeTeamName: match?.homeTeamName || 'Home',
       awayTeamName: match?.awayTeamName || 'Away',
-      minute:    match?.currentMinute ?? null,
+      minute:    triggerMinute,
       recentEvents: events.slice(-5).map(e => ({
         type:          e.eventType,
         player:        e.playerDisplay || e.playerName || null,
