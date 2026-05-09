@@ -14,6 +14,7 @@ import SkillFlashBadge from '../components/match/SkillFlashBadge'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import MatchMiniGameModal from '../components/minigame/MatchMiniGameModal'
 import { useMiniGame } from '../hooks/useMiniGame'
+import { useDirector } from '../hooks/useDirector'
 
 const AVATAR_COLORS = ['bg-violet-500','bg-blue-500','bg-emerald-500','bg-orange-500','bg-pink-500','bg-cyan-500']
 
@@ -35,6 +36,12 @@ export default function MatchPage() {
   const { match, events, loading, flashEvent }  = useMatch(matchId)
   const minigame = useMiniGame(room, user?.userId, events, matchId, match?.startedAt)
   minigameMsgRef.current = minigame.onMinigameMessage
+
+  // AI Match Director — only the host's tab posts ticks (Lambda fans the
+  // result out to all room members via WS, so non-host tabs would just
+  // multiply Bedrock cost). Fire-and-forget; commentary surfaces in
+  // <MatchFeed>, AI mini-game prompts replace the rule-based ones.
+  useDirector(room, events, user?.userId, match)
 
   // Fetch full player roster once (for enriching teamSelectionDetails)
   useEffect(() => {
@@ -155,7 +162,7 @@ export default function MatchPage() {
 
       {/* Content */}
       <div className="relative">
-        {tab === 'feed' && <MatchFeed events={events} />}
+        {tab === 'feed' && <MatchFeed events={events} commentary={room?.commentary} />}
 
         {tab === 'squad' && (
           <div className="px-2 py-3">

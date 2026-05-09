@@ -45,6 +45,7 @@ export const roomsApi = {
   postMinigameScore: (roomCode, payload) => request(`/rooms/${roomCode}/minigame-score`, 'POST', payload),
   draftReady:  (roomCode)                   => request(`/rooms/${roomCode}/draft-ready`, 'POST'),
   draftPick:   (roomCode, pairIndex, playerId) => request(`/rooms/${roomCode}/draft-pick`, 'POST', { pairIndex, playerId }),
+  directorTick: (roomCode, snapshot)        => request(`/rooms/${roomCode}/director-tick`, 'POST', { snapshot }),
 }
 
 export const matchesApi = {
