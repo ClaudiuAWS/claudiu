@@ -71,12 +71,20 @@ export function useDirector(room, events, currentUserId, match) {
       if (Number.isFinite(a) && a > derivedAway) derivedAway = a
     }
 
+    // Resolve teamRole → actual team name so the AI can say "Bayern doubles
+    // their lead!" instead of the generic "Team scores!".
+    const teamNameOf = (role) => role === 'home' ? (match?.homeTeamName || 'Home')
+                              : role === 'away' ? (match?.awayTeamName || 'Away')
+                              : null
+
     const snapshot = {
       triggerEvent: {
         eventId:       latest.eventId,
         eventType:     latest.eventType,
         playerName:    latest.playerName || latest.playerDisplay || null,
         playerDisplay: latest.playerDisplay || null,
+        teamRole:      latest.teamRole || null,
+        teamName:      teamNameOf(latest.teamRole),
         gameTime:      latest.gameTime || null,
         // Goals carry currentResult (e.g. "3:0") — passing it explicitly
         // avoids the AI having to parse the score string for the trigger.
@@ -85,10 +93,13 @@ export function useDirector(room, events, currentUserId, match) {
       score:     `${derivedHome}:${derivedAway}`,
       homeScore: derivedHome,
       awayScore: derivedAway,
+      homeTeamName: match?.homeTeamName || 'Home',
+      awayTeamName: match?.awayTeamName || 'Away',
       minute:    match?.currentMinute ?? null,
       recentEvents: events.slice(-5).map(e => ({
         type:          e.eventType,
         player:        e.playerDisplay || e.playerName || null,
+        team:          teamNameOf(e.teamRole),
         currentResult: e.currentResult || null,
       })),
       members: (room.members || []).map(m => ({

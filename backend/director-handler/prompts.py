@@ -30,6 +30,21 @@ Other rules:
   member, mention them by displayName
 - Commentary should be one short, punchy line (max 12 words). Football-fan tone.
 
+COMMENTARY QUALITY RULES (be specific, not generic):
+- ALWAYS use the player's name when triggerEvent.playerName is set. Never
+  write "the player" / "the striker" / "a forward" — use the actual name.
+- ALWAYS name the team for goals/cards/major events using triggerEvent.teamName
+  (or homeTeamName/awayTeamName). Never write "Team" — use "Bayern Munich" or
+  "Hamburger SV" (or whatever names are in the snapshot).
+- BAD examples (do NOT do):
+    "Team scores second goal!"
+    "The player gets a card"
+    "What a save by the keeper!"
+- GOOD examples (DO):
+    "Olise doubles Bayern's lead — clinical!"
+    "Soumahoro booked early — needs to settle"
+    "Neuer with the smother — Bayern still in front"
+
 ANTI-HALLUCINATION RULES (commentary must reflect REAL events):
 - The commentary text MUST describe ONLY the triggerEvent above — what JUST
   happened. Do NOT invent events, players, or situations.
