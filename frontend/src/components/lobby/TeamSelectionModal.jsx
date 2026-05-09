@@ -532,6 +532,26 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
     }
   }, [isCoordinated, draft.status, phase])
 
+  // ── Pair-resolved reveal banner ──
+  // When the backend broadcasts `draft_pair_resolved`, useRoom stashes the
+  // resolution metadata on room.lastDraftReveal. We surface this as a brief
+  // (1.6s) banner showing what the opponent picked + tiebreak result.
+  // The banner clears itself on a timer so the next pair renders unobstructed.
+  const [recentReveal, setRecentReveal] = useState(null)
+  useEffect(() => {
+    const reveal = room?.lastDraftReveal
+    if (!reveal || !isCoordinated) return
+    setRecentReveal(reveal)
+    const t = setTimeout(() => setRecentReveal(null), 1800)
+    return () => clearTimeout(t)
+  }, [room?.lastDraftReveal?.ts, isCoordinated])
+
+  const opponentDisplayName = useMemo(() => {
+    if (!room?.members) return 'Opponent'
+    const opp = room.members.find(m => m.userId !== currentUserId)
+    return opp?.displayName || 'Opponent'
+  }, [room?.members, currentUserId])
+
   const pick = (chosen_player, other_player) => {
     if (chosen || phase !== 'draft') return
 
@@ -739,10 +759,23 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
 
           {/* Coordinated mode: "waiting for opponent" indicator while our pick
               is locked in but the pair hasn't resolved yet. */}
-          {isCoordinated && chosen && (
+          {isCoordinated && chosen && !recentReveal && (
             <p className="text-emerald-400 text-xs font-semibold animate-pulse">
               ⏳ Locked in. Waiting for opponent…
             </p>
+          )}
+
+          {/* Coordinated mode: pair-resolved reveal banner. Shows for 1.8s
+              right after the backend broadcasts draft_pair_resolved so the
+              user can see what the opponent picked + the tiebreak result
+              before the next pair appears. */}
+          {isCoordinated && recentReveal && (
+            <RevealBanner
+              reveal={recentReveal}
+              currentUserId={currentUserId}
+              opponentDisplayName={opponentDisplayName}
+              playersById={playersById}
+            />
           )}
 
           {/* Progress bar */}
@@ -948,6 +981,51 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
           </div>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+// ─── RevealBanner ─────────────────────────────────────────────────────────────
+// Brief feedback panel shown after each coordinated-draft pair resolves.
+// Surfaces what the opponent picked + the tiebreak result if both users had
+// chosen the contested player.
+function RevealBanner({ reveal, currentUserId, opponentDisplayName, playersById }) {
+  const myPid       = reveal.resolved?.[currentUserId]
+  const opponentId  = Object.keys(reveal.resolved || {}).find(uid => uid !== currentUserId)
+  const oppPid      = opponentId ? reveal.resolved[opponentId] : null
+  const myPlayer    = myPid ? playersById[myPid] : null
+  const oppPlayer   = oppPid ? playersById[oppPid] : null
+  const tb          = reveal.tiebreak
+  const tbWinnerIsMe = tb && tb.winnerUserId === currentUserId
+  const tbContestedName = tb && playersById[tb.contestedPlayerId]?.displayName
+
+  return (
+    <div
+      className="w-full max-w-sm rounded-2xl px-4 py-3 border match-event-in"
+      style={{
+        background: tb
+          ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.10) 100%)'
+          : 'linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(5, 150, 105, 0.10) 100%)',
+        borderColor: tb ? 'rgba(245, 158, 11, 0.40)' : 'rgba(16, 185, 129, 0.40)',
+      }}
+    >
+      {tb && (
+        <p className="text-[10px] font-bold tracking-widest uppercase text-amber-400 text-center mb-1.5">
+          🎲 Tiebreak — {tbWinnerIsMe ? 'You won' : `${opponentDisplayName} won`}
+          {tbContestedName && <span className="text-amber-300/70 normal-case font-medium"> · contested {tbContestedName}</span>}
+        </p>
+      )}
+      <div className="flex items-center justify-between gap-2 text-[11px]">
+        <div className="flex-1 min-w-0">
+          <p className="text-emerald-300/80 font-semibold uppercase tracking-wider">You got</p>
+          <p className="text-white text-sm font-bold truncate">{myPlayer?.displayName || myPlayer?.shirtNumber || '—'}</p>
+        </div>
+        <span className="text-gray-600 px-2">vs</span>
+        <div className="flex-1 min-w-0 text-right">
+          <p className="text-gray-400/80 font-semibold uppercase tracking-wider">{opponentDisplayName} got</p>
+          <p className="text-gray-300 text-sm font-bold truncate">{oppPlayer?.displayName || oppPlayer?.shirtNumber || '—'}</p>
+        </div>
+      </div>
     </div>
   )
 }
