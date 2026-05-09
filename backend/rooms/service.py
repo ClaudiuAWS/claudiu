@@ -307,48 +307,39 @@ def _generate_draft_pairs(match_id: str) -> tuple[list, list]:
         )
         players.extend(resp.get('Items', []))
 
-    # Cap each team to its 16 most-prominent players (11 starters + top 5
-    # non-starters by shirt number). Guarantees exactly 16 picks per user
-    # post-draft (32 total / 2 users) regardless of how many fringe players
-    # are in claudiu-player-lookup for this match.
-    by_team = {'home': [], 'away': []}
-    for p in players:
-        team = p.get('teamRole')
-        if team in by_team:
-            by_team[team].append(p)
-
-    capped_players = []
-    for team, roster in by_team.items():
-        starters    = sorted([p for p in roster if p.get('starting')],
-                             key=lambda p: int(p.get('shirtNumber', 99)))
-        substitutes = sorted([p for p in roster if not p.get('starting')],
-                             key=lambda p: int(p.get('shirtNumber', 99)))
-        team_pool = starters[:11] + substitutes[:5]
-        if len(team_pool) < 16:
-            print(f"warning: only {len(team_pool)} players for team {team} "
-                  f"in match {match_id} (expected 16)")
-        capped_players.extend(team_pool)
-
-    # Group by zone, drop players without a known position.
+    # Group by zone, dropping players without a known position. Keep the full
+    # player object (not just playerId) so we can prioritise starters when
+    # pairing — see below.
     by_zone = {z: [] for z in _ZONE_ORDER}
-    for p in capped_players:
+    for p in players:
         t = _POS_TO_TYPE.get(p.get('position'))
         if not t:
             continue
         z = _TYPE_TO_ZONE.get(t, 'ATK')
-        by_zone.setdefault(z, []).append(p['playerId'])
+        by_zone.setdefault(z, []).append(p)
 
     pairs = []
     auto_picks = []
     for zone in _ZONE_ORDER:
-        members = list(by_zone.get(zone, []))
-        random.shuffle(members)
+        zone_roster = list(by_zone.get(zone, []))
+        # Within each zone: starters first (shuffled), subs after (shuffled).
+        # When the zone has an odd total, the leftover ends up being the LAST
+        # entry in the ordered list — i.e. a sub, never a starter. So the
+        # 'best' player in a zone (Kane in ATK, Neuer in GK) can never be
+        # the unpaired auto-pick. Within each tier we still shuffle for
+        # variety so the pairing isn't predictable.
+        starters = [p for p in zone_roster if p.get('starting')]
+        subs     = [p for p in zone_roster if not p.get('starting')]
+        random.shuffle(starters)
+        random.shuffle(subs)
+        ordered = [p['playerId'] for p in starters] + [p['playerId'] for p in subs]
+
         i = 0
-        while i + 1 < len(members):
-            pairs.append([members[i], members[i + 1]])
+        while i + 1 < len(ordered):
+            pairs.append([ordered[i], ordered[i + 1]])
             i += 2
-        if len(members) % 2 == 1:
-            auto_picks.append(members[-1])
+        if len(ordered) % 2 == 1:
+            auto_picks.append(ordered[-1])  # always a sub if any sub exists
 
     random.shuffle(pairs)
     return pairs, auto_picks
