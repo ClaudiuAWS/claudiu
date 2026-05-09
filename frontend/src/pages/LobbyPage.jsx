@@ -232,6 +232,8 @@ export default function LobbyPage() {
         <TeamSelectionModal
           matchId={matchId}
           roomCode={room.roomCode}
+          room={room}
+          currentUserId={user?.userId}
           existingSelection={myMember?.teamSelection ?? []}
           onDone={() => setTeamModalOpen(false)}
         />
