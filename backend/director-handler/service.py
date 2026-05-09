@@ -59,13 +59,12 @@ def _ask_model(snapshot: dict) -> dict:
                 'content': [{'text': build_user_message(snapshot)}],
             }],
             inferenceConfig={
-                'maxTokens': 250,
+                'maxTokens': 320,  # bumped from 250 to leave room for reasoning field
                 'temperature': 0.4,
             },
         )
         elapsed_ms = (time.time() - t0) * 1000
         text = response['output']['message']['content'][0]['text'].strip()
-        print(f"bedrock latency={elapsed_ms:.0f}ms response={text[:200]}")
 
         # Strip code fences if the model added them despite the rule.
         if text.startswith('```'):
@@ -74,7 +73,10 @@ def _ask_model(snapshot: dict) -> dict:
                         text = text[4:]
                 text = text.strip()
 
-        return json.loads(text)
+        decision = json.loads(text)
+        # Structured log so judges / debugging eyes can scan reasoning quickly.
+        print(f"bedrock latency={elapsed_ms:.0f}ms action={decision.get('action')} reasoning={decision.get('reasoning')!r}")
+        return decision
 
 
 def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
@@ -122,6 +124,7 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                     'relatedEventId':   related_event_id,
                     'ownershipContext': snapshot.get('ownershipContext') or {},
                     'source':           'ai-director',
+                    'reasoning':        decision.get('reasoning') or '',
                 })
         elif action == 'commentate':
                 ws.push_to_channel(f"room#{room_code}", {
@@ -129,5 +132,6 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                     'text':           decision.get('text', ''),
                     'relatedEventId': related_event_id,
                     'createdAtMs':    int(time.time() * 1000),
+                    'reasoning':      decision.get('reasoning') or '',
                 })
         # 'wait' -> no-op

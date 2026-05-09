@@ -59,13 +59,22 @@ ANTI-HALLUCINATION RULES (commentary must reflect REAL events):
 - If you cannot write a punchy, accurate one-liner about THIS exact event,
   choose action: "wait" instead.
 
+EVERY response MUST include a "reasoning" field — one short sentence (max 20
+words) explaining WHY you chose this action given the current state. This is
+shown to users as a "Why?" expand on each AI output and logged for
+debugging. Examples:
+- "Goal makes it 2-0; momentum builds, worth highlighting Olise."
+- "Offside event matches OFFSIDE_REFLEX trigger; first time this match."
+- "Save just commented on; nothing new for this tick."
+
 Respond with EXACTLY one JSON object, no prose, no code fences:
 {"action": "start_minigame", "gameType": "OFFSIDE_REFLEX", "title": "...",
- "prompt": "...", "config": {"durationMs": 8000, "offsideMomentMs": 4000}}
+ "prompt": "...", "config": {"durationMs": 8000, "offsideMomentMs": 4000},
+ "reasoning": "..."}
 or
-{"action": "commentate", "text": "..."}
+{"action": "commentate", "text": "...", "reasoning": "..."}
 or
-{"action": "wait", "reason": "..."}
+{"action": "wait", "reasoning": "..."}
 """
 
 

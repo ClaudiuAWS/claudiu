@@ -86,6 +86,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
         id:             `${msg.relatedEventId || 'cm'}-${Date.now()}`,
         text:           msg.text,
         relatedEventId: msg.relatedEventId,
+        reasoning:      msg.reasoning || null,
         ts:             msg.createdAtMs ?? Date.now(),
       }
       setRoom(prev => prev ? {
