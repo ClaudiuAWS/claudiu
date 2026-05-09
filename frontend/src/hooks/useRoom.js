@@ -79,16 +79,27 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       onMinigameMessage?.(msg)
       logger.info('useRoom', `WS ${msg.type}`, msg)
     } else if (msg.type === 'commentary_update') {
-      // AI Match Director commentary — overwrite the previous line so only
-      // the latest is shown. <DirectorCommentary> handles fade-out timing.
+      // AI Match Director commentary — push onto a stack. Newest first (top),
+      // older entries flow down. Each entry self-purges after 7s. Cap at 5
+      // visible to keep the feed clean if the AI gets chatty.
+      const entry = {
+        id:             `${msg.relatedEventId || 'cm'}-${Date.now()}`,
+        text:           msg.text,
+        relatedEventId: msg.relatedEventId,
+        ts:             msg.createdAtMs ?? Date.now(),
+      }
       setRoom(prev => prev ? {
         ...prev,
-        commentary: {
-          text:           msg.text,
-          relatedEventId: msg.relatedEventId,
-          ts:             msg.createdAtMs ?? Date.now(),
-        },
+        commentaryStack: [entry, ...(prev.commentaryStack || []).slice(0, 4)],
       } : prev)
+      // Auto-purge this entry after 7s. Each entry has its own timer so
+      // entries arriving close together don't all expire at the same instant.
+      setTimeout(() => {
+        setRoom(prev => prev ? {
+          ...prev,
+          commentaryStack: (prev.commentaryStack || []).filter(e => e.id !== entry.id),
+        } : prev)
+      }, 7000)
       logger.info('useRoom', 'WS commentary_update', msg)
     } else if (
       msg.type === 'draft_state_update' ||

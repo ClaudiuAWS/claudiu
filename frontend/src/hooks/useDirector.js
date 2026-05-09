@@ -55,6 +55,22 @@ export function useDirector(room, events, currentUserId, match) {
     lastEventIdRef.current = latest.eventId
     tickCountRef.current += 1
 
+    // Derive the score from revealed goal events instead of match.homeScore.
+    // The match record is updated by the backend on its own wall-clock, so
+    // it lags behind the displayed score (which is derived from each goal's
+    // currentResult in the events list). Without this, the AI sees a stale
+    // "2:0" right after a goal that made it "3:0" and says nonsense like
+    // "2 goals lead".
+    let derivedHome = match?.homeScore ?? 0
+    let derivedAway = match?.awayScore ?? 0
+    for (const e of events) {
+      if (e.eventType !== 'goal' || !e.currentResult) continue
+      const parts = String(e.currentResult).split(':').map(n => parseInt(n, 10))
+      const h = parts[0], a = parts[1]
+      if (Number.isFinite(h) && h > derivedHome) derivedHome = h
+      if (Number.isFinite(a) && a > derivedAway) derivedAway = a
+    }
+
     const snapshot = {
       triggerEvent: {
         eventId:       latest.eventId,
@@ -62,12 +78,18 @@ export function useDirector(room, events, currentUserId, match) {
         playerName:    latest.playerName || latest.playerDisplay || null,
         playerDisplay: latest.playerDisplay || null,
         gameTime:      latest.gameTime || null,
+        // Goals carry currentResult (e.g. "3:0") — passing it explicitly
+        // avoids the AI having to parse the score string for the trigger.
+        currentResult: latest.currentResult || null,
       },
-      score:    `${match?.homeScore ?? 0}:${match?.awayScore ?? 0}`,
-      minute:   match?.currentMinute ?? null,
+      score:     `${derivedHome}:${derivedAway}`,
+      homeScore: derivedHome,
+      awayScore: derivedAway,
+      minute:    match?.currentMinute ?? null,
       recentEvents: events.slice(-5).map(e => ({
-        type:   e.eventType,
-        player: e.playerDisplay || e.playerName || null,
+        type:          e.eventType,
+        player:        e.playerDisplay || e.playerName || null,
+        currentResult: e.currentResult || null,
       })),
       members: (room.members || []).map(m => ({
         userId:         m.userId,

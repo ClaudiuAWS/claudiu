@@ -162,7 +162,7 @@ export default function MatchPage() {
 
       {/* Content */}
       <div className="relative">
-        {tab === 'feed' && <MatchFeed events={events} commentary={room?.commentary} />}
+        {tab === 'feed' && <MatchFeed events={events} commentaryStack={room?.commentaryStack} />}
 
         {tab === 'squad' && (
           <div className="px-2 py-3">
