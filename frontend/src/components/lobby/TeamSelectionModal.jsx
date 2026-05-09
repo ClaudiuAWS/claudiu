@@ -542,7 +542,10 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
     const reveal = room?.lastDraftReveal
     if (!reveal || !isCoordinated) return
     setRecentReveal(reveal)
-    const t = setTimeout(() => setRecentReveal(null), 1800)
+    // Tiebreaks need extra time for the coin-flip animation (1s spin +
+    // ~1.2s to read the verdict). Non-tiebreak reveals stay snappy.
+    const dwellMs = reveal.tiebreak ? 2400 : 1800
+    const t = setTimeout(() => setRecentReveal(null), dwellMs)
     return () => clearTimeout(t)
   }, [room?.lastDraftReveal?.ts, isCoordinated])
 
@@ -987,18 +990,53 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
 
 // ─── RevealBanner ─────────────────────────────────────────────────────────────
 // Brief feedback panel shown after each coordinated-draft pair resolves.
-// Surfaces what the opponent picked + the tiebreak result if both users had
-// chosen the contested player.
+// Two phases when a tiebreak fires:
+//   1. 'flipping' — 1s coin-flip animation while we keep the result hidden,
+//      so the user sees the gamble actually being settled (real or capped).
+//   2. 'result'   — the existing reveal UI showing who got which player.
+// Non-tiebreak reveals skip the flip and go straight to result.
 function RevealBanner({ reveal, currentUserId, opponentDisplayName, playersById }) {
+  const tb = reveal.tiebreak
+  const [phase, setPhase] = useState(tb ? 'flipping' : 'result')
+
+  useEffect(() => {
+    if (!tb) {
+      setPhase('result')
+      return
+    }
+    setPhase('flipping')
+    const t = setTimeout(() => setPhase('result'), 1000)  // matches CSS coin-flip duration
+    return () => clearTimeout(t)
+  }, [reveal.ts, tb])
+
   const myPid       = reveal.resolved?.[currentUserId]
   const opponentId  = Object.keys(reveal.resolved || {}).find(uid => uid !== currentUserId)
   const oppPid      = opponentId ? reveal.resolved[opponentId] : null
   const myPlayer    = myPid ? playersById[myPid] : null
   const oppPlayer   = oppPid ? playersById[oppPid] : null
-  const tb          = reveal.tiebreak
   const tbWinnerIsMe = tb && tb.winnerUserId === currentUserId
   const tbContestedName = tb && playersById[tb.contestedPlayerId]?.displayName
 
+  // Phase 1: coin flip — both users picked the same player, tension build.
+  if (phase === 'flipping') {
+    return (
+      <div
+        className="w-full max-w-sm rounded-2xl px-4 py-5 border match-event-in flex flex-col items-center gap-2"
+        style={{
+          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.10) 100%)',
+          borderColor: 'rgba(245, 158, 11, 0.40)',
+        }}
+      >
+        <p className="text-[10px] font-bold tracking-widest uppercase text-amber-400 text-center">
+          🎲 Tiebreak — both picked {tbContestedName || 'the same player'}
+        </p>
+        <div className="text-4xl coin-flip" aria-hidden>🪙</div>
+        <p className="text-[10px] text-amber-300/70 italic">Flipping…</p>
+      </div>
+    )
+  }
+
+  // Phase 2: the reveal — same UI as before, but the coin-flip emoji's gone.
   return (
     <div
       className="w-full max-w-sm rounded-2xl px-4 py-3 border match-event-in"
@@ -1011,8 +1049,8 @@ function RevealBanner({ reveal, currentUserId, opponentDisplayName, playersById 
     >
       {tb && (
         <p className="text-[10px] font-bold tracking-widest uppercase text-amber-400 text-center mb-1.5">
-          🎲 Tiebreak — {tbWinnerIsMe ? 'You won' : `${opponentDisplayName} won`}
-          {tbContestedName && <span className="text-amber-300/70 normal-case font-medium"> · contested {tbContestedName}</span>}
+          🎲 {tbWinnerIsMe ? 'You won the toss' : `${opponentDisplayName} won the toss`}
+          {tb.capped && <span className="text-amber-300/60 normal-case font-medium"> · balance corrected</span>}
         </p>
       )}
       <div className="flex items-center justify-between gap-2 text-[11px]">
