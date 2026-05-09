@@ -10,6 +10,7 @@ import OffsideReflex from './OffsideReflex'
  */
 export default function MatchMiniGameModal({ state, onSubmit, onClose }) {
   const [now, setNow] = useState(Date.now())
+  const [showReasoning, setShowReasoning] = useState(false)
 
   // 60-fps-ish countdown — only ticks while a game is active so we don't
   // spin re-renders forever after the modal closes.
@@ -41,17 +42,43 @@ export default function MatchMiniGameModal({ state, onSubmit, onClose }) {
             <div className="flex items-center gap-1.5">
               <p className="text-[10px] font-bold tracking-widest text-emerald-400">MINI-GAME</p>
               {state.source === 'ai-director' && (
-                <span
-                  className="text-[9px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-full"
-                  style={{ background: 'rgba(168, 85, 247, 0.25)', color: '#d8b4fe' }}
-                >
-                  🎙️ AI Director
-                </span>
+                <>
+                  <span
+                    className="text-[9px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-full"
+                    style={{ background: 'rgba(168, 85, 247, 0.25)', color: '#d8b4fe' }}
+                  >
+                    🎙️ AI Director
+                  </span>
+                  {state.reasoning && (
+                    <button
+                      onClick={() => setShowReasoning(v => !v)}
+                      className="text-[9px] font-semibold uppercase tracking-wider text-purple-300/70 hover:text-purple-200 transition px-1 py-0.5"
+                    >
+                      {showReasoning ? 'Hide' : 'Why?'}
+                    </button>
+                  )}
+                </>
               )}
             </div>
             <h2 className="text-white font-extrabold text-lg leading-tight mt-0.5 truncate">{state.title}</h2>
             {state.prompt && (
               <p className="text-gray-400 text-xs mt-1 leading-snug">{state.prompt}</p>
+            )}
+            {showReasoning && state.reasoning && state.source === 'ai-director' && (
+              <div
+                className="mt-2 rounded-lg px-2.5 py-1.5 border-l-2"
+                style={{
+                  background: 'rgba(168, 85, 247, 0.10)',
+                  borderColor: 'rgba(168, 85, 247, 0.45)',
+                }}
+              >
+                <p className="text-[9px] font-bold tracking-widest uppercase text-purple-300/70 mb-0.5">
+                  AI reasoning
+                </p>
+                <p className="text-[11px] text-purple-100/90 leading-snug">
+                  {state.reasoning}
+                </p>
+              </div>
             )}
           </div>
           {state.status === 'active' && (

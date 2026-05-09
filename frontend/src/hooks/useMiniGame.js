@@ -266,6 +266,7 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
           ownershipContext: msg.ownershipContext || {},
           relatedEventId:   msg.relatedEventId,
           source:           msg.source || null,  // 'ai-director' when from Director Lambda
+          reasoning:        msg.reasoning || null,  // AI's "why this action" — surfaced via Why? toggle
           status:           msg.relatedEventId ? 'pending' : 'active',
         }
       })
