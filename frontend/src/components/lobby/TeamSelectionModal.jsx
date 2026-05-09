@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { matchesApi, roomsApi } from '../../services/api'
 import { PitchView } from '../match/PitchView'
 import { detectFormation, validateSquad } from '../../utils/formationPositions'
+import { useDraft } from '../../hooks/useDraft'
 import toast from 'react-hot-toast'
 
 // ─── German code → specific English type ──────────────────────────────────────
@@ -360,16 +361,28 @@ function clearDraft(roomCode) {
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
-export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
+export default function TeamSelectionModal({ matchId, roomCode, onDone, room, currentUserId }) {
   const [loading,    setLoading]    = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
-  // Draft state
+  // Draft state (solo mode — local simulation)
   const [pool,          setPool]          = useState([])
   const [myPicks,       setMyPicks]       = useState([])
   const [opponentPicks, setOpponentPicks] = useState([])
   const [currentPair,   setCurrentPair]   = useState(null)
   const [chosen,        setChosen]        = useState(null)
+
+  // Coordinated draft (2-user mode). When the room has 2+ members and the
+  // backend has started a draft, this hook drives the source of truth — local
+  // pool/myPicks/currentPair are replaced by backend state.
+  const draft = useDraft(room, currentUserId)
+  const memberCount = room?.members?.length ?? 1
+  const isCoordinated = memberCount >= 2 && draft.status !== 'idle'
+
+  // Full player roster, keyed by playerId. Populated by the same getPlayers
+  // call used for the local pool. Coordinated mode uses this to enrich the
+  // backend's player-id-only pair representation.
+  const [playersById, setPlayersById] = useState({})
 
   // Select XI state
   const [starterIds, setStarterIds] = useState(new Set())
@@ -382,8 +395,19 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
   const [phase, setPhase] = useState('draft')
 
   // ── Persist draft progress whenever meaningful state changes ──────────────
+  // In coordinated mode the backend owns pairs/picks state, so we only persist
+  // local UI state that's meaningful: phase + starterIds (so refreshing the
+  // tab restores your XI selection within the same session).
   useEffect(() => {
     if (loading) return  // don't save empty initial state
+    if (isCoordinated) {
+      saveDraft(roomCode, {
+        phase,
+        starterIds: [...starterIds],
+        coordinated: true,
+      })
+      return
+    }
     saveDraft(roomCode, {
       phase,
       myPicks,
@@ -393,12 +417,28 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
       totalPairs,
       starterIds: [...starterIds],
     })
-  }, [phase, myPicks, opponentPicks, pool, currentPair, totalPairs, starterIds])
+  }, [phase, myPicks, opponentPicks, pool, currentPair, totalPairs, starterIds, isCoordinated])
 
   useEffect(() => {
     matchesApi.getPlayers(matchId)
       .then(players => {
-        // ── Restore saved draft progress if available ─────────────────────
+        // Populate the lookup map for both modes (coordinated mode needs
+        // it to enrich the backend's playerId-only pairs).
+        const map = {}
+        for (const p of players) map[p.playerId] = p
+        setPlayersById(map)
+
+        // Coordinated mode: skip local pair generation entirely. Backend is
+        // the source of truth for pairs, and starterIds restore comes from
+        // sessionStorage so the user's XI selection survives a refresh.
+        if (isCoordinated) {
+          const saved = loadDraft(roomCode)
+          if (saved?.starterIds?.length) setStarterIds(new Set(saved.starterIds))
+          if (saved?.phase === 'preview') setPhase('preview')
+          return
+        }
+
+        // ── Restore saved draft progress if available (solo mode) ─────────
         const saved = loadDraft(roomCode)
         if (saved && (saved.myPicks?.length > 0 || saved.pool?.length > 0 || saved.currentPair)) {
           setMyPicks(saved.myPicks       ?? [])
@@ -451,13 +491,85 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
       .finally(() => setLoading(false))
   }, [matchId])
 
-  // Decisions made so far (excludes auto-picked odd-zone players)
-  const decisionsMade = totalPairs - pool.length - (currentPair ? 1 : 0)
+  // ── Effective state — branches between local (solo) and backend (coordinated) ─
+  // In coordinated mode the backend owns pairs, picks, and progress. We
+  // enrich the player-id-only payload with full player objects from
+  // playersById so the existing render code keeps working unchanged.
+  const coordCurrentPair = useMemo(() => {
+    if (!isCoordinated) return null
+    const ids = draft.currentPair
+    if (!ids || !ids.length) return null
+    const enriched = ids.map(pid => playersById[pid]).filter(Boolean)
+    return enriched.length === 2 ? enriched : null
+  }, [isCoordinated, draft.currentPair, playersById])
 
-  const draftProgress = myPicks.length
+  const coordMyPicks = useMemo(
+    () => isCoordinated ? draft.myPicks.map(pid => playersById[pid]).filter(Boolean) : null,
+    [isCoordinated, draft.myPicks, playersById],
+  )
+
+  const effectiveCurrentPair = isCoordinated ? coordCurrentPair : currentPair
+  const effectiveMyPicks     = isCoordinated ? (coordMyPicks || []) : myPicks
+  const effectiveTotalPairs  = isCoordinated ? (draft.totalPairs || 0) : totalPairs
+  const decisionsMade = isCoordinated
+    ? (draft.currentPairIndex || 0)
+    : (totalPairs - pool.length - (currentPair ? 1 : 0))
+
+  const draftProgress = effectiveMyPicks.length
+
+  // ── Coordinated mode: clear `chosen` overlay when backend advances the pair
+  //    OR when the draft completes. Drives the "waiting for opponent" → reveal
+  //    transition without local state hacks.
+  useEffect(() => {
+    if (!isCoordinated) return
+    setChosen(null)
+  }, [isCoordinated, draft.currentPairIndex, draft.status])
+
+  // Coordinated: auto-advance to select_xi when draft completes.
+  useEffect(() => {
+    if (isCoordinated && draft.status === 'complete' && phase === 'draft') {
+      setPhase('select_xi')
+    }
+  }, [isCoordinated, draft.status, phase])
+
+  // ── Pair-resolved reveal banner ──
+  // When the backend broadcasts `draft_pair_resolved`, useRoom stashes the
+  // resolution metadata on room.lastDraftReveal. We surface this as a brief
+  // (1.6s) banner showing what the opponent picked + tiebreak result.
+  // The banner clears itself on a timer so the next pair renders unobstructed.
+  const [recentReveal, setRecentReveal] = useState(null)
+  useEffect(() => {
+    const reveal = room?.lastDraftReveal
+    if (!reveal || !isCoordinated) return
+    setRecentReveal(reveal)
+    const t = setTimeout(() => setRecentReveal(null), 1800)
+    return () => clearTimeout(t)
+  }, [room?.lastDraftReveal?.ts, isCoordinated])
+
+  const opponentDisplayName = useMemo(() => {
+    if (!room?.members) return 'Opponent'
+    const opp = room.members.find(m => m.userId !== currentUserId)
+    return opp?.displayName || 'Opponent'
+  }, [room?.members, currentUserId])
 
   const pick = (chosen_player, other_player) => {
     if (chosen || phase !== 'draft') return
+
+    if (isCoordinated) {
+      // Backend-coordinated pick. Optimistic UI — show the chosen card
+      // immediately, then wait for `draft_pair_resolved` WS message to
+      // advance. The "chosen" overlay shows "waiting for opponent" if the
+      // pair isn't resolved yet (see render).
+      setChosen(chosen_player.playerId)
+      draft.pick(draft.currentPairIndex, chosen_player.playerId)
+        .catch(err => {
+          toast.error(err.message || 'Pick failed')
+          setChosen(null)
+        })
+      return
+    }
+
+    // Solo mode (existing local simulation).
     setChosen(chosen_player.playerId)
 
     setTimeout(() => {
@@ -487,8 +599,8 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
     }, 420)
   }
 
-  const starters     = myPicks.filter(p =>  starterIds.has(p.playerId))
-  const benchPlayers = myPicks.filter(p => !starterIds.has(p.playerId))
+  const starters     = effectiveMyPicks.filter(p =>  starterIds.has(p.playerId))
+  const benchPlayers = effectiveMyPicks.filter(p => !starterIds.has(p.playerId))
   const starterCount = starterIds.size
 
   // ── Swap mechanic ──────────────────────────────────────────────────────────
@@ -589,7 +701,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
             {phase === 'select_xi' && 'Pick Your XI'}
             {phase === 'preview'   && 'Squad Ready'}
           </p>
-          {phase === 'draft' && currentPair && (
+          {phase === 'draft' && effectiveCurrentPair && (
             <p className={`text-[11px] font-semibold mt-0.5 ${zoneMeta.textClass}`}>
               Pick a {zoneMeta.label}
             </p>
@@ -606,7 +718,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
               ? 'bg-green-500/20 text-green-400'
               : 'bg-white/10 text-gray-300'
         }`}>
-          {phase === 'draft' ? `${decisionsMade} / ${totalPairs}` : `${starterCount} / 11`}
+          {phase === 'draft' ? `${decisionsMade} / ${effectiveTotalPairs}` : `${starterCount} / 11`}
         </div>
       </div>
 
@@ -616,17 +728,20 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
           <p className="text-gray-500 text-sm">Loading players…</p>
         </div>
 
-      ) : phase === 'draft' && currentPair?.length ? (
+      ) : phase === 'draft' && effectiveCurrentPair?.length ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-5 px-4">
-          {/* Opponent squad building hint */}
+          {/* Coordinated mode: hide the "goes to opponent" hint — both
+              players pick simultaneously, and a tiebreak handles same-pick. */}
           <p className="text-gray-600 text-[10px] uppercase tracking-widest text-center">
-            Unchosen player goes to opponent's squad
+            {isCoordinated
+              ? 'Both pick at the same time — tap your choice'
+              : "Unchosen player goes to opponent's squad"}
           </p>
 
           {/* Cards */}
           <div className="flex gap-3 w-full max-w-sm">
-            {currentPair.map((player, idx) => {
-              const other = currentPair[1 - idx]
+            {effectiveCurrentPair.map((player, idx) => {
+              const other = effectiveCurrentPair[1 - idx]
               return (
                 <DraftCard
                   key={player.playerId}
@@ -642,16 +757,37 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
             })}
           </div>
 
+          {/* Coordinated mode: "waiting for opponent" indicator while our pick
+              is locked in but the pair hasn't resolved yet. */}
+          {isCoordinated && chosen && !recentReveal && (
+            <p className="text-emerald-400 text-xs font-semibold animate-pulse">
+              ⏳ Locked in. Waiting for opponent…
+            </p>
+          )}
+
+          {/* Coordinated mode: pair-resolved reveal banner. Shows for 1.8s
+              right after the backend broadcasts draft_pair_resolved so the
+              user can see what the opponent picked + the tiebreak result
+              before the next pair appears. */}
+          {isCoordinated && recentReveal && (
+            <RevealBanner
+              reveal={recentReveal}
+              currentUserId={currentUserId}
+              opponentDisplayName={opponentDisplayName}
+              playersById={playersById}
+            />
+          )}
+
           {/* Progress bar */}
           <div className="w-full max-w-sm">
             <div className="h-1 rounded-full bg-white/10">
               <div
                 className="h-1 rounded-full bg-green-500 transition-all duration-300"
-                style={{ width: `${(decisionsMade / Math.max(totalPairs, 1)) * 100}%` }}
+                style={{ width: `${(decisionsMade / Math.max(effectiveTotalPairs, 1)) * 100}%` }}
               />
             </div>
             <p className="text-gray-600 text-[10px] text-center mt-1">
-              Round {decisionsMade + 1} of {totalPairs}
+              Round {decisionsMade + 1} of {effectiveTotalPairs}
             </p>
           </div>
         </div>
@@ -845,6 +981,51 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
           </div>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+// ─── RevealBanner ─────────────────────────────────────────────────────────────
+// Brief feedback panel shown after each coordinated-draft pair resolves.
+// Surfaces what the opponent picked + the tiebreak result if both users had
+// chosen the contested player.
+function RevealBanner({ reveal, currentUserId, opponentDisplayName, playersById }) {
+  const myPid       = reveal.resolved?.[currentUserId]
+  const opponentId  = Object.keys(reveal.resolved || {}).find(uid => uid !== currentUserId)
+  const oppPid      = opponentId ? reveal.resolved[opponentId] : null
+  const myPlayer    = myPid ? playersById[myPid] : null
+  const oppPlayer   = oppPid ? playersById[oppPid] : null
+  const tb          = reveal.tiebreak
+  const tbWinnerIsMe = tb && tb.winnerUserId === currentUserId
+  const tbContestedName = tb && playersById[tb.contestedPlayerId]?.displayName
+
+  return (
+    <div
+      className="w-full max-w-sm rounded-2xl px-4 py-3 border match-event-in"
+      style={{
+        background: tb
+          ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.10) 100%)'
+          : 'linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(5, 150, 105, 0.10) 100%)',
+        borderColor: tb ? 'rgba(245, 158, 11, 0.40)' : 'rgba(16, 185, 129, 0.40)',
+      }}
+    >
+      {tb && (
+        <p className="text-[10px] font-bold tracking-widest uppercase text-amber-400 text-center mb-1.5">
+          🎲 Tiebreak — {tbWinnerIsMe ? 'You won' : `${opponentDisplayName} won`}
+          {tbContestedName && <span className="text-amber-300/70 normal-case font-medium"> · contested {tbContestedName}</span>}
+        </p>
+      )}
+      <div className="flex items-center justify-between gap-2 text-[11px]">
+        <div className="flex-1 min-w-0">
+          <p className="text-emerald-300/80 font-semibold uppercase tracking-wider">You got</p>
+          <p className="text-white text-sm font-bold truncate">{myPlayer?.displayName || myPlayer?.shirtNumber || '—'}</p>
+        </div>
+        <span className="text-gray-600 px-2">vs</span>
+        <div className="flex-1 min-w-0 text-right">
+          <p className="text-gray-400/80 font-semibold uppercase tracking-wider">{opponentDisplayName} got</p>
+          <p className="text-gray-300 text-sm font-bold truncate">{oppPlayer?.displayName || oppPlayer?.shirtNumber || '—'}</p>
+        </div>
+      </div>
     </div>
   )
 }

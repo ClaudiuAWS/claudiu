@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useRoom } from '../hooks/useRoom'
 import { useMatch } from '../hooks/useMatch'
 import { useAuth } from '../hooks/useAuth'
+import { useDraft } from '../hooks/useDraft'
 import { roomsApi } from '../services/api'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import RoomCodeDisplay from '../components/lobby/RoomCodeDisplay'
@@ -32,6 +33,25 @@ export default function LobbyPage() {
   const isHost   = room?.hostUserId === user?.userId
   const isLive   = match?.status === 'live'
   const canStart = isHost && (room?.members?.length ?? 0) >= 1 && !starting && !isLive // DEV: solo allowed
+
+  // Coordinated draft (2 humans). Drives the "Ready Up" CTA + auto-opens
+  // the modal once the backend has started the draft. Solo (1-user) rooms
+  // bypass this and use the existing simulation in TeamSelectionModal.
+  const draft = useDraft(room, user?.userId)
+  const memberCount = room?.members?.length ?? 0
+  const useCoordinatedDraft = memberCount >= 2
+  const draftReadying = (draft.status === 'waiting' || draft.status === 'idle') && draft.isReady
+  const draftActive   = draft.status === 'active' || draft.status === 'complete'
+
+  // Auto-open the modal once both users are ready (status flips to 'active').
+  useEffect(() => {
+    if (draftActive && !teamModalOpen && !hasTeam) setTeamModalOpen(true)
+  }, [draftActive, teamModalOpen, hasTeam])
+
+  const handleReadyUp = async () => {
+    setError('')
+    try { await draft.ready() } catch (e) { setError(e.message || 'Failed to ready up') }
+  }
 
   const handleCreate = async () => {
     setError('')
@@ -94,16 +114,34 @@ export default function LobbyPage() {
           <RoomCodeDisplay code={room.roomCode} />
           <MembersList members={room.members} hostUserId={room.hostUserId} teamReadyIds={teamReadyIds} />
 
-          {/* Team selection CTA */}
-          <button
-            onClick={() => setTeamModalOpen(true)}
-            className={`w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
-              ${hasTeam
-                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
-                : 'bg-green-500 hover:bg-green-400 active:bg-green-600 text-white'}`}
-          >
-            {hasTeam ? '✓ Squad selected — Edit' : 'Pick Your Squad'}
-          </button>
+          {/* Team selection CTA — branches on member count.
+              - Solo (1 user): existing client-only draft simulation
+              - 2 users: coordinated draft via "Ready Up" → auto-opens modal
+                         when both are ready and backend has started the draft */}
+          {useCoordinatedDraft && !draftActive && !hasTeam ? (
+            <button
+              onClick={handleReadyUp}
+              disabled={draftReadying}
+              className={`w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
+                ${draftReadying
+                  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                  : 'bg-green-500 hover:bg-green-400 active:bg-green-600 text-white'}`}
+            >
+              {draftReadying
+                ? `⏳ Waiting for opponent (${draft.readyUserIds.length}/${memberCount} ready)`
+                : '⚡ Ready Up — Start Draft'}
+            </button>
+          ) : (
+            <button
+              onClick={() => setTeamModalOpen(true)}
+              className={`w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
+                ${hasTeam
+                  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
+                  : 'bg-green-500 hover:bg-green-400 active:bg-green-600 text-white'}`}
+            >
+              {hasTeam ? '✓ Squad selected — Edit' : 'Pick Your Squad'}
+            </button>
+          )}
 
           {/* Start / Watch live */}
           {isLive ? (
@@ -194,6 +232,8 @@ export default function LobbyPage() {
         <TeamSelectionModal
           matchId={matchId}
           roomCode={room.roomCode}
+          room={room}
+          currentUserId={user?.userId}
           existingSelection={myMember?.teamSelection ?? []}
           onDone={() => setTeamModalOpen(false)}
         />
