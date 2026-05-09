@@ -407,7 +407,12 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
           setCurrentPair(saved.currentPair   ?? null)
           setTotalPairs(saved.totalPairs     ?? 0)
           setStarterIds(new Set(saved.starterIds ?? []))
-          setPhase(saved.phase           ?? 'draft')
+          // Draft is "complete" when the pool is empty and there's no current
+          // pair to choose. In that case, jump straight to select_xi (to swap
+          // starters) — never back to 'draft' (no decisions left) or stuck on
+          // 'preview' (user clicked Edit because they want to change something).
+          const draftComplete = (saved.pool?.length ?? 0) === 0 && !saved.currentPair
+          setPhase(draftComplete ? 'select_xi' : (saved.phase ?? 'draft'))
           return  // skip fresh setup
         }
 
@@ -548,7 +553,11 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
     setSubmitting(true)
     try {
       await roomsApi.selectTeam(roomCode, starters.map(p => p.playerId))
-      clearDraft(roomCode)
+      // KEEP draft progress in localStorage even after lock-in. Reopening the
+      // modal restores the user's 14 picks and starting XI, dropping them
+      // straight into 'select_xi' (load path forces this when draft is
+      // complete). The 14 draft choices themselves are immutable — the user
+      // can only swap who's starter vs bench, not re-do the picks.
       try { localStorage.removeItem(`match_started_${roomCode}`) } catch {}
       toast.success('Squad locked in! ⚡')
       onDone()
