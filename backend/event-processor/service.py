@@ -225,8 +225,32 @@ def _handle_clock_tick(match_id: str, game_time: str) -> None:
 
 
 # ─────────────────────────────────────────
-# Fantasy scoring
+# Fantasy scoring (FPL-style positional weights)
 # ─────────────────────────────────────────
+
+# German position code → FPL bucket. The goal-scorer's position lives on the
+# event payload (data.position); for card/save we look up the owner's position
+# via member.teamSelectionDetails. Anything not in the GK/DEF/FWD lists falls
+# through to MID, which matches FPL's default treatment of central/wide mids.
+_GK_CODES  = {'TW'}
+_DEF_CODES = {'IVL', 'IVR', 'IVZ', 'IV', 'LV', 'RV'}
+_FWD_CODES = {'ST', 'STZ', 'STL', 'STR', 'MS', 'LF', 'RF', 'LA', 'RA'}
+
+# FPL goal values per bucket. Mirrors official Fantasy Premier League:
+# defenders score the most because their goals are rarer; forwards score
+# least because that's their job. GK at +10 reflects an outlier event.
+_GOAL_VALUE = {'GK': 10, 'DEF': 6, 'MID': 5, 'FWD': 4}
+
+
+def _bucket(position_code: str | None) -> str:
+    if not position_code:
+        return 'MID'
+    code = position_code.upper()
+    if code in _GK_CODES:  return 'GK'
+    if code in _DEF_CODES: return 'DEF'
+    if code in _FWD_CODES: return 'FWD'
+    return 'MID'
+
 
 def _score_rooms_for_event(match_id: str, event_type: str, data: dict) -> None:
     if event_type not in ('goal', 'card', 'saved_shot'):
@@ -237,78 +261,119 @@ def _score_rooms_for_event(match_id: str, event_type: str, data: dict) -> None:
     )
     active_rooms = [r for r in response.get('Items', []) if r.get('status') != 'ended']
     for room in active_rooms:
-        deltas = _calculate_deltas(room, event_type, data)
-        if any(v != 0 for v in deltas.values()):
-            _apply_score_deltas(room, deltas, event_type)
+        # Each entry: {userId, delta, reason, playerName}.
+        # `reason` and `playerName` are surfaced in score_update.changes so the
+        # frontend toast can read like "+6 — Olise scored for your squad".
+        member_changes = _calculate_member_changes(room, event_type, data)
+        if any(c['delta'] != 0 for c in member_changes):
+            _apply_member_changes(room, member_changes, event_type)
 
 
-def _calculate_deltas(room: dict, event_type: str, data: dict) -> dict:
-    deltas = {}
+def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
+    """Return per-member point changes for this event.
+
+    Shape: [{userId, delta, reason, playerName}, ...] — ALL members included
+    (delta=0 for users with no involvement) so the caller can decide whether
+    to surface a no-op toast (it doesn't).
+    """
     members = room.get('members', [])
+    out = []
 
     if event_type == 'goal':
-        scoring_pid  = data.get('scoringPlayerId')
-        assist_pid   = data.get('assistPlayerId')
-        scoring_role = data.get('scoringTeamRole')
+        scoring_pid     = data.get('scoringPlayerId')
+        scoring_display = data.get('scoringDisplay') or data.get('scoringPlayerDisplay') or ''
+        scoring_pos     = data.get('position')  # German code from the goal payload
+        assist_pid      = data.get('assistPlayerId')
+        assist_display  = data.get('assistDisplay') or data.get('assistPlayerDisplay') or ''
+        scoring_role    = data.get('scoringTeamRole')
+
+        goal_value = _GOAL_VALUE[_bucket(scoring_pos)]
 
         for m in members:
             uid     = m['userId']
             details = {d['playerId']: d for d in m.get('teamSelectionDetails', [])}
-            delta   = 0
+            delta, reason, name = 0, '', ''
+
+            # Owners stack: scorer bonus + assist bonus + GK conceded penalty.
+            # We pick a single (reason, playerName) for the toast — scorer
+            # wins over assist wins over conceded, since a goal owner cares
+            # most about who scored for them.
             if scoring_pid and scoring_pid in details:
-                delta += 5
+                delta += goal_value
+                reason = 'scored for your squad'
+                name   = scoring_display
+
             if assist_pid and assist_pid in details:
                 delta += 3
+                if not reason:
+                    reason = 'assisted for your squad'
+                    name   = assist_display
+
             if scoring_role:
                 opp_role = 'away' if scoring_role == 'home' else 'home'
-                has_beaten_gk = any(
-                    d.get('position') == 'TW' and d.get('teamRole') == opp_role
-                    for d in details.values()
+                conceding_gk = next(
+                    (d for d in details.values()
+                     if d.get('position') == 'TW' and d.get('teamRole') == opp_role),
+                    None,
                 )
-                if has_beaten_gk:
+                if conceding_gk:
                     delta -= 1
-                if scoring_pid and scoring_pid in details:
-                    delta += 2  # valid-opponent bonus stacked with +5 above
-            deltas[uid] = delta
+                    if not reason:
+                        reason = 'conceded'
+                        # GK display name isn't on the goal event — leave a
+                        # generic label rather than fake one.
+                        name   = 'your keeper'
+
+            out.append({'userId': uid, 'delta': delta, 'reason': reason, 'playerName': name})
 
     elif event_type == 'card':
-        player_id  = data.get('playerId')
-        card_color = data.get('cardColor', '').lower()
+        player_id     = data.get('playerId')
+        player_display = data.get('playerDisplay') or ''
+        card_color    = (data.get('cardColor') or '').lower()
         if card_color not in ('yellow', 'red'):
-            return {}
+            return []
+        verb = 'booked' if card_color == 'yellow' else 'sent off'
+        magnitude = -1 if card_color == 'yellow' else -3
         for m in members:
             uid       = m['userId']
             selection = set(m.get('teamSelection', []))
-            delta     = 0
             if player_id and player_id in selection:
-                delta = -1 if card_color == 'yellow' else -3
-            deltas[uid] = delta
+                out.append({'userId': uid, 'delta': magnitude, 'reason': verb, 'playerName': player_display})
+            else:
+                out.append({'userId': uid, 'delta': 0, 'reason': '', 'playerName': ''})
 
     elif event_type == 'saved_shot':
-        gk_id = data.get('goalKeeperId')
+        gk_id      = data.get('goalKeeperId')
+        gk_display = data.get('goalKeeperDisplay') or ''
         for m in members:
             uid     = m['userId']
             details = {d['playerId']: d for d in m.get('teamSelectionDetails', [])}
-            deltas[uid] = 3 if gk_id and gk_id in details else 0
+            if gk_id and gk_id in details:
+                out.append({'userId': uid, 'delta': 2, 'reason': 'made a save', 'playerName': gk_display})
+            else:
+                out.append({'userId': uid, 'delta': 0, 'reason': '', 'playerName': ''})
 
-    return deltas
+    return out
 
 
-def _apply_score_deltas(room: dict, deltas: dict, event_type: str) -> None:
+def _apply_member_changes(room: dict, member_changes: list, event_type: str) -> None:
     members       = room.get('members', [])
     score_changes = []
+    by_user       = {c['userId']: c for c in member_changes}
 
     for m in members:
-        delta = deltas.get(m['userId'], 0)
-        if delta == 0:
+        c = by_user.get(m['userId'])
+        if not c or c['delta'] == 0:
             continue
-        new_score  = int(m.get('score', 0)) + delta
+        new_score  = int(m.get('score', 0)) + c['delta']
         m['score'] = new_score
         score_changes.append({
-            'userId':    m['userId'],
-            'delta':     delta,
-            'newScore':  new_score,
-            'eventType': event_type,  # so the frontend toast can pick the right label
+            'userId':     m['userId'],
+            'delta':      c['delta'],
+            'newScore':   new_score,
+            'eventType':  event_type,
+            'reason':     c.get('reason') or '',
+            'playerName': c.get('playerName') or '',
         })
 
     if not score_changes:

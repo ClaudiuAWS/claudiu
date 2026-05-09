@@ -4,7 +4,7 @@ import { useMatch } from '../hooks/useMatch'
 import { useRoom } from '../hooks/useRoom'
 import { useChat } from '../hooks/useChat'
 import { useAuth } from '../hooks/useAuth'
-import { matchesApi } from '../services/api'
+import { matchesApi, roomsApi } from '../services/api'
 import Scoreboard from '../components/match/Scoreboard'
 import MatchFeed from '../components/match/MatchFeed'
 import ChatPanel from '../components/match/ChatPanel'
@@ -108,12 +108,21 @@ export default function MatchPage() {
       .map(p => ({ ...p, ...playerMap[p.playerId] }))
   }, [awayTeamPlayers, awayLocalPicks, playerMap])
 
+  // Reaction tap on a nutmeg / spectacular_play badge → +2 backend bonus.
+  // Fire-and-forget; the score_update WS message that follows will surface
+  // the actual delta toast via useRoom. Failure is silent (e.g. duplicate
+  // tap, network blip) since the user already saw the local "GOT IT!" state.
+  const handleReactTap = useCallback((event) => {
+    if (!room?.roomCode || !event?.eventId) return
+    roomsApi.react(room.roomCode, event.eventId, event.eventType).catch(() => {})
+  }, [room?.roomCode])
+
   if (loading || roomLoading) return <LoadingSpinner />
   if (!room) return <Navigate to={`/lobby/${matchId}`} replace />
 
   return (
     <div className="flex flex-col">
-      <SkillFlashBadge event={flashEvent} />
+      <SkillFlashBadge event={flashEvent} onReact={handleReactTap} />
       <MatchMiniGameModal
         state={minigame.state}
         onSubmit={minigame.submit}

@@ -40,6 +40,9 @@ def handler(event, context):
             elif method == 'POST' and '/draft-pick' in path:
                 return _post_draft_pick(event, user_id)
 
+            elif method == 'POST' and '/react' in path:
+                return _post_reaction(event, user_id)
+
             else:
                 return _response(404, {'error': 'Not found'})
         
@@ -159,6 +162,20 @@ def _post_draft_pick(event, user_id):
         if not player_id:
             return _response(400, {'error': 'playerId is required'})
         out = service.submit_draft_pick(room_code, user_id, pair_index, player_id)
+        return _response(200, out)
+
+
+def _post_reaction(event, user_id):
+        # Awards a +2 bonus when the user taps the nutmeg/spectacular badge
+        # within the 1.5s window. Idempotent per (eventId, userId).
+        # Body shape: {eventId: str, reactionType: 'nutmeg' | 'spectacular_play'}
+        room_code = event['pathParameters']['code']
+        body = json.loads(event.get('body') or '{}')
+        event_id = (body.get('eventId') or '').strip()
+        reaction_type = (body.get('reactionType') or '').strip()
+        if not event_id:
+            return _response(400, {'error': 'eventId is required'})
+        out = service.claim_reaction(room_code, user_id, event_id, reaction_type)
         return _response(200, out)
 
 
