@@ -189,6 +189,8 @@ export default function MatchPage() {
               events={events}
               homeMemberName={room?.members?.[0]?.displayName}
               awayMemberName={room?.members?.[1]?.displayName}
+              members={room?.members}
+              currentUserId={user?.userId}
             />
           </div>
         )}

@@ -45,10 +45,13 @@ export function SquadVisualization({
   events           = [],
   homeMemberName   = null,
   awayMemberName   = null,
+  members          = [],
+  currentUserId    = null,
   onPlayerClick,
 }) {
   const [selectedPlayer,   setSelectedPlayer]   = useState(null)
   const [selectedTeamRole, setSelectedTeamRole] = useState(null)
+  const [showLeaderboard,  setShowLeaderboard]  = useState(true)
 
   const homeTeamName  = homeMemberName || match.homeTeamName  || 'Home'
   const awayTeamName  = awayMemberName || match.awayTeamName  || 'Away'
@@ -84,6 +87,10 @@ export function SquadVisualization({
 
   const hasBench = homeBenchPlayers.length > 0 || awayBenchPlayers.length > 0
 
+  // Leaderboard rows — newest scores cascade in via room.members WS updates,
+  // so this just sorts & renders. Empty when the room has no members yet.
+  const sortedMembers = [...members].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+
   return (
     <div className="w-full flex flex-col items-center gap-3">
       <CombinedPitchView
@@ -97,6 +104,71 @@ export function SquadVisualization({
         onAwayPlayerClick={handleAwayClick}
         selectedPlayerId={selectedPlayer?.playerId ?? null}
       />
+
+      {/* Leaderboard — collapsible. Rendered between the pitch and the
+          bench so it sits "right under the pitch" without overlapping the
+          substitutions list at the bottom of the tab. */}
+      {sortedMembers.length > 0 && (
+        <div className="w-full px-3">
+          <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 12 }}>
+            <button
+              type="button"
+              onClick={() => setShowLeaderboard(v => !v)}
+              className="w-full flex items-center justify-between px-3 py-2.5"
+            >
+              <span className="text-[8px] text-gray-500 uppercase tracking-widest">
+                Leaderboard
+              </span>
+              <div className="flex items-center gap-2">
+                {!showLeaderboard && (
+                  <span className="text-[10px] text-gray-400 tabular-nums">
+                    {sortedMembers.map(m => `${(m.displayName || '?').slice(0, 6)} ${m.score ?? 0}`).join(' · ')}
+                  </span>
+                )}
+                <span className={`text-gray-500 text-[10px] transition-transform ${showLeaderboard ? 'rotate-180' : ''}`}>
+                  ▾
+                </span>
+              </div>
+            </button>
+
+            {showLeaderboard && (
+              <div className="px-3 pb-3 space-y-1.5">
+                {sortedMembers.map((m, i) => {
+                  const isMe  = m.userId === currentUserId
+                  const score = m.score ?? 0
+                  return (
+                    <div
+                      key={m.userId}
+                      className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg ${
+                        isMe ? 'bg-green-500/10 border border-green-500/30' : 'bg-white/[0.02]'
+                      }`}
+                    >
+                      <span className="w-4 text-center text-[10px] text-gray-500 font-bold">
+                        {i + 1}
+                      </span>
+                      <div className="w-6 h-6 rounded-full bg-violet-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                        {(m.displayName || '?')[0]?.toUpperCase()}
+                      </div>
+                      <span className={`flex-1 text-[12px] truncate ${isMe ? 'text-green-300 font-semibold' : 'text-gray-200'}`}>
+                        {m.displayName || 'Player'}
+                        {isMe && <span className="ml-1.5 text-[9px] text-green-500 font-normal">you</span>}
+                      </span>
+                      <span className={`text-[12px] font-bold tabular-nums ${
+                        score > 0 ? 'text-white' : score < 0 ? 'text-red-400' : 'text-gray-500'
+                      }`}>
+                        {score > 0 ? '+' : ''}{score}
+                      </span>
+                    </div>
+                  )
+                })}
+                <p className="text-center text-gray-600 text-[9px] pt-1">
+                  Goal: GK +10 / DEF +6 / MID +5 / FWD +4 · Assist +3 · Save +2 · Yellow −1 · Red −3 · Reaction +2
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Bench */}
       {hasBench && (
