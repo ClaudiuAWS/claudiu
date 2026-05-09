@@ -45,6 +45,13 @@ COMMENTARY QUALITY RULES (be specific, not generic):
     "Soumahoro booked early — needs to settle"
     "Neuer with the smother — Bayern still in front"
 
+CLOCK / TIME RULES:
+- The ONLY clock value you may cite is the snapshot's `minute` field — an
+  integer like 9 (display as "9'"). Never invent or quote MM:SS, seconds,
+  or wall-clock formats; the trigger event no longer carries those.
+- If `minute` is null, omit the time from your output entirely. Don't
+  guess a minute from event order or recentEvents length.
+
 ANTI-HALLUCINATION RULES (commentary must reflect REAL events):
 - The commentary text MUST describe ONLY the triggerEvent above — what JUST
   happened. Do NOT invent events, players, or situations.
