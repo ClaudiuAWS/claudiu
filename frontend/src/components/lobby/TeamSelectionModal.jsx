@@ -343,19 +343,19 @@ function PlayerChip({ player, isStarter, onToggle, disabled }) {
 const draftKey = (rc) => `draft_progress_${rc}`
 
 function saveDraft(roomCode, state) {
-  try { localStorage.setItem(draftKey(roomCode), JSON.stringify(state)) } catch {}
+  try { sessionStorage.setItem(draftKey(roomCode), JSON.stringify(state)) } catch {}
 }
 
 function loadDraft(roomCode) {
   try {
-    const raw = localStorage.getItem(draftKey(roomCode))
+    const raw = sessionStorage.getItem(draftKey(roomCode))
     return raw ? JSON.parse(raw) : null
   } catch {}
   return null
 }
 
 function clearDraft(roomCode) {
-  try { localStorage.removeItem(draftKey(roomCode)) } catch {}
+  try { sessionStorage.removeItem(draftKey(roomCode)) } catch {}
 }
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
@@ -472,8 +472,8 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
         setCurrentPair(null)
         // Persist both sides for the squad tab
         try {
-          localStorage.setItem(`draft_opponent_picks_${roomCode}`, JSON.stringify(newOppPicks))
-          localStorage.setItem(`draft_my_picks_${roomCode}`, JSON.stringify(newMyPicks))
+          sessionStorage.setItem(`draft_opponent_picks_${roomCode}`, JSON.stringify(newOppPicks))
+          sessionStorage.setItem(`draft_my_picks_${roomCode}`, JSON.stringify(newMyPicks))
         } catch {}
         setPhase('select_xi')
         return
@@ -553,12 +553,12 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone }) {
     setSubmitting(true)
     try {
       await roomsApi.selectTeam(roomCode, starters.map(p => p.playerId))
-      // KEEP draft progress in localStorage even after lock-in. Reopening the
+      // KEEP draft progress in sessionStorage even after lock-in. Reopening the
       // modal restores the user's 14 picks and starting XI, dropping them
       // straight into 'select_xi' (load path forces this when draft is
       // complete). The 14 draft choices themselves are immutable — the user
       // can only swap who's starter vs bench, not re-do the picks.
-      try { localStorage.removeItem(`match_started_${roomCode}`) } catch {}
+      try { sessionStorage.removeItem(`match_started_${roomCode}`) } catch {}
       toast.success('Squad locked in! ⚡')
       onDone()
     } catch (err) {

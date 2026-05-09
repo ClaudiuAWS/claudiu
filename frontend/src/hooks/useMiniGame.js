@@ -44,7 +44,7 @@ const GAME_DEFAULTS = {
 
 // Scope the storage key by match.startedAt so resetting the match (which
 // gives it a fresh startedAt on next start) gives a clean slate for testing.
-// Without this, you'd have to clear localStorage manually between dev runs.
+// Without this, you'd have to clear sessionStorage manually between dev runs.
 function _firedTypesKey(matchId, startedAt) {
   return `minigame_fired_${matchId}_${startedAt || 'idle'}`
 }
@@ -52,14 +52,14 @@ function _firedTypesKey(matchId, startedAt) {
 function _readFiredTypes(matchId, startedAt) {
   if (!matchId) return []
   try {
-    const s = localStorage.getItem(_firedTypesKey(matchId, startedAt))
+    const s = sessionStorage.getItem(_firedTypesKey(matchId, startedAt))
     return s ? JSON.parse(s) : []
   } catch { return [] }
 }
 
 function _writeFiredTypes(matchId, startedAt, types) {
   if (!matchId) return
-  try { localStorage.setItem(_firedTypesKey(matchId, startedAt), JSON.stringify(types)) } catch {}
+  try { sessionStorage.setItem(_firedTypesKey(matchId, startedAt), JSON.stringify(types)) } catch {}
 }
 
 function _computeOwnership(event, members) {
@@ -106,7 +106,7 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
 
   // Frontend-driven trigger: when a qualifying event becomes visible in the
   // feed, open the modal locally — no waiting on backend. Idempotent across
-  // refresh via localStorage. Backend's `_trigger_minigame_for_event` push is
+  // refresh via sessionStorage. Backend's `_trigger_minigame_for_event` push is
   // ignored (see onMinigameMessage) when local state already exists, so it
   // becomes a fallback for cases where the frontend missed the event entirely.
   useEffect(() => {
