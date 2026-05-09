@@ -1,0 +1,31 @@
+name: Deploy API Gateway Infra
+
+on:
+        push:
+                branches: [main]
+                paths:
+                        - "infra/compute/api-gateway.yml"
+
+permissions:
+        id-token: write
+        contents: read
+
+jobs:
+        deploy:
+                runs-on: ubuntu-latest
+                steps:
+                        - uses: actions/checkout@v4
+
+                        - name: Configure AWS credentials
+                          uses: aws-actions/configure-aws-credentials@v4
+                          with:
+                                  role-to-assume: ${{ secrets.AWS_BACKEND_GITHUB_ACTIONS_ROLE_ARN }}
+                                  aws-region: eu-central-1
+
+                        - name: Deploy api-gateway-claudiu stack
+                          run: |
+                                  aws cloudformation deploy \
+                                    --template-file infra/compute/api-gateway.yml \
+                                    --stack-name api-gateway-claudiu \
+                                    --capabilities CAPABILITY_NAMED_IAM \
+                                    --no-fail-on-empty-changeset
