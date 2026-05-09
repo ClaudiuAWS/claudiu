@@ -296,9 +296,6 @@ def _generate_draft_pairs(match_id: str) -> tuple[list, list]:
     The order is randomised within each zone, then pairs are interleaved
     across zones so users don't get a single position-type streak.
     """
-    keys = []  # we want all players; matches/service.get_match_players is
-    # the canonical loader, but this Lambda doesn't have access — query
-    # directly using the same shape.
     resp = player_lookup_table.query(
         KeyConditionExpression=Key('matchId').eq(match_id),
     )
@@ -310,9 +307,31 @@ def _generate_draft_pairs(match_id: str) -> tuple[list, list]:
         )
         players.extend(resp.get('Items', []))
 
+    # Cap each team to its 16 most-prominent players (11 starters + top 5
+    # non-starters by shirt number). Guarantees exactly 16 picks per user
+    # post-draft (32 total / 2 users) regardless of how many fringe players
+    # are in claudiu-player-lookup for this match.
+    by_team = {'home': [], 'away': []}
+    for p in players:
+        team = p.get('teamRole')
+        if team in by_team:
+            by_team[team].append(p)
+
+    capped_players = []
+    for team, roster in by_team.items():
+        starters    = sorted([p for p in roster if p.get('starting')],
+                             key=lambda p: int(p.get('shirtNumber', 99)))
+        substitutes = sorted([p for p in roster if not p.get('starting')],
+                             key=lambda p: int(p.get('shirtNumber', 99)))
+        team_pool = starters[:11] + substitutes[:5]
+        if len(team_pool) < 16:
+            print(f"warning: only {len(team_pool)} players for team {team} "
+                  f"in match {match_id} (expected 16)")
+        capped_players.extend(team_pool)
+
     # Group by zone, drop players without a known position.
     by_zone = {z: [] for z in _ZONE_ORDER}
-    for p in players:
+    for p in capped_players:
         t = _POS_TO_TYPE.get(p.get('position'))
         if not t:
             continue
