@@ -26,6 +26,16 @@ from prompts import SYSTEM_PROMPT, build_user_message
 bedrock = boto3.client('bedrock-runtime', region_name=os.environ.get('BEDROCK_REGION', 'eu-central-1'))
 MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'eu.amazon.nova-micro-v1:0')
 
+# Allowed event-type → gameType mappings. AI's start_minigame action is
+# rejected (downgraded to commentate or wait) when the trigger event's type
+# isn't in this map for the chosen gameType. Prevents Nova Micro hallucinations
+# where it picks OFFSIDE_REFLEX for a nutmeg event etc.
+_VALID_TRIGGERS = {
+    'OFFSIDE_REFLEX':    {'offside'},
+    'SHOT_CALL':         {'shotOnGoal', 'shot_on_goal'},
+    'PENALTY_SHOOTOUT':  {'penalty'},
+}
+
 
 def run_director_tick(room_code: str, user_id: str, body: dict) -> dict:
         snapshot = body.get('snapshot') or {}
@@ -69,7 +79,28 @@ def _ask_model(snapshot: dict) -> dict:
 
 def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
         action = decision.get('action')
-        related_event_id = (snapshot.get('triggerEvent') or {}).get('eventId')
+        trigger_event = snapshot.get('triggerEvent') or {}
+        related_event_id = trigger_event.get('eventId')
+        trigger_type = trigger_event.get('eventType')
+
+        # Validate AI start_minigame against the trigger event's type. Nova Micro
+        # sometimes picks OFFSIDE_REFLEX for unrelated events (nutmegs, saves)
+        # despite the system prompt. Hard-gate here so the modal never opens
+        # nonsensically. Downgrade to commentate when the prompt has text we
+        # can repurpose; otherwise drop to wait.
+        if action == 'start_minigame':
+                game_type = decision.get('gameType')
+                allowed_event_types = _VALID_TRIGGERS.get(game_type, set())
+                if trigger_type not in allowed_event_types:
+                        downgrade_text = decision.get('prompt') or decision.get('title')
+                        if downgrade_text:
+                                print(f"director: downgrading start_minigame ({game_type}) on {trigger_type} -> commentate")
+                                action = 'commentate'
+                                decision = {**decision, 'action': 'commentate', 'text': downgrade_text}
+                        else:
+                                print(f"director: dropping start_minigame ({game_type}) on {trigger_type} -> wait")
+                                action = 'wait'
+                                decision = {**decision, 'action': 'wait', 'reason': 'gameType-event mismatch'}
 
         if action == 'start_minigame':
                 config = decision.get('config') or {}
