@@ -13,6 +13,7 @@ import { SquadVisualization } from '../components/match/SquadVisualization'
 import SkillFlashBadge from '../components/match/SkillFlashBadge'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import MatchMiniGameModal from '../components/minigame/MatchMiniGameModal'
+import DirectorCommentary from '../components/match/DirectorCommentary'
 import { useMiniGame } from '../hooks/useMiniGame'
 import { useDirector } from '../hooks/useDirector'
 
@@ -118,6 +119,10 @@ export default function MatchPage() {
         onSubmit={minigame.submit}
         onClose={minigame.close}
       />
+      {/* AI Director commentary — fixed-position pop-up overlay so it shows
+          on every tab (feed, squad, chat) and never blocks the user from
+          interacting with content underneath. */}
+      <DirectorCommentary stack={room?.commentaryStack} />
       <Scoreboard match={match} events={events} />
 
       {/* Watchers strip */}
@@ -162,7 +167,7 @@ export default function MatchPage() {
 
       {/* Content */}
       <div className="relative">
-        {tab === 'feed' && <MatchFeed events={events} commentaryStack={room?.commentaryStack} />}
+        {tab === 'feed' && <MatchFeed events={events} />}
 
         {tab === 'squad' && (
           <div className="px-2 py-3">
