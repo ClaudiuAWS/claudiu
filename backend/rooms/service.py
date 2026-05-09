@@ -282,6 +282,7 @@ def _normalize_draft(draft: dict) -> dict:
         **draft,
         'currentPairIndex': int(draft.get('currentPairIndex', 0)),
         'totalPairs':       int(draft.get('totalPairs', 0)),
+        'tiebreakCount':    int(draft.get('tiebreakCount', 0)),
     }
 
 
@@ -381,6 +382,7 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
             'pendingChoices':    {},
             'picks':             picks_per_user,
             'totalPairs':        len(pairs),
+            'tiebreakCount':     0,
             'startedAt':         int(time.time() * 1000),
         }
         rooms_table.update_item(
@@ -470,14 +472,29 @@ def submit_draft_pick(room_code: str, user_id: str, pair_index: int, player_id: 
 
     tiebreak = None
     if my_pick == other_pick:
-        # Conflict — random tiebreak. The "winner" gets the picked player,
-        # the "loser" gets the other one in the pair.
-        winner_id = random.choice([user_id, other_id])
-        loser_id = other_id if winner_id == user_id else user_id
+        # Conflict — deterministic alternation. The "winner" gets the picked
+        # player, the "loser" gets the other one in the pair.
+        #
+        # User reported a perceived bias when this used random.choice (one
+        # account consistently won ties regardless of pick order). Whether
+        # that was real or small-sample, alternating by an explicit
+        # tiebreakCount makes ties provably fair: over N tiebreaks, the host
+        # wins ⌈N/2⌉ and the non-host wins ⌊N/2⌋ (or vice versa). Off-by-one
+        # only on odd totals, and the spare goes to the host (ordered[0])
+        # to match the auto-picks tie-break convention.
+        host_id = room.get('hostUserId') or members[0]['userId']
+        ordered = sorted(member_ids, key=lambda mid: 0 if mid == host_id else 1)
+        tiebreak_count = int(draft.get('tiebreakCount', 0))
+        winner_id = ordered[tiebreak_count % 2]
+        loser_id = ordered[(tiebreak_count + 1) % 2]
         other_player = pair[0] if pair[1] == my_pick else pair[1]
         winner_player = my_pick
         loser_player = other_player
-        tiebreak = {'winnerUserId': winner_id, 'contestedPlayerId': my_pick}
+        tiebreak = {
+            'winnerUserId':       winner_id,
+            'contestedPlayerId':  my_pick,
+            'tiebreakIndex':      tiebreak_count,
+        }
         resolved = {winner_id: winner_player, loser_id: loser_player}
     else:
         # Distinct picks — each gets what they chose.
@@ -491,12 +508,18 @@ def submit_draft_pick(room_code: str, user_id: str, pair_index: int, player_id: 
     is_last = next_idx >= len(pairs)
     new_status = 'complete' if is_last else 'active'
 
+    # Increment the tiebreak counter only when a tiebreak actually fired —
+    # so the alternation in `_resolve_tiebreak` is across REAL ties, not all
+    # pairs. Off-by-one fairness over the match lifecycle.
+    new_tiebreak_count = int(draft.get('tiebreakCount', 0)) + (1 if tiebreak else 0)
+
     draft = {
         **draft,
         'currentPairIndex': next_idx,
         'pendingChoices':   {},
         'picks':            picks_per_user,
         'status':           new_status,
+        'tiebreakCount':    new_tiebreak_count,
         **({'completedAt': int(time.time() * 1000)} if is_last else {}),
     }
     rooms_table.update_item(
