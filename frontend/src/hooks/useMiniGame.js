@@ -236,6 +236,7 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
           durationMs:       msg.durationMs ?? 8000,
           ownershipContext: msg.ownershipContext || {},
           relatedEventId:   msg.relatedEventId,
+          source:           msg.source || null,  // 'ai-director' when from Director Lambda
           status:           msg.relatedEventId ? 'pending' : 'active',
         }
       })

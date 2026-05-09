@@ -78,6 +78,18 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       // single-purpose for state sync; mini-game UI lives elsewhere.
       onMinigameMessage?.(msg)
       logger.info('useRoom', `WS ${msg.type}`, msg)
+    } else if (msg.type === 'commentary_update') {
+      // AI Match Director commentary — overwrite the previous line so only
+      // the latest is shown. <DirectorCommentary> handles fade-out timing.
+      setRoom(prev => prev ? {
+        ...prev,
+        commentary: {
+          text:           msg.text,
+          relatedEventId: msg.relatedEventId,
+          ts:             msg.createdAtMs ?? Date.now(),
+        },
+      } : prev)
+      logger.info('useRoom', 'WS commentary_update', msg)
     } else if (
       msg.type === 'draft_state_update' ||
       msg.type === 'draft_started' ||

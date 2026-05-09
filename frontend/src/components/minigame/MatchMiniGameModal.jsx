@@ -38,7 +38,17 @@ export default function MatchMiniGameModal({ state, onSubmit, onClose }) {
       >
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-bold tracking-widest text-emerald-400">MINI-GAME</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[10px] font-bold tracking-widest text-emerald-400">MINI-GAME</p>
+              {state.source === 'ai-director' && (
+                <span
+                  className="text-[9px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-full"
+                  style={{ background: 'rgba(168, 85, 247, 0.25)', color: '#d8b4fe' }}
+                >
+                  🎙️ AI Director
+                </span>
+              )}
+            </div>
             <h2 className="text-white font-extrabold text-lg leading-tight mt-0.5 truncate">{state.title}</h2>
             {state.prompt && (
               <p className="text-gray-400 text-xs mt-1 leading-snug">{state.prompt}</p>

@@ -1,4 +1,5 @@
 import EventItem from './EventItem'
+import DirectorCommentary from './DirectorCommentary'
 import { sortMatchEventsNewestFirst, gameTimeToSeconds } from '../../utils/matchEvents'
 
 // Events surfaced in the live feed list. Goal/card/saved_shot drive scoring;
@@ -15,7 +16,7 @@ const FEED_EVENT_TYPES = new Set([
   'fulltime',
 ])
 
-export default function MatchFeed({ events }) {
+export default function MatchFeed({ events, commentary }) {
   const filtered = (events ?? []).filter(e => FEED_EVENT_TYPES.has(e.eventType))
   const ordered  = sortMatchEventsNewestFirst(filtered)
 
@@ -25,6 +26,7 @@ export default function MatchFeed({ events }) {
 
   return (
     <div className="px-4 pt-4">
+      <DirectorCommentary commentary={commentary} />
       <p className="text-[11px] font-semibold tracking-widest uppercase text-gray-600 mb-3 px-1">
         Match Events
       </p>
