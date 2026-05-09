@@ -16,7 +16,7 @@ const FEED_EVENT_TYPES = new Set([
   'fulltime',
 ])
 
-export default function MatchFeed({ events, commentary }) {
+export default function MatchFeed({ events, commentaryStack }) {
   const filtered = (events ?? []).filter(e => FEED_EVENT_TYPES.has(e.eventType))
   const ordered  = sortMatchEventsNewestFirst(filtered)
 
@@ -26,7 +26,7 @@ export default function MatchFeed({ events, commentary }) {
 
   return (
     <div className="px-4 pt-4">
-      <DirectorCommentary commentary={commentary} />
+      <DirectorCommentary stack={commentaryStack} />
       <p className="text-[11px] font-semibold tracking-widest uppercase text-gray-600 mb-3 px-1">
         Match Events
       </p>
