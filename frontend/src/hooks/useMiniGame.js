@@ -148,7 +148,23 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
         _resolve(null)
       }
     }, remaining + 200)  // small buffer
-    return () => clearTimeout(expireTimerRef.current)
+
+    // Hard fail-safe: regardless of submit/auto-expire, never let the modal
+    // sit in 'active' for more than durationMs + 6s. Covers the edge case
+    // where neither submit nor auto-expire ran (state stuck somehow), or
+    // the WS minigame_result broadcast got dropped before reaching us.
+    const lockedGameId = state.gameId
+    const hardTimeoutMs = state.startedAtMs + state.durationMs + 6000 - Date.now()
+    const hardTimer = setTimeout(() => {
+      setState(s => s && s.gameId === lockedGameId && s.status === 'active'
+        ? { ...s, status: 'resolved' }
+        : s)
+    }, Math.max(0, hardTimeoutMs))
+
+    return () => {
+      clearTimeout(expireTimerRef.current)
+      clearTimeout(hardTimer)
+    }
   }, [state?.gameId, state?.status])
 
   // Solo-mode bot: when only one human is in the room, the bot generates a
@@ -190,6 +206,19 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
         result:   { userPayload, botPayload },
       }).catch(err => logger.warn('useMiniGame', 'postMinigameScore failed', err))
     }
+
+    // Optimistic local resolution — flip the modal to 'resolved' immediately
+    // so the user sees their own delta even if the backend's WS broadcast
+    // gets dropped or delayed. When the real broadcast arrives, the existing
+    // minigame_result handler merges in the opponent's delta and resets the
+    // dismiss timer, so the panel naturally upgrades.
+    const lockedGameId = state.gameId
+    setState(s => s && s.gameId === lockedGameId ? { ...s, status: 'resolved', deltas } : s)
+    if (resultDismissTimerRef.current) clearTimeout(resultDismissTimerRef.current)
+    resultDismissTimerRef.current = setTimeout(
+      () => setState(s => s && s.gameId === lockedGameId ? null : s),
+      4500,
+    )
   }, [state, currentUserId, room?.roomCode, room?.members])
 
   const _resolve = useCallback((userPayload) => {

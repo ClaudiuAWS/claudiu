@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react'
 export default function OffsideReflex({ config, startedAtMs, durationMs, onSubmit }) {
   const [submitted, setSubmitted] = useState(false)
   const [tapAtMs, setTapAtMs] = useState(null)
+  const [expired, setExpired]   = useState(false)  // dot reached the end without a tap
   const startMs = useRef(startedAtMs ?? Date.now())
   startMs.current = startedAtMs ?? startMs.current
 
@@ -47,7 +48,15 @@ export default function OffsideReflex({ config, startedAtMs, durationMs, onSubmi
         x = 60 + (95 - 60) * ((t - moment) / (1 - moment))
       }
       setAttackerX(x)
-      if (t < 1) raf = requestAnimationFrame(tick)
+      if (t < 1) {
+        raf = requestAnimationFrame(tick)
+      } else if (!submitted) {
+        // Animation reached the end and the user didn't tap. Mark expired
+        // so the button switches to a disabled "Too slow" state — without
+        // this, users keep staring at the frozen dot and tap many seconds
+        // late, recording bogus deltas like '11498ms late' on an 8s game.
+        setExpired(true)
+      }
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
@@ -102,17 +111,19 @@ export default function OffsideReflex({ config, startedAtMs, durationMs, onSubmi
         </div>
       </div>
 
-      {/* Tap button */}
+      {/* Tap button — three states: live, tapped, expired (too slow) */}
       <button
         onClick={handleTap}
-        disabled={submitted}
+        disabled={submitted || expired}
         className={`w-full mt-4 py-4 rounded-xl text-lg font-extrabold tracking-widest transition ${
           submitted
             ? 'bg-gray-700 text-gray-400 cursor-default'
-            : 'bg-yellow-500 hover:bg-yellow-400 text-black shadow-lg active:scale-95'
+            : expired
+              ? 'bg-red-900/40 text-red-400 border border-red-500/30 cursor-default'
+              : 'bg-yellow-500 hover:bg-yellow-400 text-black shadow-lg active:scale-95'
         }`}
       >
-        {submitted ? 'TAPPED ✓' : 'TAP NOW'}
+        {submitted ? 'TAPPED ✓' : expired ? '⏰ TOO SLOW' : 'TAP NOW'}
       </button>
 
       {/* Feedback after tap */}
@@ -126,6 +137,14 @@ export default function OffsideReflex({ config, startedAtMs, durationMs, onSubmi
             </span>
           </p>
           <p className="text-xs text-gray-500 mt-1">Waiting for opponent…</p>
+        </div>
+      )}
+
+      {/* Feedback when window closed without a tap */}
+      {expired && !submitted && (
+        <div className="mt-3 text-center">
+          <p className="text-xs text-red-400/80">You missed the window</p>
+          <p className="text-[11px] text-gray-500 mt-1">Resolving with no points…</p>
         </div>
       )}
     </div>
