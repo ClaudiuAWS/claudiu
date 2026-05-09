@@ -17,7 +17,7 @@ export default function DirectorCommentary({ stack }) {
 
   return (
     <div
-      className="fixed inset-x-0 top-2 z-40 flex flex-col items-center gap-2 px-3 pointer-events-none"
+      className="fixed inset-x-0 top-20 z-[45] flex flex-col items-center gap-2 px-3 pointer-events-none"
       aria-live="polite"
     >
       {stack.map(entry => (
