@@ -5,6 +5,8 @@ import { useRoom } from '../hooks/useRoom'
 import { useChat } from '../hooks/useChat'
 import { useAuth } from '../hooks/useAuth'
 import { matchesApi, roomsApi } from '../services/api'
+import { logger } from '../services/logger'
+import toast from 'react-hot-toast'
 import Scoreboard from '../components/match/Scoreboard'
 import MatchFeed from '../components/match/MatchFeed'
 import ChatPanel from '../components/match/ChatPanel'
@@ -109,12 +111,20 @@ export default function MatchPage() {
   }, [awayTeamPlayers, awayLocalPicks, playerMap])
 
   // Reaction tap on a nutmeg / spectacular_play badge → +2 backend bonus.
-  // Fire-and-forget; the score_update WS message that follows will surface
-  // the actual delta toast via useRoom. Failure is silent (e.g. duplicate
-  // tap, network blip) since the user already saw the local "GOT IT!" state.
+  // The score_update WS that follows surfaces the actual delta toast via
+  // useRoom. Errors used to be silently swallowed here, which masked a
+  // real prod bug (missing API Gateway route returning 403) — now we log
+  // and surface a small toast on failure so misconfigurations don't hide.
   const handleReactTap = useCallback((event) => {
     if (!room?.roomCode || !event?.eventId) return
-    roomsApi.react(room.roomCode, event.eventId, event.eventType).catch(() => {})
+    roomsApi.react(room.roomCode, event.eventId, event.eventType)
+      .catch(err => {
+        logger.warn('MatchPage', 'react tap failed', err)
+        const msg = String(err?.message || '').toLowerCase()
+        // Duplicate is expected after a re-tap and not user-actionable.
+        if (msg.includes('duplicate')) return
+        toast.error('Reaction did not register', { duration: 2500 })
+      })
   }, [room?.roomCode])
 
   if (loading || roomLoading) return <LoadingSpinner />

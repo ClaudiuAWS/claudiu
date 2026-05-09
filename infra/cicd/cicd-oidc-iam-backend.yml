@@ -35,6 +35,57 @@ Resources:
                                           Resource:
                                                   - !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-*
 
+                                        # CloudFormation deploys for infra/compute/** stacks.
+                                        # Scoped to the api-gateway-claudiu stack — extend the
+                                        # resource list if other stacks should auto-deploy.
+                                        - Sid: CloudFormationDeploy
+                                          Effect: Allow
+                                          Action:
+                                                  - cloudformation:CreateChangeSet
+                                                  - cloudformation:DescribeChangeSet
+                                                  - cloudformation:ExecuteChangeSet
+                                                  - cloudformation:DeleteChangeSet
+                                                  - cloudformation:DescribeStacks
+                                                  - cloudformation:DescribeStackEvents
+                                                  - cloudformation:GetTemplate
+                                                  - cloudformation:GetTemplateSummary
+                                                  - cloudformation:ListStackResources
+                                                  - cloudformation:UpdateStack
+                                                  - cloudformation:ValidateTemplate
+                                          Resource:
+                                                  - !Sub arn:aws:cloudformation:eu-central-1:${AWS::AccountId}:stack/api-gateway-claudiu/*
+
+                                        # API Gateway resources are managed by the
+                                        # api-gateway-claudiu stack. Wildcard scope is
+                                        # required because the API ID is allocated by
+                                        # CFN itself; the stack scope above bounds the
+                                        # actual changes.
+                                        - Sid: ApiGatewayManage
+                                          Effect: Allow
+                                          Action:
+                                                  - apigateway:GET
+                                                  - apigateway:POST
+                                                  - apigateway:PUT
+                                                  - apigateway:PATCH
+                                                  - apigateway:DELETE
+                                                  - apigateway:TagResource
+                                                  - apigateway:UntagResource
+                                          Resource:
+                                                  - !Sub arn:aws:apigateway:eu-central-1::/*
+
+                                        # api-gateway.yml defines AWS::Lambda::Permission
+                                        # resources binding API Gateway to the rooms /
+                                        # matches / replay-emitter Lambdas. CFN needs
+                                        # to add/remove these as routes change.
+                                        - Sid: LambdaInvokePermissions
+                                          Effect: Allow
+                                          Action:
+                                                  - lambda:AddPermission
+                                                  - lambda:RemovePermission
+                                                  - lambda:GetPolicy
+                                          Resource:
+                                                  - !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-*
+
 Outputs:
         RoleArn:
                 Value: !GetAtt GitHubActionsBackendRole.Arn
