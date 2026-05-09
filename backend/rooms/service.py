@@ -359,12 +359,19 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
     if len(ready) >= 2 and len(members) >= 2:
         # Both users ready — generate pairs and start the draft.
         pairs, auto_picks = _generate_draft_pairs(room['matchId'])
-        # Auto-picks all go to the host (matches the existing solo-mode
-        # behaviour where unpaired-zone players land in `myPicks`). Spread
-        # across both users in a future iteration if needed.
+        # Auto-picks come from odd-numbered zones (e.g. 7 CBs → 3 pairs + 1
+        # leftover). Distribute them ALTERNATELY between the two users so the
+        # final squad sizes are balanced (equal if auto-picks count is even,
+        # off-by-one if odd). Shuffle first so the per-zone bias (GK auto-pick
+        # always going to the same user, etc.) doesn't materialise.
         host_id = room.get('hostUserId') or members[0]['userId']
-        picks_per_user = {m['userId']: [] for m in members}
-        picks_per_user[host_id].extend(auto_picks)
+        member_ids = [m['userId'] for m in members]
+        ordered = sorted(member_ids, key=lambda mid: 0 if mid == host_id else 1)
+        picks_per_user = {mid: [] for mid in member_ids}
+        shuffled_auto = list(auto_picks)
+        random.shuffle(shuffled_auto)
+        for i, pid in enumerate(shuffled_auto):
+            picks_per_user[ordered[i % len(ordered)]].append(pid)
 
         draft = {
             'status':            'active',
