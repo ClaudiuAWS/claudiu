@@ -14,11 +14,11 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
   const [room, setRoom] = useState(initialRoom)
   const [loading, setLoading] = useState(initialRoom ? false : true)
 
-  // Restore room from localStorage on mount (skip if we already have room from nav state)
+  // Restore room from sessionStorage on mount (skip if we already have room from nav state)
   useEffect(() => {
     if (initialRoom) return
 
-    const savedCode = localStorage.getItem(ROOM_CODE_KEY)
+    const savedCode = sessionStorage.getItem(ROOM_CODE_KEY)
     if (!savedCode) {
       setLoading(false)
       return
@@ -36,7 +36,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       .catch(err => {
         if (!controller.signal.aborted) {
           logger.warn('useRoom', 'Saved room gone, clearing', err)
-          localStorage.removeItem(ROOM_CODE_KEY)
+          sessionStorage.removeItem(ROOM_CODE_KEY)
         }
       })
       .finally(() => {
@@ -52,7 +52,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       setRoom(msg.room)
       logger.success('useRoom', 'WS room_update', msg.room)
     } else if (msg.type === 'room_closed') {
-      localStorage.removeItem(ROOM_CODE_KEY)
+      sessionStorage.removeItem(ROOM_CODE_KEY)
       setRoom(null)
       toast('Room was closed')
       logger.info('useRoom', 'WS room_closed')
@@ -88,7 +88,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     try {
       const data = await roomsApi.create(matchId)
       setRoom(data)
-      localStorage.setItem(ROOM_CODE_KEY, data.roomCode)
+      sessionStorage.setItem(ROOM_CODE_KEY, data.roomCode)
       logger.success('useRoom', 'Room created', data)
       toast.success('Room created!')
       return data
@@ -106,7 +106,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     try {
       const data = await roomsApi.join(roomCode)
       setRoom(data)
-      localStorage.setItem(ROOM_CODE_KEY, data.roomCode)
+      sessionStorage.setItem(ROOM_CODE_KEY, data.roomCode)
       logger.success('useRoom', 'Room joined', data)
       toast.success('Joined room!')
       return data
@@ -125,7 +125,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     setLoading(true)
     try {
       const result = await roomsApi.leave(room.roomCode)
-      localStorage.removeItem(ROOM_CODE_KEY)
+      sessionStorage.removeItem(ROOM_CODE_KEY)
       setRoom(null)
 
       if (result.deleted) {
@@ -137,7 +137,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       }
     } catch (err) {
       logger.error('useRoom', 'Failed to leave room', err)
-      localStorage.removeItem(ROOM_CODE_KEY)
+      sessionStorage.removeItem(ROOM_CODE_KEY)
       setRoom(null)
       toast.error(err.message || 'Failed to leave room')
     } finally {

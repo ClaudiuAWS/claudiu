@@ -48,7 +48,7 @@ export default function MatchPage() {
       .catch(() => {/* silently ignore — popup just shows less info */})
   }, [matchId])
 
-  // Enrich teamSelectionDetails: localStorage draft picks (imageUrl) → playerMap (stats) → details (position/shirt)
+  // Enrich teamSelectionDetails: sessionStorage draft picks (imageUrl) → playerMap (stats) → details (position/shirt)
   const enrichPlayers = (details, localPicks = []) => {
     if (!Array.isArray(details) || !details.length) return []
     const localMap = {}
@@ -62,14 +62,14 @@ export default function MatchPage() {
 
   const homeLocalPicks = useMemo(() => {
     try {
-      const s = localStorage.getItem(`draft_my_picks_${room?.roomCode}`)
+      const s = sessionStorage.getItem(`draft_my_picks_${room?.roomCode}`)
       return s ? JSON.parse(s) : []
     } catch { return [] }
   }, [room?.roomCode])
 
   const awayLocalPicks = useMemo(() => {
     try {
-      const s = localStorage.getItem(`draft_opponent_picks_${room?.roomCode}`)
+      const s = sessionStorage.getItem(`draft_opponent_picks_${room?.roomCode}`)
       return s ? JSON.parse(s) : []
     } catch { return [] }
   }, [room?.roomCode])
@@ -83,7 +83,7 @@ export default function MatchPage() {
     if (member1?.teamSelectionDetails?.length) {
       return enrichPlayers(member1.teamSelectionDetails, awayLocalPicks)
     }
-    // Fallback: full draft picks from localStorage
+    // Fallback: full draft picks from sessionStorage
     if (awayLocalPicks.length) return awayLocalPicks.map(p => ({ ...p, ...playerMap[p.playerId] }))
     return []
   }, [room, playerMap, awayLocalPicks])
