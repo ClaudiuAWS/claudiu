@@ -118,22 +118,35 @@ export default function MatchMiniGameModal({ state, onSubmit, onClose }) {
 
 function ResultBanner({ state, onClose }) {
   const deltas = state.deltas || []
+  const totalAwarded = deltas.reduce((acc, d) => acc + (Number(d.delta) || 0), 0)
   return (
     <div className="py-2">
       <p className="text-emerald-400 text-xs font-bold tracking-widest mb-2">RESULT</p>
       {deltas.length === 0 ? (
         <p className="text-gray-400 text-sm">No points awarded this round.</p>
       ) : (
-        <div className="space-y-1.5">
-          {deltas.map((d, i) => (
-            <div key={d.userId || i} className="flex items-baseline justify-between text-sm">
-              <span className="text-gray-300 truncate flex-1 mr-3">{d.displayName || d.userId}</span>
-              <span className={`font-black tabular-nums ${d.delta > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {d.delta > 0 ? '+' : ''}{d.delta}
-              </span>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="space-y-1.5">
+            {deltas.map((d, i) => {
+              const delta = Number(d.delta) || 0
+              // Render every participant, even 0-point taps. Without this,
+              // a user who tapped outside the bracket sees an empty result
+              // and can't tell whether their opponent scored.
+              const colorCls = delta > 0 ? 'text-emerald-400' : delta < 0 ? 'text-red-400' : 'text-gray-500'
+              const sign     = delta > 0 ? '+' : delta < 0 ? '−' : ''
+              const value    = delta === 0 ? '0' : Math.abs(delta)
+              return (
+                <div key={d.userId || i} className="flex items-baseline justify-between text-sm">
+                  <span className="text-gray-300 truncate flex-1 mr-3">{d.displayName || d.userId}</span>
+                  <span className={`font-black tabular-nums ${colorCls}`}>{sign}{value}</span>
+                </div>
+              )
+            })}
+          </div>
+          {totalAwarded === 0 && (
+            <p className="text-gray-500 text-xs mt-2">Nobody hit the bracket this round.</p>
+          )}
+        </>
       )}
       <button
         onClick={onClose}
