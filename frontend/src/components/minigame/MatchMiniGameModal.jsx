@@ -8,7 +8,7 @@ import OffsideReflex from './OffsideReflex'
  * Game-type-specific UIs are mounted via the switch below. Add a new clause
  * + import to support a new mini-game vertical.
  */
-export default function MatchMiniGameModal({ state, onSubmit, onClose }) {
+export default function MatchMiniGameModal({ state, onSubmit, onClose, playerMap = {} }) {
   const [now, setNow] = useState(Date.now())
   const [showReasoning, setShowReasoning] = useState(false)
 
@@ -95,6 +95,7 @@ export default function MatchMiniGameModal({ state, onSubmit, onClose }) {
             startedAtMs={state.startedAtMs}
             durationMs={state.durationMs}
             onSubmit={onSubmit}
+            offsidePlayer={playerMap[state.ownershipContext?.playerId] || null}
           />
         )}
 
