@@ -74,6 +74,14 @@ export default function OffsideReflex({ config, startedAtMs, durationMs, onSubmi
   const msToMoment = Math.abs(offsideMomentMs - elapsed)
   const tension = Math.max(0, 1 - msToMoment / 800) // 0..1 in the last 800ms before/after
 
+  // Fuse: 3 dots lit when we're >1500ms from the moment, 2 at 1500, 1 at 750, 0 at the line.
+  const msBefore = offsideMomentMs - elapsed
+  const fuseRemaining =
+    msBefore >= 1500 ? 3 :
+    msBefore >=  750 ? 2 :
+    msBefore >=    0 ? 1 :
+                       0
+
   const handleTap = () => {
     if (submitted || expired) return
     const t = Date.now() - startMs.current
@@ -152,11 +160,19 @@ export default function OffsideReflex({ config, startedAtMs, durationMs, onSubmi
           }}
         />
 
-        {/* Defender silhouette */}
-        <DefenderSilhouette />
-
         {/* Attacker runner */}
-        <Runner x={attackerX} imageUrl={offsidePlayer?.imageUrl} running={!submitted && !expired} />
+        <Runner
+          x={attackerX}
+          imageUrl={offsidePlayer?.imageUrl}
+          running={!submitted && !expired}
+          fuseRemaining={submitted || expired ? null : fuseRemaining}
+        />
+
+        {/* Linesman flag — up for a hit, crossed/low for a miss */}
+        {submitted && bracket && (
+          <LinesmanFlag verdict={bracket === 'miss' ? 'miss' : 'good'} />
+        )}
+        {expired && <LinesmanFlag verdict="miss" />}
 
         {/* Tap stamp: vertical tick at user's tap x + at the ideal moment */}
         {submitted && tapAtMs != null && (
@@ -238,95 +254,90 @@ export default function OffsideReflex({ config, startedAtMs, durationMs, onSubmi
 
 // -------- helpers --------
 
-function DefenderSilhouette() {
-  return (
-    <svg
-      className="absolute"
-      style={{ left: 'calc(60% - 8px)', bottom: '6px', opacity: 0.55 }}
-      width="16" height="36" viewBox="0 0 16 36" fill="none"
-    >
-      {/* head */}
-      <circle cx="8" cy="5" r="3.5" fill="#fff" />
-      {/* body */}
-      <path d="M3 11 Q8 8 13 11 L12 23 Q8 22 4 23 Z" fill="#fff" />
-      {/* legs */}
-      <rect x="4" y="22" width="3" height="12" rx="1.2" fill="#fff" />
-      <rect x="9" y="22" width="3" height="12" rx="1.2" fill="#fff" />
-    </svg>
-  )
-}
-
-function Runner({ x, imageUrl, running }) {
+function Runner({ x, imageUrl, running, fuseRemaining }) {
+  // fuseRemaining is 0..3 (dots still lit). null = hide fuse entirely (post-tap).
+  const showFuse = fuseRemaining != null && running
   return (
     <div
       className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
       style={{ left: `${x}%`, transition: 'none' }}
     >
-      <div className={`relative ${running ? 'runner-bob' : ''}`} style={{ width: 28, height: 36 }}>
-        {/* Head — player photo if we have it, else yellow ball fallback */}
+      {/* Fuse dots */}
+      {showFuse && (
+        <div className="absolute left-1/2 -translate-x-1/2 -top-5 flex items-center gap-1">
+          {[0, 1, 2].map(i => {
+            const lit = i < fuseRemaining
+            return (
+              <div
+                key={i}
+                className="rounded-full transition-all duration-150"
+                style={{
+                  width: lit ? 5 : 3,
+                  height: lit ? 5 : 3,
+                  background: lit ? '#fde047' : 'rgba(255,255,255,0.18)',
+                  boxShadow: lit ? '0 0 6px rgba(253,224,71,0.85)' : 'none',
+                }}
+              />
+            )
+          })}
+        </div>
+      )}
+
+      <div className={running ? 'runner-bob' : ''}>
         {imageUrl ? (
           <div
-            className="absolute left-1/2 -translate-x-1/2"
+            className="rounded-full overflow-hidden"
             style={{
-              top: 0,
-              width: 18,
-              height: 18,
-              borderRadius: '50%',
-              overflow: 'hidden',
+              width: 26,
+              height: 26,
               background: '#1f2937',
-              boxShadow: '0 0 0 2px #fde047, 0 0 10px rgba(253,224,71,0.75)',
+              boxShadow: '0 0 0 2px #fde047, 0 0 14px rgba(253,224,71,0.9)',
             }}
           >
             <img src={imageUrl} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
           </div>
         ) : (
           <div
-            className="absolute left-1/2 -translate-x-1/2"
+            className="rounded-full"
             style={{
-              top: 2,
-              width: 16, height: 16,
-              borderRadius: '50%',
+              width: 20,
+              height: 20,
               background: '#fbbf24',
-              boxShadow: '0 0 12px rgba(251,191,36,0.9)',
+              boxShadow: '0 0 14px rgba(251,191,36,0.95)',
             }}
           />
         )}
-        {/* Body */}
-        <div
-          className="absolute left-1/2 -translate-x-1/2"
-          style={{
-            top: 16,
-            width: 12,
-            height: 12,
-            background: '#fde047',
-            borderRadius: '4px 4px 2px 2px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-          }}
-        />
-        {/* Legs */}
-        <div
-          className={`absolute ${running ? 'runner-leg-l' : ''}`}
-          style={{
-            left: 'calc(50% - 4px)',
-            top: 26,
-            width: 3,
-            height: 10,
-            background: '#fde047',
-            borderRadius: 1,
-          }}
-        />
-        <div
-          className={`absolute ${running ? 'runner-leg-r' : ''}`}
-          style={{
-            left: 'calc(50% + 1px)',
-            top: 26,
-            width: 3,
-            height: 10,
-            background: '#fde047',
-            borderRadius: 1,
-          }}
-        />
       </div>
+    </div>
+  )
+}
+
+// Linesman flag — raised for an in-bracket tap, lowered (crossed through) for miss/expired.
+function LinesmanFlag({ verdict }) {
+  // verdict: 'good' | 'miss'
+  const isGood = verdict === 'good'
+  return (
+    <div className="absolute top-1 right-2 pointer-events-none flag-pop">
+      <svg width="34" height="44" viewBox="0 0 34 44" fill="none">
+        {/* pole */}
+        <rect x="15" y="4" width="2" height="36" rx="1" fill="#e5e7eb" />
+        {/* flag */}
+        <path
+          d={isGood ? 'M17 6 L33 10 L17 16 Z' : 'M17 22 L29 26 L17 30 Z'}
+          fill={isGood ? '#fde047' : '#ef4444'}
+          style={{
+            filter: `drop-shadow(0 1px 2px rgba(0,0,0,0.4))`,
+          }}
+        />
+        {isGood && (
+          <path
+            d="M17 6 L33 10 L17 16 Z"
+            fill="none"
+            stroke="rgba(255,255,255,0.35)"
+            strokeWidth="0.5"
+          />
+        )}
+      </svg>
     </div>
   )
 }
