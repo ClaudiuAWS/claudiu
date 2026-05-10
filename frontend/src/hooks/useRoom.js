@@ -73,16 +73,17 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     } else if (msg.type === 'chat_message') {
       onChatMessage?.(msg)
     } else if (msg.type === 'score_update') {
-      // Reconcile via max(leaderboard_absolute, local + delta).
+      // Reconcile to the leaderboard absolute, with a regression guard.
       //
-      // Why this hybrid: the leaderboard absolute is authoritative if the
-      // backend wrote correctly, and lets us catch up on any score_update
-      // we missed (e.g. before WS subscribed). But a stale eventually-
-      // consistent backend read (despite our recent fixes) can occasionally
-      // broadcast a regressed leaderboard. Taking the max protects against
-      // that — the score never moves backward unless our own delta says so.
-      // Yellow/red cards still subtract correctly because their delta IS
-      // negative and the leaderboard agrees.
+      // Optimistic frontend scoring already bumped local on event reveal,
+      // so when the matching score_update arrives the leaderboard absolute
+      // == local. Just trust it. Two edge cases:
+      //   1. Catch-up: local is lower because an earlier broadcast was
+      //      missed → leaderboard > local → take leaderboard.
+      //   2. Stale broadcast: backend read pre-write, broadcast value is
+      //      lower than what local already counted. Don't regress UNLESS
+      //      the delta is genuinely negative (yellow/red card), in which
+      //      case local moving down IS correct.
       const scoreMap = Object.fromEntries(
         (msg.leaderboard || []).map(e => [e.userId, Number(e.score) || 0])
       )
@@ -92,33 +93,25 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       setRoom(prev => prev ? {
         ...prev,
         members: prev.members.map(m => {
-          const localBase     = Number(m.score) || 0
-          const delta         = deltaByUid[m.userId] || 0
-          const expectedAfter = localBase + delta
-          const target        = scoreMap[m.userId]
-          if (target === undefined) return { ...m, score: expectedAfter }
-          // Leaderboard is the truth UNLESS it would regress vs. our own
-          // bookkeeping (stale broadcast slipped through). In that case
-          // trust local + delta — we know what we've already counted.
-          return { ...m, score: target >= expectedAfter ? target : expectedAfter }
+          const localBase = Number(m.score) || 0
+          const target    = scoreMap[m.userId]
+          if (target === undefined) return m
+          const delta     = deltaByUid[m.userId] || 0
+          const allowDecrease = delta < 0 // legitimate negative event
+          if (target >= localBase || allowDecrease) {
+            return { ...m, score: target }
+          }
+          // Regression detected — keep local
+          return m
         }),
       } : prev)
 
-      // Show a per-event toast for the current user's own deltas. We rely on
-      // the backend to populate `playerName` + `reason` so the message reads
-      // like "+6 — Olise scored for your squad". Mini-game results have their
-      // own modal already so we suppress them here to avoid double-surfacing.
-      const myChange = (msg.changes || []).find(c => c.userId === currentUserId && c.delta !== 0)
-      // Mini-game deltas already surface in the modal's result panel; skip toast.
-      if (myChange && myChange.source !== 'minigame') {
-        const sign  = myChange.delta > 0 ? '+' : '−'
-        const value = Math.abs(myChange.delta)
-        const who   = myChange.playerName || ''
-        const verb  = myChange.reason || (myChange.delta > 0 ? 'awarded' : 'penalty')
-        const text  = who ? `${sign}${value} — ${who} ${verb}` : `${sign}${value} — ${verb}`
-        const icon  = myChange.delta > 0 ? '⚽' : '🟨'
-        toast(text, { icon, duration: 3000 })
-      }
+      // Per-event toast intentionally NOT fired here. Optimistic frontend
+      // scoring (applyOptimisticDeltas in useMatch) already surfaces a toast
+      // the moment the event reveals — duplicating it on the WS round-trip
+      // gave users two notifications for the same event. The reaction-tap
+      // path still posts its own confirmation toast at tap time, and
+      // mini-game results show in the modal panel.
       logger.info('useRoom', 'WS score_update', msg.changes)
     } else if (msg.type === 'minigame_start' || msg.type === 'minigame_result' || msg.type === 'minigame_expired') {
       // Mini-game lifecycle messages — forward to the dedicated useMiniGame
