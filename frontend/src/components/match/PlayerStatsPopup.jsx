@@ -2,8 +2,18 @@ import { formatFootballTime, gameTimeToSeconds } from '../../utils/matchEvents'
 import { POS_TO_TYPE } from '../../utils/formationPositions'
 
 // ─── Points rules ─────────────────────────────────────────────────────────────
-// Mirror of the values applied server-side in event-processor/service.py.
-const POINTS = { goal: 5, assist: 3, yellow: -1, red: -3, save: 3 }
+// Mirror of backend/event-processor/service.py::_calculate_member_changes.
+// Goal value depends on the SCORER's FPL bucket (GK/DEF/MID/FWD); other
+// events have flat values. Keep these in sync if the backend rules change.
+const GOAL_BY_FPL_BUCKET = { GK: 10, DEF: 6, MID: 5, FWD: 4 }
+const POINTS = { assist: 3, save: 2, concede: -1, yellow: -1, red: -3 }
+
+// Map our 5-tier popup group → backend's 4-tier FPL bucket. The popup splits
+// midfielders into CDM/CAM for layout reasons; the scoring rules only know
+// MID. FWD stays FWD.
+const POPUP_GROUP_TO_FPL = { GK: 'GK', DEF: 'DEF', CDM: 'MID', CAM: 'MID', FWD: 'FWD' }
+const fplBucket = (popupGroup) => POPUP_GROUP_TO_FPL[popupGroup] ?? 'MID'
+const goalValueFor = (popupGroup) => GOAL_BY_FPL_BUCKET[fplBucket(popupGroup)]
 
 // 5-tier group colour config (ATM renamed to CAM)
 const GROUP_ACCENT = {
@@ -43,16 +53,19 @@ const STAT_CONFIG = {
 }
 
 // ─── Event matching ────────────────────────────────────────────────────────────
-function getPlayerMatchEvents(player, events, htStoredSec) {
+function getPlayerMatchEvents(player, events, htStoredSec, popupGroup) {
   if (!player || !events?.length) return []
   const pid = player.playerId
+  const isGK = popupGroup === 'GK'
   const result = []
 
   for (const e of events) {
     if (e.eventType === 'goal') {
       if (e.scoringPlayerId === pid) {
+        // Goal value uses the SCORER's bucket — i.e. this player's bucket,
+        // since this branch fires when the player IS the scorer.
         result.push({
-          type: 'goal', icon: '⚽', label: 'Goal', points: POINTS.goal,
+          type: 'goal', icon: '⚽', label: 'Goal', points: goalValueFor(popupGroup),
           time: formatFootballTime(gameTimeToSeconds(e.gameTime), htStoredSec),
           detail: e.isPenalty ? 'Penalty' : null,
           eventId: e.eventId,
@@ -63,6 +76,16 @@ function getPlayerMatchEvents(player, events, htStoredSec) {
           time: formatFootballTime(gameTimeToSeconds(e.gameTime), htStoredSec),
           detail: e.scoringDisplay || null,
           eventId: e.eventId + '_assist',
+        })
+      } else if (isGK && e.scoringTeamRole && e.scoringTeamRole !== player.teamRole) {
+        // GK on the conceding side — −1 per opposing-team goal. Without
+        // this row the user sees +18 from saves but doesn't see why their
+        // leaderboard score is lower (concedes silently apply on backend).
+        result.push({
+          type: 'concede', icon: '🥅', label: 'Conceded', points: POINTS.concede,
+          time: formatFootballTime(gameTimeToSeconds(e.gameTime), htStoredSec),
+          detail: e.scoringDisplay ? `vs ${e.scoringDisplay}` : null,
+          eventId: e.eventId + '_concede',
         })
       }
     } else if (e.eventType === 'saved_shot' && e.goalKeeperId === pid) {
@@ -158,6 +181,8 @@ function EventTimeline({ events }) {
   const typeColor = {
     goal:    { bg: 'bg-green-500/20', border: 'border-green-500/30', text: 'text-green-300', pts: 'text-green-400' },
     assist:  { bg: 'bg-blue-500/20',  border: 'border-blue-500/30',  text: 'text-blue-300',  pts: 'text-blue-400' },
+    save:    { bg: 'bg-purple-500/20',border: 'border-purple-500/30',text: 'text-purple-300',pts: 'text-purple-400' },
+    concede: { bg: 'bg-red-500/10',   border: 'border-red-500/20',   text: 'text-red-300/80',pts: 'text-red-400' },
     yellow:  { bg: 'bg-yellow-500/20',border: 'border-yellow-500/30',text: 'text-yellow-300',pts: 'text-yellow-400' },
     red:     { bg: 'bg-red-600/20',   border: 'border-red-600/30',   text: 'text-red-300',   pts: 'text-red-400' },
     sub_in:  { bg: 'bg-emerald-500/20',border:'border-emerald-500/30',text:'text-emerald-300',pts:'text-gray-500' },
@@ -215,7 +240,7 @@ export function PlayerStatsPopup({ player, isOpen, onClose, events = [], htStore
   const teamColor  = teamRole === 'home' ? '#DC2626' : '#1D4ED8'
   const teamRing   = teamRole === 'home' ? 'rgba(220,38,38,0.25)' : 'rgba(29,78,216,0.25)'
 
-  const playerEvents = getPlayerMatchEvents(player, events, htStoredSec)
+  const playerEvents = getPlayerMatchEvents(player, events, htStoredSec, group)
   const totalPoints  = playerEvents.reduce((s, e) => s + e.points, 0)
   // Live overrides on top of the season stats: count match events involving
   // this player so the card reflects what's happening right now (especially
@@ -338,7 +363,7 @@ export function PlayerStatsPopup({ player, isOpen, onClose, events = [], htStore
         {/* ── Footer ── */}
         <div className="flex-shrink-0 border-t border-white/[0.06] px-4 py-2.5 flex items-center justify-between">
           <p className="text-[9px] text-gray-600 uppercase tracking-widest">
-            Points: Goal +5 · Assist +3 · Save +3 · Yellow −1 · Red −3
+            Goal: GK +10 / DEF +6 / MID +5 / FWD +4 · Assist +3 · Save +2 · Conceded −1 · Yellow −1 · Red −3
           </p>
         </div>
       </div>
