@@ -200,6 +200,49 @@ Leaderboard pushes via `score_update` over the room WebSocket.
 
 ---
 
+## Running locally
+
+The fastest path is just to use the deployed frontend at the CloudFront URL —
+sign up via Cognito, create or join a room, no local setup needed.
+
+If you want to run the **frontend dev server** against the deployed backend:
+
+```bash
+git clone https://github.com/ClaudiuAWS/claudiu.git
+cd claudiu/frontend
+cp .env.example .env       # then fill in the four VITE_* values
+npm ci
+npm run dev                # http://localhost:5173
+```
+
+The four values in `.env.example` come from the deployed AWS stacks
+(`cognito-claudiu-auth`, `api-gateway-claudiu`, `claudiu-ws-api`). They're
+not committed; ask a teammate to share their current values, or look them up
+via `aws cloudformation describe-stacks` if you have AWS access.
+
+### Backend / infra changes
+
+Lambda code changes auto-deploy on `main` via the workflows in
+`.github/workflows/deploy-*.yml`. CloudFormation stacks (`api-gateway-claudiu`,
+the IAM role stacks, etc.) require manual `aws cloudformation deploy` for
+the stacks that don't yet have a workflow. See `infra/compute/`.
+
+### Reloading match data
+
+The four source XMLs (`positions.xml`, `kpi.xml`, `events.xml`, `match.xml`)
+are gitignored because they're too large. You only need them if you want to
+re-populate DynamoDB with fresh match data via `data/loader/main.py`. Match
+data is already loaded in the deployed DDB tables, so most local development
+doesn't need this.
+
+To reset the deployed match back to `upcoming` for a fresh replay:
+
+```bash
+python data/reset_match.py    # uses [hackathon] AWS profile
+```
+
+---
+
 ## Repository layout
 
 ```
