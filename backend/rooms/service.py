@@ -156,8 +156,12 @@ def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, g
     Idempotent per (gameId, userId): a single user can only score once for a
     given game (retries are no-ops), but multiple users in the same game
     each get their own resolution + broadcast.
+
+    Strong-consistent read: members are SET as a whole list below, so a stale
+    eventual-consistent read here would regress every other user's score
+    back to a stale snapshot. The cost is one extra millisecond.
     """
-    room = rooms_table.get_item(Key={'roomCode': room_code}).get('Item')
+    room = rooms_table.get_item(Key={'roomCode': room_code}, ConsistentRead=True).get('Item')
     if not room:
         raise ValueError('Room not found')
     if not any(m['userId'] == submitter_user_id for m in room.get('members', [])):
@@ -265,7 +269,10 @@ def claim_reaction(room_code: str, user_id: str, event_id: str, reaction_type: s
     if not event_id:
         raise ValueError('eventId is required')
 
-    room = rooms_table.get_item(Key={'roomCode': room_code}).get('Item')
+    # Strong-consistent read: same regression risk as apply_minigame_score
+    # — we SET members as a whole list, so a stale read would clobber other
+    # users' accumulated scores back to whatever was in the stale snapshot.
+    room = rooms_table.get_item(Key={'roomCode': room_code}, ConsistentRead=True).get('Item')
     if not room:
         raise ValueError('Room not found')
     member = next((m for m in room.get('members', []) if m['userId'] == user_id), None)

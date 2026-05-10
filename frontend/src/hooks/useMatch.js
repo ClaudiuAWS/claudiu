@@ -38,7 +38,7 @@ export function useMatches() {
   return { matches, loading, error }
 }
 
-export function useMatch(matchId) {
+export function useMatch(matchId, onScoreEvent = null) {
   const [match, setMatch] = useState(null)
   // allEvents = everything received from REST + WS. Consumers see the filtered
   // `events` (below) which only includes events whose gameTime has been
@@ -52,6 +52,11 @@ export function useMatch(matchId) {
   const [revealSec, setRevealSec] = useState(-1)
   const flashTimerRef = useRef(null)
   const revealedIdsRef = useRef(new Set())
+  // Track which events have already triggered onScoreEvent so optimistic
+  // scoring fires exactly once per event even if the events array recomputes.
+  const scoredIdsRef = useRef(new Set())
+  const onScoreEventRef = useRef(onScoreEvent)
+  onScoreEventRef.current = onScoreEvent
   // Reordering buffer: holds incoming match_update messages until the next
   // drain tick, then flushes them in ascending-gameTime order. Even with
   // SQS FIFO upstream, parallel WS fan-out across many connection IDs can
@@ -219,6 +224,20 @@ export function useMatch(matchId) {
       clearTimeout(flashTimerRef.current)
       setFlashEvent(pick)
       flashTimerRef.current = setTimeout(() => setFlashEvent(null), 3000)
+    }
+
+    // Optimistic frontend scoring — fire onScoreEvent for newly-revealed
+    // goals / cards / saves so the leaderboard bumps in lockstep with the
+    // feed reveal, instead of waiting on the backend WS round-trip
+    // (1–24s with cold starts). Tracked per-eventId so it never double-fires.
+    const cb = onScoreEventRef.current
+    if (cb) {
+      for (const ev of newlyRevealed) {
+        if (!['goal', 'card', 'saved_shot'].includes(ev.eventType)) continue
+        if (scoredIdsRef.current.has(ev.eventId)) continue
+        scoredIdsRef.current.add(ev.eventId)
+        cb(ev)
+      }
     }
   }, [events])
 

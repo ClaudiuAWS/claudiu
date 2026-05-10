@@ -73,21 +73,35 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     } else if (msg.type === 'chat_message') {
       onChatMessage?.(msg)
     } else if (msg.type === 'score_update') {
-      // Apply DELTAS rather than the absolute leaderboard. Stale backend
-      // snapshots (eventual-consistency races) can produce a broadcast where
-      // a user's absolute leaderboard score regresses — e.g. an in-flight
-      // Lambda re-broadcasts an old members list right after a fresh refresh.
-      // Trusting the delta keeps the local state monotonic against the
-      // events the user actually saw.
+      // Reconcile via max(leaderboard_absolute, local + delta).
+      //
+      // Why this hybrid: the leaderboard absolute is authoritative if the
+      // backend wrote correctly, and lets us catch up on any score_update
+      // we missed (e.g. before WS subscribed). But a stale eventually-
+      // consistent backend read (despite our recent fixes) can occasionally
+      // broadcast a regressed leaderboard. Taking the max protects against
+      // that — the score never moves backward unless our own delta says so.
+      // Yellow/red cards still subtract correctly because their delta IS
+      // negative and the leaderboard agrees.
+      const scoreMap = Object.fromEntries(
+        (msg.leaderboard || []).map(e => [e.userId, Number(e.score) || 0])
+      )
       const deltaByUid = Object.fromEntries(
         (msg.changes || []).map(c => [c.userId, Number(c.delta) || 0])
       )
       setRoom(prev => prev ? {
         ...prev,
-        members: prev.members.map(m => ({
-          ...m,
-          score: (Number(m.score) || 0) + (deltaByUid[m.userId] || 0),
-        })),
+        members: prev.members.map(m => {
+          const localBase     = Number(m.score) || 0
+          const delta         = deltaByUid[m.userId] || 0
+          const expectedAfter = localBase + delta
+          const target        = scoreMap[m.userId]
+          if (target === undefined) return { ...m, score: expectedAfter }
+          // Leaderboard is the truth UNLESS it would regress vs. our own
+          // bookkeeping (stale broadcast slipped through). In that case
+          // trust local + delta — we know what we've already counted.
+          return { ...m, score: target >= expectedAfter ? target : expectedAfter }
+        }),
       } : prev)
 
       // Show a per-event toast for the current user's own deltas. We rely on
@@ -227,11 +241,43 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     }
   }
 
+  // Optimistic local score bumps. Called by useMatch the moment a scoring
+  // event becomes visible on the displayed clock — closes the gap between
+  // event reveal and the backend score_update broadcast (which can take
+  // 1–24s with cold-start latency). The next score_update WS reconciles
+  // to the authoritative DDB value, silently correcting any drift.
+  const applyOptimisticDeltas = useCallback((deltas) => {
+    if (!Array.isArray(deltas) || !deltas.length) return
+    const byUid = Object.fromEntries(deltas.map(d => [d.userId, Number(d.delta) || 0]))
+    setRoom(prev => prev ? {
+      ...prev,
+      members: prev.members.map(m => {
+        const bump = byUid[m.userId]
+        if (!bump) return m
+        return { ...m, score: (Number(m.score) || 0) + bump }
+      }),
+    } : prev)
+    // Per-event toast for the current user. Mirrors the score_update toast
+    // logic so optimistic bumps surface immediately rather than waiting on
+    // the backend round-trip.
+    const myDelta = deltas.find(d => d.userId === currentUserId && d.delta !== 0)
+    if (myDelta) {
+      const sign  = myDelta.delta > 0 ? '+' : '−'
+      const value = Math.abs(myDelta.delta)
+      const who   = myDelta.playerName || ''
+      const verb  = myDelta.reason || (myDelta.delta > 0 ? 'awarded' : 'penalty')
+      const text  = who ? `${sign}${value} — ${who} ${verb}` : `${sign}${value} — ${verb}`
+      const icon  = myDelta.delta > 0 ? '⚽' : '🟨'
+      toast(text, { icon, duration: 3000 })
+    }
+  }, [currentUserId])
+
   return {
     room,
     loading,
     createRoom,
     joinRoom,
     leaveRoom,
+    applyOptimisticDeltas,
   }
 }
