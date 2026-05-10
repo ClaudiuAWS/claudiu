@@ -12,8 +12,11 @@ Resources:
                                                   - "*"
                                           AllowedMethods:
                                                   - PUT
+                                                  - GET
                                           AllowedHeaders:
                                                   - "*"
+                                          ExposedHeaders:
+                                                  - ETag
                                           MaxAge: 3600
                         PublicAccessBlockConfiguration:
                                 BlockPublicAcls: false
