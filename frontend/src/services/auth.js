@@ -49,6 +49,7 @@ export const getUser = async () => {
       userId: user.userId,
       email: claims?.email,
       displayName: claims?.name,
+      avatarUrl: claims?.['custom:avatar_url'] || null,
     }
     logger.info('Auth', 'Got current user', profile)
     return profile

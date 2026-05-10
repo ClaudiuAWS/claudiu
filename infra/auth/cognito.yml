@@ -22,6 +22,10 @@ Resources:
                                   AttributeDataType: String
                                   Required: true
                                   Mutable: true
+                                - Name: avatar_url
+                                  AttributeDataType: String
+                                  Required: false
+                                  Mutable: true
 
         UserPoolClient:
                 Type: AWS::Cognito::UserPoolClient
@@ -32,6 +36,14 @@ Resources:
                         ExplicitAuthFlows:
                                 - ALLOW_USER_SRP_AUTH
                                 - ALLOW_REFRESH_TOKEN_AUTH
+                        ReadAttributes:
+                                - email
+                                - name
+                                - custom:avatar_url
+                        WriteAttributes:
+                                - email
+                                - name
+                                - custom:avatar_url
                         AccessTokenValidity: 1
                         IdTokenValidity: 1
                         RefreshTokenValidity: 30
