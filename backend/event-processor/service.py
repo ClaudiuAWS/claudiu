@@ -255,18 +255,33 @@ def _bucket(position_code: str | None) -> str:
 def _score_rooms_for_event(match_id: str, event_type: str, data: dict) -> None:
     if event_type not in ('goal', 'card', 'saved_shot'):
         return
+    # GSI is eventually consistent — use it only to find which rooms are
+    # active for this match, NOT to read members. Then strong-consistent
+    # GetItem each room before computing/writing the delta. Without this,
+    # two events firing close together each read a stale members snapshot
+    # and their writes overwrite each other's score increases — accumulated
+    # scores systematically regress as the match progresses.
     response = rooms_table.query(
         IndexName='matchId-index',
         KeyConditionExpression=Key('matchId').eq(match_id),
+        ProjectionExpression='roomCode, #s',
+        ExpressionAttributeNames={'#s': 'status'},
     )
-    active_rooms = [r for r in response.get('Items', []) if r.get('status') != 'ended']
-    for room in active_rooms:
+    for r in response.get('Items', []):
+        if r.get('status') == 'ended':
+            continue
+        fresh = rooms_table.get_item(
+            Key={'roomCode': r['roomCode']},
+            ConsistentRead=True,
+        ).get('Item')
+        if not fresh:
+            continue
         # Each entry: {userId, delta, reason, playerName}.
         # `reason` and `playerName` are surfaced in score_update.changes so the
         # frontend toast can read like "+6 — Olise scored for your squad".
-        member_changes = _calculate_member_changes(room, event_type, data)
+        member_changes = _calculate_member_changes(fresh, event_type, data)
         if any(c['delta'] != 0 for c in member_changes):
-            _apply_member_changes(room, member_changes, event_type)
+            _apply_member_changes(fresh, member_changes, event_type)
 
 
 def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
