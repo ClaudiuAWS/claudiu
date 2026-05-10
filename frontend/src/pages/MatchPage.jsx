@@ -202,7 +202,7 @@ export default function MatchPage() {
 
       {/* Content */}
       <div className="relative">
-        {tab === 'feed' && <MatchFeed events={events} />}
+        {tab === 'feed' && <MatchFeed events={events} playerMap={playerMap} />}
 
         {tab === 'squad' && (
           <div className="px-2 py-3">

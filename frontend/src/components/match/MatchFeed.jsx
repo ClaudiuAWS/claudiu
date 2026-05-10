@@ -15,7 +15,7 @@ const FEED_EVENT_TYPES = new Set([
   'fulltime',
 ])
 
-export default function MatchFeed({ events }) {
+export default function MatchFeed({ events, playerMap = {} }) {
   const filtered = (events ?? []).filter(e => FEED_EVENT_TYPES.has(e.eventType))
   const ordered  = sortMatchEventsNewestFirst(filtered)
 
@@ -24,7 +24,7 @@ export default function MatchFeed({ events }) {
   const htStoredSec = htEvent ? gameTimeToSeconds(htEvent.gameTime) : -1
 
   return (
-    <div className="px-4 pt-4">
+    <div className="px-4 pt-4 pb-2">
       <p className="text-[11px] font-semibold tracking-widest uppercase text-gray-600 mb-3 px-1">
         Match Events
       </p>
@@ -37,7 +37,12 @@ export default function MatchFeed({ events }) {
       ) : (
         <div className="flex flex-col gap-2">
           {ordered.map(event => (
-            <EventItem key={event.eventId} event={event} htStoredSec={htStoredSec} />
+            <EventItem
+              key={event.eventId}
+              event={event}
+              htStoredSec={htStoredSec}
+              playerMap={playerMap}
+            />
           ))}
         </div>
       )}
