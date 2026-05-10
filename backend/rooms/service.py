@@ -173,17 +173,26 @@ def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, g
     # but never to score other users — that prevents one client from inflating
     # a roommate's score.
     submitter_delta = next((d for d in deltas if d.get('userId') == submitter_user_id), None)
+    raw_delta = int(submitter_delta.get('delta') or 0) if submitter_delta else 0
     score_changes = []
-    if submitter_delta and submitter_delta.get('delta'):
+    new_score = None
+
+    if submitter_delta:
         for m in members:
             if m['userId'] != submitter_user_id:
                 continue
-            new_score = int(m.get('score', 0)) + int(submitter_delta['delta'])
-            m['score'] = new_score
+            new_score = int(m.get('score', 0)) + raw_delta
+            if raw_delta != 0:
+                m['score'] = new_score
+            # Always emit a score_change row, even when delta is 0. The
+            # minigame_result merge on the frontend uses this so each user's
+            # modal can show every participant's result — including their own
+            # 0-point tap and the opponent's positive tap on the same modal,
+            # rather than the "No points awarded this round" empty fallback.
             score_changes.append({
                 'userId':      submitter_user_id,
                 'displayName': m.get('displayName'),
-                'delta':       int(submitter_delta['delta']),
+                'delta':       raw_delta,
                 'newScore':    new_score,
                 'eventType':   game_type or 'minigame',
                 'reason':      submitter_delta.get('reason') or game_type,
@@ -196,15 +205,26 @@ def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, g
 
     update_kwargs = {
         'Key': {'roomCode': room_code},
-        'UpdateExpression': 'SET members = :members',
-        'ExpressionAttributeValues': {':members': members},
     }
+    # Skip the DDB members write when the delta is 0 — nothing changed in the
+    # member list. Always record idempotency on resolvedMinigames so retries
+    # are no-ops regardless of score outcome.
+    if raw_delta != 0:
+        update_kwargs['UpdateExpression'] = 'SET members = :members'
+        update_kwargs['ExpressionAttributeValues'] = {':members': members}
     if submitter_key:
-        update_kwargs['UpdateExpression'] += ' ADD resolvedMinigames :gid'
-        update_kwargs['ExpressionAttributeValues'][':gid'] = {submitter_key}
-    rooms_table.update_item(**update_kwargs)
+        if 'UpdateExpression' in update_kwargs:
+            update_kwargs['UpdateExpression'] += ' ADD resolvedMinigames :gid'
+            update_kwargs['ExpressionAttributeValues'][':gid'] = {submitter_key}
+        else:
+            update_kwargs['UpdateExpression'] = 'ADD resolvedMinigames :gid'
+            update_kwargs['ExpressionAttributeValues'] = {':gid': {submitter_key}}
+    if 'UpdateExpression' in update_kwargs:
+        rooms_table.update_item(**update_kwargs)
 
-    if score_changes:
+    # Only broadcast a score_update when there's an actual scoreboard change.
+    # 0-delta participation flows through minigame_result (below) only.
+    if raw_delta != 0:
         leaderboard = sorted(
             [{'userId': m['userId'], 'displayName': m['displayName'], 'score': int(m.get('score', 0))} for m in members],
             key=lambda x: x['score'],
