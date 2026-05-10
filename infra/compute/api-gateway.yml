@@ -3,7 +3,7 @@ Description: Claudiu API Gateway - REST
 
 Resources:
         # -----------------------------------------
-        # REST API
+        # REST API hello world
         # -----------------------------------------
 
         RestApi:
