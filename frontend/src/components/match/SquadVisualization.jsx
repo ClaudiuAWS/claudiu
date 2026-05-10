@@ -62,15 +62,19 @@ export function SquadVisualization({
   const htEvent     = events.find(e => e.eventType === 'halftime')
   const htStoredSec = htEvent ? gameTimeToSeconds(htEvent.gameTime) : -1
 
+  // userSide is which side of THIS user's pitch the player sits on (drives
+  // popup color). teamRole is the player's actual match team (Bayern home vs
+  // Hamburg away) — must NOT be overwritten or downstream logic that depends
+  // on the real team (e.g. GK concede detection) gets the wrong answer.
   const handleHomeClick = (player) => {
-    const p = { ...player, teamRole: 'home' }
+    const p = { ...player, userSide: 'home' }
     setSelectedPlayer(p)
     setSelectedTeamRole('home')
     onPlayerClick?.(p, 'home')
   }
 
   const handleAwayClick = (player) => {
-    const p = { ...player, teamRole: 'away' }
+    const p = { ...player, userSide: 'away' }
     setSelectedPlayer(p)
     setSelectedTeamRole('away')
     onPlayerClick?.(p, 'away')

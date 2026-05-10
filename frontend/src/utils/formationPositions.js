@@ -302,7 +302,14 @@ function findCanonicalEntry(defC, cdmC, camC, fwdC) {
   // Filter to formations with the exact same defender count first — this ensures
   // a 3-DEF squad is never labelled "4-2-3-1" and vice versa.
   const defCandidates = CANONICAL_FORMATIONS.filter(f => f.def === defC)
-  const pool = defCandidates.length > 0 ? defCandidates : CANONICAL_FORMATIONS
+  // Then filter by exact forward count. A squad with 2 forwards is NEVER a
+  // ...-1 formation regardless of how the mids are split. Without this, e.g.
+  // (def=5, cdm=1, cam=2, fwd=2) was matching 5-4-1 (cdm=2, cam=2, fwd=1)
+  // because the cdm/cam distance won out over the fwd diff.
+  const fwdCandidates = defCandidates.filter(f => f.fwd === fwdC)
+  const pool = fwdCandidates.length > 0
+    ? fwdCandidates
+    : (defCandidates.length > 0 ? defCandidates : CANONICAL_FORMATIONS)
 
   let best = pool[0], bestDist = Infinity, bestFwdDist = Infinity
   for (const f of pool) {
