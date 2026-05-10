@@ -29,8 +29,19 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     roomsApi.get(savedCode)
       .then(data => {
         if (!controller.signal.aborted) {
-          setRoom(data)
-          logger.success('useRoom', 'Room restored', data)
+          // Coerce member.score to number — DDB Decimal arrives as a string
+          // ("20") via the API's `default=str` JSON serializer, and
+          // string-vs-number coercion in downstream comparisons can hide
+          // valid scores. Always treat scores as numbers from the boundary.
+          const normalized = {
+            ...data,
+            members: (data.members || []).map(m => ({
+              ...m,
+              score: Number(m.score) || 0,
+            })),
+          }
+          setRoom(normalized)
+          logger.success('useRoom', 'Room restored', normalized)
         }
       })
       .catch(err => {
@@ -62,10 +73,21 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     } else if (msg.type === 'chat_message') {
       onChatMessage?.(msg)
     } else if (msg.type === 'score_update') {
-      const scoreMap = Object.fromEntries(msg.leaderboard.map(e => [e.userId, e.score]))
+      // Apply DELTAS rather than the absolute leaderboard. Stale backend
+      // snapshots (eventual-consistency races) can produce a broadcast where
+      // a user's absolute leaderboard score regresses — e.g. an in-flight
+      // Lambda re-broadcasts an old members list right after a fresh refresh.
+      // Trusting the delta keeps the local state monotonic against the
+      // events the user actually saw.
+      const deltaByUid = Object.fromEntries(
+        (msg.changes || []).map(c => [c.userId, Number(c.delta) || 0])
+      )
       setRoom(prev => prev ? {
         ...prev,
-        members: prev.members.map(m => ({ ...m, score: scoreMap[m.userId] ?? m.score }))
+        members: prev.members.map(m => ({
+          ...m,
+          score: (Number(m.score) || 0) + (deltaByUid[m.userId] || 0),
+        })),
       } : prev)
 
       // Show a per-event toast for the current user's own deltas. We rely on
