@@ -73,22 +73,35 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     } else if (msg.type === 'chat_message') {
       onChatMessage?.(msg)
     } else if (msg.type === 'score_update') {
-      // Trust the LEADERBOARD ABSOLUTE — it's authoritative DDB state at
-      // broadcast time. Optimistic frontend scoring (see useMatch +
-      // applyOptimisticDeltas below) closes the perceived latency gap, and
-      // each backend broadcast silently reconciles to the truth so any
-      // optimistic over- or under-count self-corrects.
+      // Reconcile via max(leaderboard_absolute, local + delta).
+      //
+      // Why this hybrid: the leaderboard absolute is authoritative if the
+      // backend wrote correctly, and lets us catch up on any score_update
+      // we missed (e.g. before WS subscribed). But a stale eventually-
+      // consistent backend read (despite our recent fixes) can occasionally
+      // broadcast a regressed leaderboard. Taking the max protects against
+      // that — the score never moves backward unless our own delta says so.
+      // Yellow/red cards still subtract correctly because their delta IS
+      // negative and the leaderboard agrees.
       const scoreMap = Object.fromEntries(
         (msg.leaderboard || []).map(e => [e.userId, Number(e.score) || 0])
       )
+      const deltaByUid = Object.fromEntries(
+        (msg.changes || []).map(c => [c.userId, Number(c.delta) || 0])
+      )
       setRoom(prev => prev ? {
         ...prev,
-        members: prev.members.map(m => ({
-          ...m,
-          // `!== undefined` (vs `??`) — a leaderboard score of 0 is a valid
-          // value and should overwrite a stale local non-zero.
-          score: scoreMap[m.userId] !== undefined ? scoreMap[m.userId] : (Number(m.score) || 0),
-        })),
+        members: prev.members.map(m => {
+          const localBase     = Number(m.score) || 0
+          const delta         = deltaByUid[m.userId] || 0
+          const expectedAfter = localBase + delta
+          const target        = scoreMap[m.userId]
+          if (target === undefined) return { ...m, score: expectedAfter }
+          // Leaderboard is the truth UNLESS it would regress vs. our own
+          // bookkeeping (stale broadcast slipped through). In that case
+          // trust local + delta — we know what we've already counted.
+          return { ...m, score: target >= expectedAfter ? target : expectedAfter }
+        }),
       } : prev)
 
       // Show a per-event toast for the current user's own deltas. We rely on
