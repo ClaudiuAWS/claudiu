@@ -48,6 +48,19 @@ export default function LobbyPage() {
     if (draftActive && !teamModalOpen && !hasTeam) setTeamModalOpen(true)
   }, [draftActive, teamModalOpen, hasTeam])
 
+  // Auto-navigate to the match page when the host starts the match. The host
+  // already navigates from handleStart; this covers GUEST clients who would
+  // otherwise sit on the lobby waiting for them to click "Watch Live →".
+  // Gated on a per-match sessionStorage flag so it fires exactly once: a user
+  // who later navigates back to the lobby on purpose isn't bounced back.
+  useEffect(() => {
+    if (!isLive || !room?.roomCode) return
+    const flagKey = `lobby_auto_redirected_${matchId}`
+    if (sessionStorage.getItem(flagKey)) return
+    sessionStorage.setItem(flagKey, '1')
+    navigate(`/match/${matchId}`, { state: { initialRoom: room } })
+  }, [isLive, matchId, room, navigate])
+
   const handleReadyUp = async () => {
     setError('')
     try { await draft.ready() } catch (e) { setError(e.message || 'Failed to ready up') }
@@ -68,6 +81,9 @@ export default function LobbyPage() {
     setStarting(true)
     try {
       await roomsApi.startMatch(room.roomCode, speedMultiplier)
+      // Mark as auto-redirected for this session so the isLive effect
+      // doesn't re-navigate if the host later comes back to the lobby.
+      sessionStorage.setItem(`lobby_auto_redirected_${matchId}`, '1')
       navigate(`/match/${matchId}`, { state: { initialRoom: room } })
     } catch (e) {
       setError(e.message)
