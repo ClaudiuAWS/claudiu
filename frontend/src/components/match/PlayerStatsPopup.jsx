@@ -236,9 +236,12 @@ export function PlayerStatsPopup({ player, isOpen, onClose, events = [], htStore
   const group      = POS_TO_GROUP[player.position] ?? 'CAM'
   const accent     = GROUP_ACCENT[group] ?? GROUP_ACCENT.CAM
   const typeLabel  = POS_TO_TYPE[player.position] ?? group
-  const teamRole   = player.teamRole ?? 'home'
-  const teamColor  = teamRole === 'home' ? '#DC2626' : '#1D4ED8'
-  const teamRing   = teamRole === 'home' ? 'rgba(220,38,38,0.25)' : 'rgba(29,78,216,0.25)'
+  // userSide = which user owns this player (drives popup color so the
+  // owner is instantly recognisable). player.teamRole = the player's
+  // actual match team — used by the concede check, not for color.
+  const userSide   = player.userSide ?? player.teamRole ?? 'home'
+  const teamColor  = userSide === 'home' ? '#DC2626' : '#1D4ED8'
+  const teamRing   = userSide === 'home' ? 'rgba(220,38,38,0.25)' : 'rgba(29,78,216,0.25)'
 
   const playerEvents = getPlayerMatchEvents(player, events, htStoredSec, group)
   const totalPoints  = playerEvents.reduce((s, e) => s + e.points, 0)
