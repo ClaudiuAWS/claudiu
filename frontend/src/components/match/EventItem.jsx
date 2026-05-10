@@ -169,6 +169,11 @@ function GoalHero({ event, meta, playerMap, displayTime }) {
       {/* Sweep shimmer (runs once on mount via CSS animation) */}
       <div className="goal-sweep absolute inset-0 pointer-events-none" />
 
+      {/* Flying ball — arcs in from the left, spins, settles near the score */}
+      <div className="goal-ball absolute pointer-events-none" aria-hidden="true">
+        <SoccerBall size={26} />
+      </div>
+
       <div className="relative px-4 py-4 flex items-center gap-4">
         {/* Scorer photo */}
         <PlayerAvatar
@@ -227,6 +232,26 @@ function GoalHero({ event, meta, playerMap, displayTime }) {
         )}
       </div>
     </div>
+  )
+}
+
+// Classic black-and-white soccer ball. Pure SVG, no deps.
+function SoccerBall({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="15" fill="white" stroke="#111" strokeWidth="1" />
+      {/* Center pentagon */}
+      <polygon
+        points="16,8 22,12.5 19.7,19.5 12.3,19.5 10,12.5"
+        fill="#111"
+      />
+      {/* Outer seams pointing to the 5 corners */}
+      <path d="M16 8 L16 3" stroke="#111" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M22 12.5 L27 10.5" stroke="#111" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M19.7 19.5 L23.5 24.5" stroke="#111" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M12.3 19.5 L8.5 24.5" stroke="#111" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M10 12.5 L5 10.5" stroke="#111" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
   )
 }
 
