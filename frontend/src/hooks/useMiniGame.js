@@ -271,28 +271,42 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
         }
       })
     } else if (msg.type === 'minigame_result') {
-      // Multi-user: each user's POST broadcasts only their own delta. Accumulate
-      // across messages, deduping by userId so retries don't double-count. The
-      // modal stays open longer so both users have time to land in the panel
-      // (timer reset on each new result message).
+      // Each user's POST broadcasts their own delta to the whole room. Merge
+      // incoming deltas into state.deltas (deduped by userId) so the result
+      // panel will show every user's outcome when it eventually renders.
+      //
+      // CRITICAL: do NOT flip status to 'resolved' for a user who hasn't
+      // submitted yet — let them keep playing the full window. Otherwise the
+      // first tapper closes the game for everyone else, which the user
+      // explicitly does not want ("not a first-reaction game"). Their own
+      // submit / expire timer will transition them to resolved later, with
+      // the merged deltas already populated.
       setState(s => {
         if (!s || s.gameId !== msg.gameId) return s
         const existingByUid = new Map((s.deltas || []).map(d => [d.userId, d]))
         for (const d of msg.deltas || []) existingByUid.set(d.userId, d)
+        const mergedDeltas = Array.from(existingByUid.values())
+        if (!submittedRef.current && s.status === 'active') {
+          // Still playing — stash the opponent's deltas, don't change status.
+          return { ...s, deltas: mergedDeltas, result: msg.result }
+        }
         return {
           ...s,
           status:  'resolved',
           result:  msg.result,
-          deltas:  Array.from(existingByUid.values()),
+          deltas:  mergedDeltas,
         }
       })
-      // Reset auto-dismiss timer on each new result (so the second arrival
-      // doesn't get truncated to half a second of view time).
-      if (resultDismissTimerRef.current) clearTimeout(resultDismissTimerRef.current)
-      resultDismissTimerRef.current = setTimeout(
-        () => setState(s => s && s.gameId === msg.gameId ? null : s),
-        4500,
-      )
+      // Only re-arm dismiss when WE'RE the one who submitted (i.e. now in
+      // the result panel). Without this guard a non-submitter could be
+      // closed early by the opponent's broadcast.
+      if (submittedRef.current) {
+        if (resultDismissTimerRef.current) clearTimeout(resultDismissTimerRef.current)
+        resultDismissTimerRef.current = setTimeout(
+          () => setState(s => s && s.gameId === msg.gameId ? null : s),
+          4500,
+        )
+      }
     } else if (msg.type === 'minigame_expired') {
       setState(s => s && s.gameId === msg.gameId ? { ...s, status: 'expired' } : s)
       setTimeout(() => setState(s => s && s.gameId === msg.gameId ? null : s), 2000)
