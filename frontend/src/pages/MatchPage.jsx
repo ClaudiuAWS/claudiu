@@ -18,6 +18,7 @@ import MatchMiniGameModal from '../components/minigame/MatchMiniGameModal'
 import DirectorCommentary from '../components/match/DirectorCommentary'
 import { useMiniGame } from '../hooks/useMiniGame'
 import { useDirector } from '../hooks/useDirector'
+import { computeOptimisticDeltas } from '../utils/fplScoring'
 
 const AVATAR_COLORS = ['bg-violet-500','bg-blue-500','bg-emerald-500','bg-orange-500','bg-pink-500','bg-cyan-500']
 
@@ -35,8 +36,23 @@ export default function MatchPage() {
   // arg. We construct a ref-stable forwarder here and feed it both ways.
   const minigameMsgRef = useRef(null)
   const minigameMsgHandler = useCallback((msg) => minigameMsgRef.current?.(msg), [])
-  const { room, loading: roomLoading }          = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler)
-  const { match, events, loading, flashEvent }  = useMatch(matchId)
+  const { room, loading: roomLoading, applyOptimisticDeltas } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler)
+
+  // Optimistic local scoring — when an event reveals on the displayed clock,
+  // compute deltas client-side and bump the leaderboard immediately. The
+  // backend score_update WS still arrives later and silently reconciles to
+  // the authoritative DDB value. The ref keeps the callback identity stable
+  // so useMatch's effect never re-runs on every render.
+  const roomMembersRef = useRef(room?.members)
+  roomMembersRef.current = room?.members
+  const handleScoreEvent = useCallback((event) => {
+    const members = roomMembersRef.current
+    if (!members?.length) return
+    const deltas = computeOptimisticDeltas(event, members)
+    if (deltas.length) applyOptimisticDeltas(deltas)
+  }, [applyOptimisticDeltas])
+
+  const { match, events, loading, flashEvent }  = useMatch(matchId, handleScoreEvent)
   const minigame = useMiniGame(room, user?.userId, events, matchId, match?.startedAt)
   minigameMsgRef.current = minigame.onMinigameMessage
 
