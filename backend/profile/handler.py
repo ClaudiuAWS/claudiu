@@ -3,7 +3,7 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
-s3 = boto3.client("s3")
+s3 = boto3.client("s3", region_name="eu-central-1", endpoint_url="https://s3.eu-central-1.amazonaws.com")
 cognito = boto3.client("cognito-idp")
 # hello world
 BUCKET = os.environ["PROFILE_PICTURES_BUCKET"]
