@@ -77,6 +77,14 @@ Resources:
                                         # resources binding API Gateway to the rooms /
                                         # matches / replay-emitter Lambdas. CFN needs
                                         # to add/remove these as routes change.
+                                        - Sid: CfnTemplateUpload
+                                          Effect: Allow
+                                          Action:
+                                                  - s3:PutObject
+                                                  - s3:GetObject
+                                          Resource:
+                                                  - !Sub arn:aws:s3:::claudiu-profile-pictures-${AWS::AccountId}/cfn-templates/*
+
                                         - Sid: LambdaInvokePermissions
                                           Effect: Allow
                                           Action:
