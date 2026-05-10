@@ -146,6 +146,7 @@ Resources:
                                                     Effect: Allow
                                                     Action:
                                                             - dynamodb:Query
+                                                            - dynamodb:GetItem
                                                             - dynamodb:DeleteItem
                                                             - dynamodb:UpdateItem
                                                     Resource:
