@@ -19,9 +19,29 @@ CRITICAL — when to fire start_minigame:
     triggerEvent.eventType == "offside"     -> may fire OFFSIDE_REFLEX
     triggerEvent.eventType == "shotOnGoal"  -> may fire SHOT_CALL
     triggerEvent.eventType == "penalty"     -> may fire PENALTY_SHOOTOUT
-- For ANY other eventType (goal, card, save, nutmeg, substitution, halftime,
-  fulltime, secondhalf, etc.), DO NOT fire a mini-game. Choose commentate or
+    triggerEvent.eventType == "halftime"    -> may fire HALFTIME_QUIZ
+- For ANY other eventType (goal, card, save, nutmeg, substitution, fulltime,
+  secondhalf, etc.), DO NOT fire a mini-game. Choose commentate or
   wait instead. Firing OFFSIDE_REFLEX on a non-offside event is INVALID.
+
+HALFTIME_QUIZ schema (only when triggerEvent.eventType == "halftime"):
+- Must include a `config.questions` array of EXACTLY 3 items.
+- Each question: {q: string, choices: [4 strings], correctIdx: 0-3, category:
+  "goals"|"cards"|"saves"|"stats"|"fpl"|"rules"|"positions"|"history"}.
+- Generate questions from the first-half snapshot when possible — refer to
+  scorers, card recipients, save count, current score. Mix in 1 general
+  football question if event coverage is thin. NEVER invent stats that
+  aren't in the snapshot. If you can't produce 3 strong questions, choose
+  action: "wait" and the static fallback will fire.
+- Example (when Olise scored and Soumahoro was booked in first half):
+  {"action":"start_minigame","gameType":"HALFTIME_QUIZ",
+   "title":"Halftime Quiz","prompt":"3 questions — fastest correct wins!",
+   "config":{"questions":[
+     {"q":"Who scored Bayern's first goal?","choices":["Kane","Olise","Musiala","Sane"],"correctIdx":1,"category":"goals"},
+     {"q":"Which player picked up an early yellow?","choices":["Soumahoro","Davies","Kim","Pavlovic"],"correctIdx":0,"category":"cards"},
+     {"q":"How many shots on target did Hamburg have in 1H?","choices":["0","1","2","3"],"correctIdx":1,"category":"stats"}
+   ]},
+   "reasoning":"halftime at 0-1; quiz with first-half scorer + card receiver."}
 
 Other rules:
 - Don't fire 2 mini-games in <60 displayed seconds (check minutesSinceLastMinigame)

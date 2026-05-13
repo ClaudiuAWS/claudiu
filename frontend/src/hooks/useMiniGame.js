@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { roomsApi } from '../services/api'
 import { logger } from '../services/logger'
 import { runSoloBot, computeScoreDeltas } from '../utils/minigameBot'
+import { pickFallbackQuestions } from '../utils/quizFallback'
 
 /**
  * Mini-game lifecycle on the client.
@@ -27,8 +28,9 @@ import { runSoloBot, computeScoreDeltas } from '../utils/minigameBot'
 // dispatch jitter). When the AI Match Director (Step 2 of the plan) is
 // online, its WS push overrides this with personalized title/prompt.
 const TRIGGER_MAP = {
-  offside: 'OFFSIDE_REFLEX',
-  // future: penalty → 'PENALTY_SHOOTOUT', shot → 'SHOT_CALL', etc.
+  offside:  'OFFSIDE_REFLEX',
+  penalty:  'PENALTY_SHOOTOUT',
+  halftime: 'HALFTIME_QUIZ',
 }
 
 const GAME_DEFAULTS = {
@@ -39,6 +41,20 @@ const GAME_DEFAULTS = {
     prompt: (ev) => ev.playerDisplay
       ? `${ev.playerDisplay} caught offside — tap when they cross the line.`
       : 'Tap when the attacker crosses the offside line.',
+  },
+  PENALTY_SHOOTOUT: {
+    title: 'Penalty Shootout',
+    durationMs: 10000,
+    config: {},
+    prompt: (ev) => ev.playerDisplay
+      ? `${ev.playerDisplay} steps up to take the penalty — pick your corner!`
+      : 'Penalty time — pick your corner!',
+  },
+  HALFTIME_QUIZ: {
+    title: 'Halftime Quiz',
+    durationMs: 28000,  // 3 questions × 8s + transitions + buffer
+    config: { /* questions filled in from AI or fallback at trigger time */ },
+    prompt: () => 'Halftime trivia — fastest correct answers win!',
   },
 }
 
@@ -120,12 +136,21 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
       if (!defaults) continue
       // Mark fired BEFORE setting state so a quick re-render can't double-fire.
       _writeFiredTypes(matchId, matchStartedAt, [...firedTypes, gameType])
+      // Game-type-specific extras the defaults can't compute statically.
+      const extraConfig = {}
+      if (gameType === 'HALFTIME_QUIZ') {
+        // No AI-supplied questions on the frontend trigger path — fill with
+        // the static fallback so the quiz renders something coherent. When
+        // the backend Director WS arrives later it'll be ignored (state
+        // already set), so the fallback questions stick for this game.
+        extraConfig.questions = pickFallbackQuestions(3)
+      }
       setState({
         gameId:           `${matchId}#${ev.eventId}`,
         gameType,
         title:            defaults.title,
         prompt:           defaults.prompt(ev),
-        config:           { ...defaults.config, durationMs: defaults.durationMs },
+        config:           { ...defaults.config, ...extraConfig, durationMs: defaults.durationMs },
         startedAtMs:      Date.now(),
         durationMs:       defaults.durationMs,
         ownershipContext: _computeOwnership(ev, room?.members),
@@ -175,7 +200,18 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
     if (state?.status !== 'active' || !room) return
     const isSolo = (room.members || []).length <= 1
     if (!isSolo) return
-    botRef.current = runSoloBot(state, (botPayload) => {
+    // Inject the user's role into the state snapshot the bot sees so games
+    // like PENALTY_SHOOTOUT can pick the opposite role for the bot.
+    const userRole = (() => {
+      if (state.gameType !== 'PENALTY_SHOOTOUT') return null
+      const adv = state.ownershipContext?.advantagedUserId
+      if (adv) return adv === currentUserId ? 'shooter' : 'keeper'
+      const ids = (room.members || []).map(m => m.userId).filter(Boolean).sort()
+      if (ids.length === 0) return 'shooter'
+      return ids[0] === currentUserId ? 'shooter' : 'keeper'
+    })()
+    const enriched = { ...state, _userRole: userRole }
+    botRef.current = runSoloBot(enriched, (botPayload) => {
       // Stash on state so resolve sees it; if user has already submitted,
       // resolve now with both sides.
       setState(s => s ? { ...s, _botPayload: botPayload } : s)
@@ -184,7 +220,7 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
       }
     })
     return () => botRef.current?.cancel?.()
-  }, [state?.gameId, state?.status, room?.members?.length])
+  }, [state?.gameId, state?.status, room?.members?.length, currentUserId])
 
   const _resolveBoth = useCallback((userPayload, botPayload) => {
     if (resolvedRef.current) return

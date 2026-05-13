@@ -154,6 +154,8 @@ export default function MatchPage() {
         onSubmit={minigame.submit}
         onClose={minigame.close}
         playerMap={playerMap}
+        currentUserId={user?.userId}
+        members={room?.members}
       />
       {/* AI Director commentary — fixed-position pop-up overlay so it shows
           on every tab (feed, squad, chat) and never blocks the user from

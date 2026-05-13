@@ -34,6 +34,7 @@ _VALID_TRIGGERS = {
     'OFFSIDE_REFLEX':    {'offside'},
     'SHOT_CALL':         {'shotOnGoal', 'shot_on_goal'},
     'PENALTY_SHOOTOUT':  {'penalty'},
+    'HALFTIME_QUIZ':     {'halftime'},
 }
 
 
@@ -106,12 +107,35 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
 
         if action == 'start_minigame':
                 config = dict(decision.get('config') or {})
+                game_type_dec = decision.get('gameType')
                 # Defensive defaults — Nova Micro sometimes omits the timing
-                # config fields. Fill in OFFSIDE_REFLEX-shaped defaults so the
-                # frontend's scoring computation references a valid moment.
-                config.setdefault('durationMs', 8000)
-                if decision.get('gameType') == 'OFFSIDE_REFLEX':
+                # config fields. Fill in per-game-type defaults so the frontend
+                # scoring/UI never sees missing critical fields.
+                if game_type_dec == 'HALFTIME_QUIZ':
+                        config.setdefault('durationMs', 28000)
+                elif game_type_dec == 'PENALTY_SHOOTOUT':
+                        config.setdefault('durationMs', 10000)
+                else:
+                        config.setdefault('durationMs', 8000)
+                if game_type_dec == 'OFFSIDE_REFLEX':
                         config.setdefault('offsideMomentMs', config['durationMs'] // 2)
+                if game_type_dec == 'HALFTIME_QUIZ':
+                        # AI's `questions` should be a list of {q, choices[4],
+                        # correctIdx, category}. Drop the whole action if it
+                        # doesn't validate; we want quality questions or none.
+                        qs = config.get('questions')
+                        valid = isinstance(qs, list) and 1 <= len(qs) <= 5 and all(
+                                isinstance(q, dict)
+                                and isinstance(q.get('q'), str)
+                                and isinstance(q.get('choices'), list)
+                                and len(q['choices']) == 4
+                                and isinstance(q.get('correctIdx'), int)
+                                and 0 <= q['correctIdx'] < 4
+                                for q in qs
+                        )
+                        if not valid:
+                                print(f"director: HALFTIME_QUIZ questions failed validation, dropping -> wait")
+                                return
                 ws.push_to_channel(f"room#{room_code}", {
                     'type':             'minigame_start',
                     'gameId':           f"director-{related_event_id}-{room_code}",

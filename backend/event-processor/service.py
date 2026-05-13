@@ -421,10 +421,9 @@ def _apply_member_changes(room: dict, member_changes: list, event_type: str) -> 
 # a (gameType, durationSec) the frontend modal recognises. Add a new entry +
 # implement the matching child component to add a new game vertical.
 MINIGAME_TRIGGERS = {
-    'offside': ('OFFSIDE_REFLEX', 8),
-    # 'penalty':           ('PENALTY_SHOOTOUT', 10),  # follow-up
-    # 'fulltime':          ('QUIZ_BATTLE',      15),  # follow-up
-    # 'halftime':          ('QUIZ_BATTLE',      15),  # follow-up
+    'offside':  ('OFFSIDE_REFLEX',  8),
+    'penalty':  ('PENALTY_SHOOTOUT', 10),
+    'halftime': ('HALFTIME_QUIZ',   28),
 }
 
 
@@ -480,6 +479,16 @@ def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, g
             config['offsideMomentMs'] = duration_sec * 1000 // 2
             config['playerName'] = data.get('playerDisplay') or data.get('playerName')
             config['teamRole']   = data.get('teamRole')
+        elif game_type == 'PENALTY_SHOOTOUT':
+            # Penalty taker context — frontend uses `advantagedUserId` from
+            # ownership to assign shooter vs. keeper role.
+            config['takerName']  = data.get('scoringDisplay') or data.get('playerDisplay') or data.get('penaltyTakerId')
+            config['teamRole']   = data.get('teamRole') or data.get('scoringTeamRole')
+        elif game_type == 'HALFTIME_QUIZ':
+            # Pre-shuffled fallback questions (3) so the game has content even
+            # without an AI Director pass. AI Director can overwrite this via
+            # its own minigame_start broadcast with custom `questions`.
+            config['questions'] = _fallback_quiz_questions()
 
         payload = {
             'type':                'minigame_start',
@@ -530,6 +539,8 @@ def _minigame_title(game_type: str, data: dict) -> str:
         return 'Offside Reflex'
     if game_type == 'PENALTY_SHOOTOUT':
         return 'Penalty Shootout'
+    if game_type == 'HALFTIME_QUIZ':
+        return 'Halftime Quiz'
     if game_type == 'QUIZ_BATTLE':
         return 'Quiz Battle'
     return 'Mini-game'
@@ -540,7 +551,64 @@ def _minigame_prompt(game_type: str, ownership: dict) -> str:
         if ownership.get('advantagedUserId'):
             return f"{ownership.get('involvedPlayerName') or 'A player'} caught offside — tap when they cross the line."
         return 'Tap when the attacker crosses the offside line.'
+    if game_type == 'PENALTY_SHOOTOUT':
+        name = ownership.get('involvedPlayerName')
+        if name:
+            return f"{name} steps up to take the penalty — pick your corner!"
+        return 'Penalty kick — shooter aims, keeper dives. Match for the save.'
+    if game_type == 'HALFTIME_QUIZ':
+        return 'Halftime trivia — three questions, faster correct answers win.'
     return ''
+
+
+# ─────────────────────────────────────────
+# Halftime quiz fallback questions
+# ─────────────────────────────────────────
+# Python mirror of `frontend/src/utils/quizFallback.js`. Kept in sync so
+# the non-Director trigger path serves coherent questions when Bedrock is
+# down or returns malformed output. Each entry: {q, choices[4],
+# correctIdx, category}.
+
+import random as _quiz_random
+
+_QUIZ_POOL = [
+    {'q': 'How many minutes are in a full football match (excluding stoppage time)?',
+     'choices': ['80', '85', '90', '95'], 'correctIdx': 2, 'category': 'rules'},
+    {'q': 'Which colour card means a player is sent off?',
+     'choices': ['Yellow', 'Red', 'Blue', 'Green'], 'correctIdx': 1, 'category': 'rules'},
+    {'q': 'Which position is most often credited with goal scoring?',
+     'choices': ['Goalkeeper', 'Centre-back', 'Striker', 'Left-back'], 'correctIdx': 2, 'category': 'positions'},
+    {'q': 'A penalty kick is taken from how far out?',
+     'choices': ['9 metres', '11 metres', '13 metres', '15 metres'], 'correctIdx': 1, 'category': 'rules'},
+    {'q': 'How many players from each team start a match on the pitch?',
+     'choices': ['10', '11', '12', '13'], 'correctIdx': 1, 'category': 'rules'},
+    {'q': 'What is FPL?',
+     'choices': ['Free Player List', 'Fantasy Premier League', 'Final Penalty Line', 'Foul Per Lap'],
+     'correctIdx': 1, 'category': 'fpl'},
+    {'q': 'Which of these is NOT a real on-field position?',
+     'choices': ['Right Wing', 'Sweeper', 'Setter', 'Trequartista'], 'correctIdx': 2, 'category': 'positions'},
+    {'q': 'In which country was the modern football association founded?',
+     'choices': ['Germany', 'Brazil', 'England', 'Italy'], 'correctIdx': 2, 'category': 'history'},
+]
+
+
+def _fallback_quiz_questions(count: int = 3) -> list:
+    """Return `count` fresh questions, shuffled, with shuffled answer order
+    (correctIdx adjusted)."""
+    picked = _quiz_random.sample(_QUIZ_POOL, k=min(count, len(_QUIZ_POOL)))
+    out = []
+    for q in picked:
+        idxs = list(range(len(q['choices'])))
+        _quiz_random.shuffle(idxs)
+        choices = [q['choices'][i] for i in idxs]
+        correct_idx = idxs.index(q['correctIdx'])
+        out.append({
+            'q':          q['q'],
+            'choices':    choices,
+            'correctIdx': correct_idx,
+            'category':   q['category'],
+        })
+    return out
 
 
 # ─────────────────────────────────────────

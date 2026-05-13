@@ -18,8 +18,12 @@ export function runSoloBot(state, onSubmit) {
   if (state.gameType === 'OFFSIDE_REFLEX') {
     return _offsideReflexBot(state, onSubmit)
   }
-  // Stubs for future game types — bot just no-ops, so scoring will fall
-  // through to "user-only" deltas (still works but no opponent).
+  if (state.gameType === 'PENALTY_SHOOTOUT') {
+    return _penaltyShootoutBot(state, onSubmit)
+  }
+  if (state.gameType === 'HALFTIME_QUIZ') {
+    return _halftimeQuizBot(state, onSubmit)
+  }
   return { cancel: () => {} }
 }
 
@@ -44,6 +48,12 @@ function _offsideReflexBot(state, onSubmit) {
 export function computeScoreDeltas({ gameType, config, ownership, userId, userPayload, botPayload, members }) {
   if (gameType === 'OFFSIDE_REFLEX') {
     return _offsideReflexDeltas({ config, ownership, userId, userPayload, botPayload, members })
+  }
+  if (gameType === 'PENALTY_SHOOTOUT') {
+    return _penaltyShootoutDeltas({ config, ownership, userId, userPayload, botPayload, members })
+  }
+  if (gameType === 'HALFTIME_QUIZ') {
+    return _halftimeQuizDeltas({ config, ownership, userId, userPayload, botPayload, members })
   }
   return []
 }
@@ -100,4 +110,135 @@ function _bracketScore(deltaMs, ownsOffsidePlayer) {
   if (deltaMs <= 600) return 2
   if (ownsOffsidePlayer && deltaMs <= 1000) return 1
   return 0
+}
+
+// ─── PENALTY_SHOOTOUT ───────────────────────────────────────────────────────
+
+// Solo bot for penalty shootout: picks a random corner, weighted slightly
+// against the user's likely pick so it doesn't always save / always concede.
+function _penaltyShootoutBot(state, onSubmit) {
+  const zones = ['TL', 'TM', 'TR', 'BL', 'BR']
+  // Keepers irl pick corners more than middle — weight 30% middle, 70% corners.
+  const weights = [0.225, 0.15, 0.225, 0.2, 0.2]
+  const r = Math.random()
+  let acc = 0
+  let pick = 'TL'
+  for (let i = 0; i < zones.length; i++) {
+    acc += weights[i]
+    if (r <= acc) { pick = zones[i]; break }
+  }
+  // Bot is whatever role the user isn't.
+  const botRole = state._userRole === 'shooter' ? 'keeper' : 'shooter'
+  const reactionMs = 600 + Math.random() * 2500
+  const id = setTimeout(() => onSubmit({ zone: pick, role: botRole, submittedAtMs: reactionMs }), reactionMs)
+  return { cancel: () => clearTimeout(id) }
+}
+
+// Zone → shooter goal value if it goes in.
+const PEN_GOAL_POINTS = { TL: 8, TR: 8, BL: 6, BR: 6, TM: 4 }
+const PEN_SAVE_POINTS = 5
+
+function _penaltyShootoutDeltas({ ownership, userId, userPayload, botPayload, members }) {
+  // Roles. The component sets payload.role from the user's POV. The opponent
+  // (other user or bot) is implicit. We rebuild a {shooterPayload, keeperPayload}
+  // pair from whatever we got.
+  const userRole = userPayload?.role || _defaultRoleForUser(userId, ownership)
+  const oppPayload = botPayload || null
+  const oppId = (members || []).find(m => m.userId !== userId)?.userId || 'bot'
+
+  let shooterPayload, shooterId, keeperPayload, keeperId
+  if (userRole === 'shooter') {
+    shooterPayload = userPayload; shooterId = userId
+    keeperPayload  = oppPayload;  keeperId  = oppId
+  } else {
+    shooterPayload = oppPayload;  shooterId = oppId
+    keeperPayload  = userPayload; keeperId  = userId
+  }
+
+  // If shooter never committed: no goal, no save → 0 to both.
+  if (!shooterPayload?.zone) return []
+
+  // Keeper guessed correctly?
+  const saved = !!(keeperPayload?.zone) && keeperPayload.zone === shooterPayload.zone
+  const deltas = []
+  if (saved) {
+    if (keeperId && keeperId !== 'bot') {
+      deltas.push({ userId: keeperId, delta: PEN_SAVE_POINTS, reason: 'penalty save', playerName: '' })
+    }
+  } else {
+    const pts = PEN_GOAL_POINTS[shooterPayload.zone] ?? 4
+    if (shooterId && shooterId !== 'bot') {
+      deltas.push({ userId: shooterId, delta: pts, reason: 'penalty goal', playerName: '' })
+    }
+  }
+  return deltas
+}
+
+function _defaultRoleForUser(userId, ownership) {
+  // Owner of the penalty taker is shooter; everyone else is keeper.
+  if (ownership?.advantagedUserId === userId) return 'shooter'
+  return 'keeper'
+}
+
+// ─── HALFTIME_QUIZ ─────────────────────────────────────────────────────────
+
+// Solo bot: answers each question with ~55% accuracy. Mid-range timing.
+function _halftimeQuizBot(state, onSubmit) {
+  const questions = state.config?.questions || []
+  const answers = []
+  const timings = []
+  for (const q of questions) {
+    const correct = Math.random() < 0.55
+    const idx = correct ? q.correctIdx : _randomWrongIdx(q.correctIdx, q.choices?.length ?? 4)
+    answers.push(idx)
+    timings.push(2500 + Math.random() * 3500)  // 2.5–6s per question
+  }
+  // Bot submits all answers once after a realistic total delay.
+  const fireMs = 4000 + Math.random() * 4000
+  const id = setTimeout(() => onSubmit({ answers, timings, questions, role: 'bot' }), fireMs)
+  return { cancel: () => clearTimeout(id) }
+}
+
+function _randomWrongIdx(correctIdx, n) {
+  const opts = []
+  for (let i = 0; i < n; i++) if (i !== correctIdx) opts.push(i)
+  return opts[Math.floor(Math.random() * opts.length)]
+}
+
+function _scoreQuizPayload(payload, questions) {
+  if (!payload?.answers || !questions?.length) return 0
+  let total = 0
+  let streak = 0
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i]
+    const ans = payload.answers[i]
+    const elapsed = payload.timings?.[i] ?? 8000
+    const correct = ans === q.correctIdx
+    if (!correct) { streak = 0; continue }
+    const remaining = Math.max(0, 8000 - elapsed)
+    const base = remaining >= 6000 ? 5
+              : remaining >= 3000 ? 3
+              : 1
+    const streakBonus = Math.min(streak, 2)
+    total += base + streakBonus
+    streak += 1
+  }
+  return total
+}
+
+function _halftimeQuizDeltas({ config, userId, userPayload, botPayload, members }) {
+  const questions = userPayload?.questions || botPayload?.questions || config?.questions || []
+  const deltas = []
+  if (userPayload?.answers) {
+    const pts = _scoreQuizPayload(userPayload, questions)
+    if (pts > 0) deltas.push({ userId, delta: pts, reason: 'halftime quiz', playerName: '' })
+  }
+  if (botPayload?.answers) {
+    const botUserId = (members || []).find(m => m.userId !== userId)?.userId || 'bot'
+    if (botUserId !== 'bot') {
+      const pts = _scoreQuizPayload(botPayload, questions)
+      if (pts > 0) deltas.push({ userId: botUserId, delta: pts, reason: 'halftime quiz', playerName: '' })
+    }
+  }
+  return deltas
 }

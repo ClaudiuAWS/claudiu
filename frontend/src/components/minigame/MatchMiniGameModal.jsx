@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import OffsideReflex from './OffsideReflex'
+import PenaltyShootout from './PenaltyShootout'
+import HalftimeQuiz from './HalftimeQuiz'
 
 /**
  * Reusable modal shell for mini-games. Renders backdrop + countdown ring +
@@ -8,7 +10,16 @@ import OffsideReflex from './OffsideReflex'
  * Game-type-specific UIs are mounted via the switch below. Add a new clause
  * + import to support a new mini-game vertical.
  */
-export default function MatchMiniGameModal({ state, onSubmit, onClose, playerMap = {} }) {
+export default function MatchMiniGameModal({ state, onSubmit, onClose, playerMap = {}, currentUserId = null, members = [] }) {
+  // Penalty role assignment: ownership wins; deterministic lex fallback when
+  // nobody owns the penalty taker so both clients agree on who shoots.
+  const penaltyRole = (() => {
+    const adv = state?.ownershipContext?.advantagedUserId
+    if (adv) return adv === currentUserId ? 'shooter' : 'keeper'
+    const ids = (members || []).map(m => m.userId).filter(Boolean).sort()
+    if (ids.length === 0) return 'shooter'
+    return ids[0] === currentUserId ? 'shooter' : 'keeper'
+  })()
   const [now, setNow] = useState(Date.now())
   const [showReasoning, setShowReasoning] = useState(false)
 
@@ -99,7 +110,33 @@ export default function MatchMiniGameModal({ state, onSubmit, onClose, playerMap
           />
         )}
 
-        {state.status === 'active' && state.gameType !== 'OFFSIDE_REFLEX' && (
+        {state.status === 'active' && state.gameType === 'PENALTY_SHOOTOUT' && (
+          <PenaltyShootout
+            config={state.config}
+            startedAtMs={state.startedAtMs}
+            durationMs={state.durationMs}
+            onSubmit={onSubmit}
+            role={penaltyRole}
+            takerDisplay={
+              playerMap[state.ownershipContext?.playerId]?.displayName
+              || state.ownershipContext?.advantagedDisplayName
+              || state.config?.takerName
+            }
+            keeperDisplay={null}
+          />
+        )}
+
+        {state.status === 'active' && state.gameType === 'HALFTIME_QUIZ' && (
+          <HalftimeQuiz
+            config={state.config}
+            startedAtMs={state.startedAtMs}
+            durationMs={state.durationMs}
+            onSubmit={onSubmit}
+          />
+        )}
+
+        {state.status === 'active'
+          && !['OFFSIDE_REFLEX', 'PENALTY_SHOOTOUT', 'HALFTIME_QUIZ'].includes(state.gameType) && (
           <div className="text-gray-500 text-sm py-8 text-center">Coming soon…</div>
         )}
 
