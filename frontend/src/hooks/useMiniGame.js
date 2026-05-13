@@ -285,8 +285,29 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
     if (submittedRef.current) return
     submittedRef.current = true
     userPayloadRef.current = payload
+
+    // PENALTY_SHOOTOUT (multi-user) is the one game with a mutual outcome —
+    // shooter scores or keeper saves depending on whether the picks match.
+    // Resolving immediately on the first tap would lock in "GOAL +N" with
+    // keeperPayload=null (keeper hasn't tapped). Instead, broadcast our pick
+    // as a `result.pick` announcement (deltas=[]), stash the pick locally,
+    // and wait for the opponent's pick to arrive via minigame_result merge.
+    // Real deltas get POSTed by _resolveBoth once both picks are known.
+    const isMultiHumanPenalty =
+      state?.gameType === 'PENALTY_SHOOTOUT' && (room?.members || []).length > 1
+    if (isMultiHumanPenalty && room?.roomCode) {
+      roomsApi.postMinigameScore(room.roomCode, {
+        gameId:   state.gameId,
+        gameType: state.gameType,
+        deltas:   [],
+        result:   { pick: payload },
+      }).catch(err => logger.warn('useMiniGame', 'penalty pick announce failed', err))
+      setState(s => s ? { ...s, _localPick: payload } : s)
+      return
+    }
+
     _resolve(payload)
-  }, [_resolve])
+  }, [_resolve, state, room?.members?.length, room?.roomCode])
 
   // Handle WS messages forwarded by useRoom.
   const onMinigameMessage = useCallback((msg) => {
@@ -337,21 +358,63 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
         const existingByUid = new Map((s.deltas || []).map(d => [d.userId, d]))
         for (const d of msg.deltas || []) existingByUid.set(d.userId, d)
         const mergedDeltas = Array.from(existingByUid.values())
-        if (!submittedRef.current && s.status === 'active') {
-          // Still playing — stash the opponent's deltas, don't change status.
-          return { ...s, deltas: mergedDeltas, result: msg.result }
+
+        // PENALTY_SHOOTOUT pick coordination: the announce-only broadcast
+        // (deltas=[], result.pick=...) carries the opponent's pick. Capture
+        // it so we can resolve once BOTH picks are present.
+        let opponentPick = s._opponentPick
+        if (s.gameType === 'PENALTY_SHOOTOUT' && msg.result?.pick) {
+          const incomingRole = msg.result.pick.role
+          // Don't overwrite if the broadcast is our OWN pick echoing back.
+          if (incomingRole && incomingRole !== s._localPick?.role) {
+            opponentPick = msg.result.pick
+          }
         }
+
+        // If WE submitted and both picks are now known, trigger the real
+        // resolution as a microtask so refs are stable before _resolveBoth.
+        if (s.gameType === 'PENALTY_SHOOTOUT'
+            && submittedRef.current
+            && !resolvedRef.current
+            && s._localPick
+            && opponentPick) {
+          const localPick = s._localPick
+          const oppPick   = opponentPick
+          Promise.resolve().then(() => _resolveBoth(localPick, oppPick))
+        }
+
+        // Non-submitter case (existing): keep playing.
+        if (!submittedRef.current && s.status === 'active') {
+          return {
+            ...s,
+            deltas:        mergedDeltas,
+            result:        msg.result,
+            _opponentPick: opponentPick,
+          }
+        }
+        // Penalty submitter waiting for opponent — stay 'active' until
+        // _resolveBoth runs and flips status itself.
+        const stillWaitingForPenaltyOpponent =
+          s.gameType === 'PENALTY_SHOOTOUT'
+          && !resolvedRef.current
+          && (!s._localPick || !opponentPick)
         return {
           ...s,
-          status:  'resolved',
-          result:  msg.result,
-          deltas:  mergedDeltas,
+          status:        stillWaitingForPenaltyOpponent ? s.status : 'resolved',
+          result:        msg.result,
+          deltas:        mergedDeltas,
+          _opponentPick: opponentPick,
         }
       })
-      // Only re-arm dismiss when WE'RE the one who submitted (i.e. now in
-      // the result panel). Without this guard a non-submitter could be
-      // closed early by the opponent's broadcast.
-      if (submittedRef.current) {
+      // Only re-arm dismiss when WE'RE the one who submitted AND we're
+      // truly entering the resolved phase. For penalty, the announce-only
+      // broadcasts (deltas=[]) shouldn't trigger a dismiss timer — only the
+      // final resolution does, via `_resolveBoth` (which sets its own).
+      const isPenaltyAnnounceOnly =
+        msg.gameType === 'PENALTY_SHOOTOUT'
+        && (!msg.deltas || msg.deltas.length === 0)
+        && msg.result?.pick != null
+      if (submittedRef.current && !isPenaltyAnnounceOnly) {
         if (resultDismissTimerRef.current) clearTimeout(resultDismissTimerRef.current)
         resultDismissTimerRef.current = setTimeout(
           () => setState(s => s && s.gameId === msg.gameId ? null : s),
