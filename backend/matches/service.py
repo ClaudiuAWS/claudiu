@@ -26,6 +26,13 @@ def get_match(match_id: str) -> dict:
     return match
 
 
+# A real football halftime is ~15 minutes of break time. The data loader
+# packs halftime and secondhalf 1 second apart on the match clock, leaving
+# no room for the halftime mini-game. Shifting at API read time means
+# we don't need to re-run the loader and reseed DDB.
+HALFTIME_BREAK_SECONDS = 15 * 60
+
+
 def get_match_events(match_id: str) -> list:
     """Return all events for a match, sorted by match clock (gameTime), then eventTime.
     The frontend reveal-on-clock filter shows each event at the moment the displayed
@@ -43,7 +50,40 @@ def get_match_events(match_id: str) -> list:
             break
         kwargs['ExclusiveStartKey'] = lek
 
+    events = _apply_halftime_break_shift(events)
     return sorted(events, key=_event_feed_order_key)
+
+
+def _apply_halftime_break_shift(events: list) -> list:
+    """Shift `secondhalf` and all post-halftime events forward by
+    HALFTIME_BREAK_SECONDS. Keeps halftime mini-game playable without
+    second-half events firing during the break.
+
+    Halftime event itself is left in place — its gameTime defines the
+    moment the break starts.
+
+    Idempotent under repeated calls? No — it mutates gameTime each call.
+    Callers should call exactly once per request.
+    """
+    halftime_sec = None
+    for e in events:
+        if e.get('eventType') == 'halftime':
+            halftime_sec = _game_clock_seconds(e.get('gameTime'))
+            break
+    if halftime_sec is None:
+        return events
+    for e in events:
+        et = e.get('eventType')
+        if et == 'halftime':
+            continue
+        sec = _game_clock_seconds(e.get('gameTime'))
+        if sec is None or sec <= halftime_sec:
+            continue
+        new_sec = sec + HALFTIME_BREAK_SECONDS
+        mm = new_sec // 60
+        ss = new_sec % 60
+        e['gameTime'] = f"{mm}:{ss:02d}"
+    return events
 
 
 def get_match_players(match_id: str) -> list:

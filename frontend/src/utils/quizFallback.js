@@ -62,18 +62,63 @@ const POOL = [
   },
 ]
 
+// ─── Deterministic seeded RNG (mulberry32) ─────────────────────────────────
+// Both clients in a room need to render the SAME questions in the SAME order
+// for Q1/Q2/Q3 to feel "synchronous". Using Math.random() on each client
+// produces different sets. Seed by matchId+eventId — both backend Python and
+// frontend JS implement the identical algorithm, so the question lineup is
+// reproducible across client/server boundaries too.
+
+function _hashSeed(str) {
+  // FNV-1a-ish 32-bit. Stable and matches the Python mirror in
+  // backend/event-processor/service.py::_fallback_quiz_questions when given
+  // the same string.
+  let h = 2166136261
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0
+  }
+  return h >>> 0
+}
+
+function _mulberry32(seed) {
+  let t = seed >>> 0
+  return function () {
+    t = (t + 0x6D2B79F5) >>> 0
+    let r = t
+    r = Math.imul(r ^ (r >>> 15), r | 1)
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61)
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function _shuffleInPlace(arr, rand) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1))
+    const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp
+  }
+  return arr
+}
+
 /**
- * Return a fresh 3-question set, shuffled, with shuffled answer order.
- * The component renders whatever it gets — shuffling here means each
- * match's halftime quiz feels different without re-running this twice
- * on different clients (call this on the AI Director / event-processor
- * side ONCE; both clients receive the same shuffled config).
+ * Return a fresh `count`-question set, shuffled, with shuffled answer order.
+ *
+ * @param {number} count    - number of questions to pick (default 3).
+ * @param {string} [seed]   - optional seed string. When provided, two
+ *                            callers using the same seed get the IDENTICAL
+ *                            output. Use `${matchId}#${eventId}` to keep
+ *                            both clients in the same room aligned.
  */
-export function pickFallbackQuestions(count = 3) {
-  const shuffled = [...POOL].sort(() => Math.random() - 0.5).slice(0, count)
-  return shuffled.map(q => {
-    // Shuffle answer order while preserving correctIdx.
-    const idx = q.choices.map((_, i) => i).sort(() => Math.random() - 0.5)
+export function pickFallbackQuestions(count = 3, seed = null) {
+  const rand = seed !== null
+    ? _mulberry32(_hashSeed(String(seed)))
+    : Math.random
+  const indices = POOL.map((_, i) => i)
+  _shuffleInPlace(indices, rand)
+  const picked = indices.slice(0, count).map(i => POOL[i])
+  return picked.map(q => {
+    const idx = q.choices.map((_, i) => i)
+    _shuffleInPlace(idx, rand)
     const choices = idx.map(i => q.choices[i])
     const correctIdx = idx.indexOf(q.correctIdx)
     return { q: q.q, choices, correctIdx, category: q.category }

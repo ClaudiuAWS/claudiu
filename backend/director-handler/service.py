@@ -121,7 +121,7 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                 # config fields. Fill in per-game-type defaults so the frontend
                 # scoring/UI never sees missing critical fields.
                 if game_type_dec == 'HALFTIME_QUIZ':
-                        config.setdefault('durationMs', 28000)
+                        config.setdefault('durationMs', 180_000)  # 15 game-min at 5×
                 elif game_type_dec == 'PENALTY_SHOOTOUT':
                         config.setdefault('durationMs', 10000)
                 else:

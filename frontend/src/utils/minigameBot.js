@@ -205,6 +205,10 @@ function _randomWrongIdx(correctIdx, n) {
   return opts[Math.floor(Math.random() * opts.length)]
 }
 
+// Keep in lockstep with HalftimeQuiz.jsx PER_Q_MS — scoring brackets
+// scale to per-question duration.
+const QUIZ_PER_Q_MS = 12000
+
 function _scoreQuizPayload(payload, questions) {
   if (!payload?.answers || !questions?.length) return 0
   let total = 0
@@ -212,12 +216,12 @@ function _scoreQuizPayload(payload, questions) {
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i]
     const ans = payload.answers[i]
-    const elapsed = payload.timings?.[i] ?? 8000
+    const elapsed = payload.timings?.[i] ?? QUIZ_PER_Q_MS
     const correct = ans === q.correctIdx
     if (!correct) { streak = 0; continue }
-    const remaining = Math.max(0, 8000 - elapsed)
-    const base = remaining >= 6000 ? 5
-              : remaining >= 3000 ? 3
+    const remaining = Math.max(0, QUIZ_PER_Q_MS - elapsed)
+    const base = remaining >= QUIZ_PER_Q_MS * 2 / 3 ? 5
+              : remaining >= QUIZ_PER_Q_MS / 3     ? 3
               : 1
     const streakBonus = Math.min(streak, 2)
     total += base + streakBonus

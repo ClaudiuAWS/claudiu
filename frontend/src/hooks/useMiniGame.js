@@ -54,7 +54,11 @@ const GAME_DEFAULTS = {
   },
   HALFTIME_QUIZ: {
     title: 'Halftime Quiz',
-    durationMs: 28000,  // 3 questions × 8s + transitions + buffer
+    // 15 in-game minutes of halftime break. At default 5× speed that's
+    // 180 wall-seconds, comfortable room for 3 × 12s questions + reading
+    // time. Hard fail-safe in useMiniGame closes the modal if it sits
+    // beyond durationMs + 6s.
+    durationMs: 180_000,
     config: { /* questions filled in from AI or fallback at trigger time */ },
     prompt: () => 'Halftime trivia — fastest correct answers win!',
   },
@@ -146,11 +150,11 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
       // Game-type-specific extras the defaults can't compute statically.
       const extraConfig = {}
       if (gameType === 'HALFTIME_QUIZ') {
-        // No AI-supplied questions on the frontend trigger path — fill with
-        // the static fallback so the quiz renders something coherent. When
-        // the backend Director WS arrives later it'll be ignored (state
-        // already set), so the fallback questions stick for this game.
-        extraConfig.questions = pickFallbackQuestions(3)
+        // Both users in the room need the SAME 3 questions in the SAME
+        // order for parallel play to feel coherent. Seed by matchId +
+        // eventId so two clients firing the modal locally compute
+        // identical question sets (no need to wait for backend WS).
+        extraConfig.questions = pickFallbackQuestions(3, `${matchId}#${ev.eventId}`)
       }
       setState({
         gameId:           `${matchId}#${ev.eventId}`,
