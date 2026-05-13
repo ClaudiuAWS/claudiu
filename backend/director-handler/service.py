@@ -33,7 +33,10 @@ MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'eu.amazon.nova-micro-v1:0')
 _VALID_TRIGGERS = {
     'OFFSIDE_REFLEX':    {'offside'},
     'SHOT_CALL':         {'shotOnGoal', 'shot_on_goal'},
-    'PENALTY_SHOOTOUT':  {'penalty'},
+    # Penalties ride on eventType:'goal' with isPenalty:true. The downgrade
+    # gate below applies the secondary isPenalty check, so the literal
+    # eventType allowed here is 'goal'.
+    'PENALTY_SHOOTOUT':  {'goal'},
     'HALFTIME_QUIZ':     {'halftime'},
 }
 
@@ -94,7 +97,13 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
         if action == 'start_minigame':
                 game_type = decision.get('gameType')
                 allowed_event_types = _VALID_TRIGGERS.get(game_type, set())
-                if trigger_type not in allowed_event_types:
+                ok = trigger_type in allowed_event_types
+                # Penalty gate: PENALTY_SHOOTOUT is only valid on goals where
+                # isPenalty is true. Non-penalty goals (regular open-play) must
+                # NOT trigger the shootout.
+                if ok and game_type == 'PENALTY_SHOOTOUT' and not trigger_event.get('isPenalty'):
+                        ok = False
+                if not ok:
                         downgrade_text = decision.get('prompt') or decision.get('title')
                         if downgrade_text:
                                 print(f"director: downgrading start_minigame ({game_type}) on {trigger_type} -> commentate")
@@ -112,7 +121,7 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                 # config fields. Fill in per-game-type defaults so the frontend
                 # scoring/UI never sees missing critical fields.
                 if game_type_dec == 'HALFTIME_QUIZ':
-                        config.setdefault('durationMs', 28000)
+                        config.setdefault('durationMs', 180_000)  # 15 game-min at 5×
                 elif game_type_dec == 'PENALTY_SHOOTOUT':
                         config.setdefault('durationMs', 10000)
                 else:

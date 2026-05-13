@@ -422,8 +422,12 @@ def _apply_member_changes(room: dict, member_changes: list, event_type: str) -> 
 # implement the matching child component to add a new game vertical.
 MINIGAME_TRIGGERS = {
     'offside':  ('OFFSIDE_REFLEX',  8),
-    'penalty':  ('PENALTY_SHOOTOUT', 10),
-    'halftime': ('HALFTIME_QUIZ',   28),
+    # 15 in-game minutes worth of halftime break (the standard real-football
+    # interval). At default 5× speed, that's 180 wall seconds.
+    'halftime': ('HALFTIME_QUIZ',   180),
+    # Penalties don't have their own eventType — see fallback inside
+    # `_trigger_minigame_for_event` that maps eventType:'goal' +
+    # isPenalty:true to PENALTY_SHOOTOUT.
 }
 
 
@@ -436,6 +440,11 @@ def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, g
     block the match flow — caller wraps this in try/except.
     """
     trigger = MINIGAME_TRIGGERS.get(event_type)
+    # Penalties don't have their own eventType — the data loader emits them
+    # as eventType:'goal' with `data.isPenalty: true`. Map here so the
+    # mini-game fires when those events come through.
+    if not trigger and event_type == 'goal' and data.get('isPenalty'):
+        trigger = ('PENALTY_SHOOTOUT', 10)
     if not trigger:
         return
     game_type, duration_sec = trigger
@@ -488,7 +497,9 @@ def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, g
             # Pre-shuffled fallback questions (3) so the game has content even
             # without an AI Director pass. AI Director can overwrite this via
             # its own minigame_start broadcast with custom `questions`.
-            config['questions'] = _fallback_quiz_questions()
+            # Seed by match_id + event_id so this matches what each frontend
+            # computes locally (same algorithm in `quizFallback.js`).
+            config['questions'] = _fallback_quiz_questions(3, seed=f"{match_id}#{event_id}")
 
         payload = {
             'type':                'minigame_start',
@@ -569,7 +580,38 @@ def _minigame_prompt(game_type: str, ownership: dict) -> str:
 # down or returns malformed output. Each entry: {q, choices[4],
 # correctIdx, category}.
 
-import random as _quiz_random
+# Mulberry32 PRNG mirror of the JS implementation in
+# `frontend/src/utils/quizFallback.js`. Same seed → same sequence on both
+# sides, so backend-broadcast questions match what each client would have
+# computed locally.
+
+def _quiz_hash_seed(s: str) -> int:
+    """FNV-1a-style 32-bit hash mirroring `_hashSeed` in quizFallback.js."""
+    h = 2166136261
+    for ch in s:
+        h ^= ord(ch)
+        h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) & 0xFFFFFFFF
+    return h
+
+
+def _quiz_mulberry32(seed: int):
+    state = [seed & 0xFFFFFFFF]
+    def rand():
+        state[0] = (state[0] + 0x6D2B79F5) & 0xFFFFFFFF
+        r = state[0]
+        r = ((r ^ (r >> 15)) * (r | 1)) & 0xFFFFFFFF
+        r = (r ^ (r + ((r ^ (r >> 7)) * (r | 61)) & 0xFFFFFFFF)) & 0xFFFFFFFF
+        return ((r ^ (r >> 14)) & 0xFFFFFFFF) / 4294967296
+    return rand
+
+
+def _quiz_shuffle(arr: list, rand) -> None:
+    """Fisher-Yates in-place, matching the JS `_shuffleInPlace`."""
+    import math as _math
+    for i in range(len(arr) - 1, 0, -1):
+        j = int(_math.floor(rand() * (i + 1)))
+        arr[i], arr[j] = arr[j], arr[i]
+
 
 _QUIZ_POOL = [
     {'q': 'How many minutes are in a full football match (excluding stoppage time)?',
@@ -592,14 +634,27 @@ _QUIZ_POOL = [
 ]
 
 
-def _fallback_quiz_questions(count: int = 3) -> list:
+def _fallback_quiz_questions(count: int = 3, seed: str = None) -> list:
     """Return `count` fresh questions, shuffled, with shuffled answer order
-    (correctIdx adjusted)."""
-    picked = _quiz_random.sample(_QUIZ_POOL, k=min(count, len(_QUIZ_POOL)))
+    (correctIdx adjusted). When `seed` is provided, the output is
+    deterministic and matches the JS `pickFallbackQuestions(count, seed)`
+    output byte-for-byte — so backend-broadcast and frontend-driven trigger
+    paths produce IDENTICAL question lineups."""
+    if seed is not None:
+        rand = _quiz_mulberry32(_quiz_hash_seed(str(seed)))
+    else:
+        # Unseeded fallback for non-room contexts (testing). Uses Python's
+        # builtin which won't match the JS side — only acceptable when no
+        # client comparison is happening.
+        import random as _quiz_random
+        rand = _quiz_random.random
+    indices = list(range(len(_QUIZ_POOL)))
+    _quiz_shuffle(indices, rand)
+    picked = [_QUIZ_POOL[i] for i in indices[:count]]
     out = []
     for q in picked:
         idxs = list(range(len(q['choices'])))
-        _quiz_random.shuffle(idxs)
+        _quiz_shuffle(idxs, rand)
         choices = [q['choices'][i] for i in idxs]
         correct_idx = idxs.index(q['correctIdx'])
         out.append({

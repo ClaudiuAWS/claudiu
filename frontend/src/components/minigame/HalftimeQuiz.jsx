@@ -22,7 +22,11 @@ import { pickFallbackQuestions } from '../../utils/quizFallback'
  *   - Tiny football mascot rolls in between questions
  */
 
-const PER_Q_MS = 8000
+// 12s per question gives users time to read the trivia properly and weigh
+// answers without the wrong-button-mash feel of 8s. Total active phase:
+// 3 × 12 = 36s + transitions = ~38s. Matches the durationMs in
+// useMiniGame.GAME_DEFAULTS.HALFTIME_QUIZ.
+const PER_Q_MS = 12000
 const BETWEEN_MS = 900
 
 const CATEGORY_ICON = {
@@ -100,10 +104,12 @@ export default function HalftimeQuiz({ config, durationMs, onSubmit }) {
     const q = questions[qIndex]
     const correct = idx === q.correctIdx
     const remaining = Math.max(0, PER_Q_MS - elapsed)
+    // Tiered scoring scaled to PER_Q_MS — first third = max, middle = mid,
+    // last third = consolation.
     const base = !correct
       ? 0
-      : remaining >= 6000 ? 5
-      : remaining >= 3000 ? 3
+      : remaining >= PER_Q_MS * 2 / 3 ? 5
+      : remaining >= PER_Q_MS / 3     ? 3
       : 1
     const streakBonus = correct ? Math.min(streak, 2) : 0
     const total = base + streakBonus
@@ -246,8 +252,10 @@ function CountdownRing({ remaining, progress }) {
   const RADIUS = 15
   const CIRC = 2 * Math.PI * RADIUS
   const dash = CIRC * (1 - progress)
-  const color = remaining > 4000 ? '#10b981'
-              : remaining > 2000 ? '#f59e0b'
+  // Colour bands scale to PER_Q_MS: top third green, middle amber,
+  // last third red. Matches the scoring brackets above.
+  const color = remaining > PER_Q_MS * 2 / 3 ? '#10b981'
+              : remaining > PER_Q_MS / 3     ? '#f59e0b'
               : '#ef4444'
   return (
     <div className="relative" style={{ width: SIZE, height: SIZE }}>
