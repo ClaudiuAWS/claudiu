@@ -190,14 +190,29 @@ export function useMatch(matchId, onScoreEvent = null) {
     return () => clearInterval(id)
   }, [match?.startedAt, match?.speedMultiplier])
 
+  // Halftime break: post-halftime events become visible
+  // HALFTIME_BREAK_SECONDS LATER than their gameTime would suggest, so the
+  // halftime mini-game has ~15 game-minutes of breathing room. We don't
+  // mutate gameTime (display rendering reads it directly via
+  // formatFootballTime — mutating would shift the football minute), only
+  // the reveal threshold.
+  const HALFTIME_BREAK_SECONDS = 15 * 60
+
   // Filter: an event is visible once the reveal clock reaches its gameTime.
   // Late-arriving events (backend dispatched late) still appear immediately
   // when they reach us — the reveal floor only delays *early* arrivals.
   const events = useMemo(() => {
     if (revealSec < 0) return []
+    const halftime = allEvents.find(e => e.eventType === 'halftime')
+    const htSec = halftime ? gameTimeToSeconds(halftime.gameTime) : -1
     return allEvents.filter(e => {
       const sec = gameTimeToSeconds(e.gameTime)
-      return sec >= 0 && sec <= revealSec
+      if (sec < 0) return false
+      // Post-halftime events get a HALFTIME_BREAK_SECONDS delay in
+      // reveal threshold. Halftime itself reveals at its natural time.
+      const isPostHalftime = htSec >= 0 && sec > htSec && e.eventType !== 'halftime'
+      const threshold = isPostHalftime ? sec + HALFTIME_BREAK_SECONDS : sec
+      return threshold <= revealSec
     })
   }, [allEvents, revealSec])
 
