@@ -422,8 +422,10 @@ def _apply_member_changes(room: dict, member_changes: list, event_type: str) -> 
 # implement the matching child component to add a new game vertical.
 MINIGAME_TRIGGERS = {
     'offside':  ('OFFSIDE_REFLEX',  8),
-    'penalty':  ('PENALTY_SHOOTOUT', 10),
     'halftime': ('HALFTIME_QUIZ',   28),
+    # Penalties don't have their own eventType — see fallback inside
+    # `_trigger_minigame_for_event` that maps eventType:'goal' +
+    # isPenalty:true to PENALTY_SHOOTOUT.
 }
 
 
@@ -436,6 +438,11 @@ def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, g
     block the match flow — caller wraps this in try/except.
     """
     trigger = MINIGAME_TRIGGERS.get(event_type)
+    # Penalties don't have their own eventType — the data loader emits them
+    # as eventType:'goal' with `data.isPenalty: true`. Map here so the
+    # mini-game fires when those events come through.
+    if not trigger and event_type == 'goal' and data.get('isPenalty'):
+        trigger = ('PENALTY_SHOOTOUT', 10)
     if not trigger:
         return
     game_type, duration_sec = trigger

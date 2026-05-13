@@ -103,6 +103,10 @@ export function useDirector(room, events, currentUserId, match) {
       triggerEvent: {
         eventId:       latest.eventId,
         eventType:     latest.eventType,
+        // Penalties come through as eventType:'goal' with isPenalty:true —
+        // surface the flag so the AI can choose PENALTY_SHOOTOUT (and the
+        // prompt's rule can validate the combo).
+        isPenalty:     !!latest.isPenalty,
         playerName:    latest.playerName || latest.playerDisplay || null,
         playerDisplay: latest.playerDisplay || null,
         teamRole:      latest.teamRole || null,

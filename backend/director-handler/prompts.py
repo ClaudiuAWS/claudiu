@@ -18,7 +18,8 @@ CRITICAL — when to fire start_minigame:
 - Strict allowed mappings (no exceptions, no inference, no creativity):
     triggerEvent.eventType == "offside"     -> may fire OFFSIDE_REFLEX
     triggerEvent.eventType == "shotOnGoal"  -> may fire SHOT_CALL
-    triggerEvent.eventType == "penalty"     -> may fire PENALTY_SHOOTOUT
+    triggerEvent.eventType == "goal" AND triggerEvent.isPenalty == true
+                                            -> may fire PENALTY_SHOOTOUT
     triggerEvent.eventType == "halftime"    -> may fire HALFTIME_QUIZ
 - For ANY other eventType (goal, card, save, nutmeg, substitution, fulltime,
   secondhalf, etc.), DO NOT fire a mini-game. Choose commentate or

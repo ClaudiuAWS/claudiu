@@ -29,8 +29,10 @@ import { pickFallbackQuestions } from '../utils/quizFallback'
 // online, its WS push overrides this with personalized title/prompt.
 const TRIGGER_MAP = {
   offside:  'OFFSIDE_REFLEX',
-  penalty:  'PENALTY_SHOOTOUT',
   halftime: 'HALFTIME_QUIZ',
+  // Penalties don't have their own eventType — the data loader emits
+  // them as eventType:'goal' with `isPenalty: true`. See the special
+  // case in the trigger effect below.
 }
 
 const GAME_DEFAULTS = {
@@ -129,7 +131,12 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
     if (!matchId || !events?.length || state) return
     const firedTypes = _readFiredTypes(matchId, matchStartedAt)
     for (const ev of events) {
-      const gameType = TRIGGER_MAP[ev.eventType]
+      let gameType = TRIGGER_MAP[ev.eventType]
+      // Penalty events ride on eventType:'goal' with isPenalty:true — the
+      // loader doesn't emit a separate type. Detect and map here.
+      if (!gameType && ev.eventType === 'goal' && ev.isPenalty === true) {
+        gameType = 'PENALTY_SHOOTOUT'
+      }
       if (!gameType) continue
       if (firedTypes.includes(gameType)) continue
       const defaults = GAME_DEFAULTS[gameType]
