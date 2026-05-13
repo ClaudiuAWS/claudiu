@@ -297,10 +297,14 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
       // ignore — frontend beat backend, no need to clobber the active game.
       setState(prev => {
         if (prev) return prev
-        // Mark fired so the trigger effect doesn't double-fire after this.
+        // firedTypes guard: a late-arriving WS broadcast for a game that
+        // already played and dismissed (state went to null after the 4.5s
+        // result panel) used to open a fresh duplicate modal. Now we drop
+        // the broadcast if firedTypes says the gameType is already done.
         if (matchId && msg.gameType) {
           const fired = _readFiredTypes(matchId, matchStartedAt)
-          if (!fired.includes(msg.gameType)) _writeFiredTypes(matchId, matchStartedAt, [...fired, msg.gameType])
+          if (fired.includes(msg.gameType)) return prev
+          _writeFiredTypes(matchId, matchStartedAt, [...fired, msg.gameType])
         }
         return {
           gameId:           msg.gameId,

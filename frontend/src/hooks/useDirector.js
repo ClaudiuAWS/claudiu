@@ -134,8 +134,18 @@ export function useDirector(room, events, currentUserId, match) {
         displayName:    m.displayName,
         ownedPlayerIds: (m.teamSelectionDetails || []).map(p => p.playerId),
       })),
-      minigamesFired:           Array.isArray(room.triggeredMinigames) ? room.triggeredMinigames : [],
+      // Map event-type entries on the room record to game-type names so
+      // both the prompt's "once per match" rule and the backend hard gate
+      // can compare apples to apples (the AI thinks in gameTypes).
+      minigamesFired: _mapFiredToGameTypes(
+        Array.isArray(room.triggeredMinigames) ? room.triggeredMinigames : []
+      ),
       minutesSinceLastMinigame: 99,  // not tracked in current room state — Lambda treats as 'fresh'
+      // Compute ownership so the AI-Director-fired modal carries the
+      // player's identity downstream. Without this, AI broadcasts have
+      // `ownershipContext: {}`, the modal can't look up the player's
+      // photo, and OffsideReflex falls back to the dotless avatar.
+      ownershipContext: _computeSnapshotOwnership(latest, room.members || []),
     }
 
     roomsApi.directorTick(room.roomCode, snapshot)
@@ -150,4 +160,42 @@ export function useDirector(room, events, currentUserId, match) {
     match?.homeScore,
     match?.awayScore,
   ])
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────
+
+// Mirror of useMiniGame's TRIGGER_MAP + isPenalty special case. Translates
+// the room's `triggeredMinigames` SS (event-type-keyed) into the gameType
+// space the AI Director reasons in. Keep in lockstep with useMiniGame.js.
+const _EVENT_TYPE_TO_GAME_TYPE = {
+  offside:  'OFFSIDE_REFLEX',
+  halftime: 'HALFTIME_QUIZ',
+  // 'penalty' isn't a real event type — penalty goals come through as
+  // eventType:'goal' with isPenalty:true. The backend's triggeredMinigames
+  // SS would never contain a 'penalty' entry, so no row needed here.
+}
+
+function _mapFiredToGameTypes(firedEventTypes) {
+  const out = []
+  for (const et of firedEventTypes) {
+    const gt = _EVENT_TYPE_TO_GAME_TYPE[et]
+    if (gt && !out.includes(gt)) out.push(gt)
+  }
+  return out
+}
+
+// Same shape as useMiniGame's _computeOwnership — kept inline (vs importing)
+// to keep this hook a leaf. The frontend modal reads
+// `state.ownershipContext?.playerId` so we need to emit that exact key.
+function _computeSnapshotOwnership(event, members) {
+  const playerId = event?.playerId || event?.scoringPlayerId || event?.goalKeeperId || null
+  if (!playerId || !members?.length) return {}
+  const owner = members.find(m =>
+    (m.teamSelectionDetails || []).some(p => p.playerId === playerId)
+  )
+  return {
+    playerId,
+    advantagedUserId:      owner?.userId || null,
+    advantagedDisplayName: owner?.displayName || null,
+  }
 }
