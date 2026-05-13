@@ -46,7 +46,10 @@ HALFTIME_QUIZ schema (only when triggerEvent.eventType == "halftime"):
 
 Other rules:
 - Don't fire 2 mini-games in <60 displayed seconds (check minutesSinceLastMinigame)
-- Each game type fires at most ONCE per match (check minigamesFired list)
+- Each EVENT (by eventId) fires at most ONCE — but multiple events of the
+  same gameType are fine, e.g. every offside opens its own OFFSIDE_REFLEX.
+  minigamesFired is informational: use it to vary commentary tone, not as
+  a hard "don't repeat" rule.
 - Personalize commentary using ownership: if the player involved is owned by a
   member, mention them by displayName
 - Commentary should be one short, punchy line (max 12 words). Football-fan tone.

@@ -64,24 +64,30 @@ const GAME_DEFAULTS = {
   },
 }
 
-// Scope the storage key by match.startedAt so resetting the match (which
-// gives it a fresh startedAt on next start) gives a clean slate for testing.
-// Without this, you'd have to clear sessionStorage manually between dev runs.
-function _firedTypesKey(matchId, startedAt) {
-  return `minigame_fired_${matchId}_${startedAt || 'idle'}`
+// Idempotency keyed by EVENT ID (not gameType) so multiple events of the
+// same gameType — e.g. several offsides in a match — can each open their
+// own mini-game while a single event still only fires once. Penalty +
+// halftime events are inherently single-occurrence so they're naturally
+// once-per-match. Storage key bumped to v2 to invalidate stale per-type
+// entries from earlier deploys.
+function _firedEventsKey(matchId, startedAt) {
+  // v2 bump invalidates old per-gameType keys (`minigame_fired_...`) from
+  // previous deploys so stale "OFFSIDE_REFLEX already fired" entries don't
+  // carry over and silently suppress the second offside on first load.
+  return `minigame_fired_v2_${matchId}_${startedAt || 'idle'}`
 }
 
-function _readFiredTypes(matchId, startedAt) {
+function _readFiredEvents(matchId, startedAt) {
   if (!matchId) return []
   try {
-    const s = sessionStorage.getItem(_firedTypesKey(matchId, startedAt))
+    const s = sessionStorage.getItem(_firedEventsKey(matchId, startedAt))
     return s ? JSON.parse(s) : []
   } catch { return [] }
 }
 
-function _writeFiredTypes(matchId, startedAt, types) {
+function _writeFiredEvents(matchId, startedAt, ids) {
   if (!matchId) return
-  try { sessionStorage.setItem(_firedTypesKey(matchId, startedAt), JSON.stringify(types)) } catch {}
+  try { sessionStorage.setItem(_firedEventsKey(matchId, startedAt), JSON.stringify(ids)) } catch {}
 }
 
 function _computeOwnership(event, members) {
@@ -133,7 +139,7 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
   // becomes a fallback for cases where the frontend missed the event entirely.
   useEffect(() => {
     if (!matchId || !events?.length || state) return
-    const firedTypes = _readFiredTypes(matchId, matchStartedAt)
+    const firedEvents = _readFiredEvents(matchId, matchStartedAt)
     for (const ev of events) {
       let gameType = TRIGGER_MAP[ev.eventType]
       // Penalty events ride on eventType:'goal' with isPenalty:true — the
@@ -142,11 +148,14 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
         gameType = 'PENALTY_SHOOTOUT'
       }
       if (!gameType) continue
-      if (firedTypes.includes(gameType)) continue
+      // Per-event idempotency: each event triggers AT MOST ONCE, but
+      // different events of the same gameType (e.g. multiple offsides) can
+      // each open their own mini-game.
+      if (firedEvents.includes(ev.eventId)) continue
       const defaults = GAME_DEFAULTS[gameType]
       if (!defaults) continue
       // Mark fired BEFORE setting state so a quick re-render can't double-fire.
-      _writeFiredTypes(matchId, matchStartedAt, [...firedTypes, gameType])
+      _writeFiredEvents(matchId, matchStartedAt, [...firedEvents, ev.eventId])
       // Game-type-specific extras the defaults can't compute statically.
       const extraConfig = {}
       if (gameType === 'HALFTIME_QUIZ') {
@@ -318,14 +327,16 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
       // ignore — frontend beat backend, no need to clobber the active game.
       setState(prev => {
         if (prev) return prev
-        // firedTypes guard: a late-arriving WS broadcast for a game that
-        // already played and dismissed (state went to null after the 4.5s
-        // result panel) used to open a fresh duplicate modal. Now we drop
-        // the broadcast if firedTypes says the gameType is already done.
-        if (matchId && msg.gameType) {
-          const fired = _readFiredTypes(matchId, matchStartedAt)
-          if (fired.includes(msg.gameType)) return prev
-          _writeFiredTypes(matchId, matchStartedAt, [...fired, msg.gameType])
+        // firedEvents guard: a late-arriving WS broadcast for an event that
+        // already played and dismissed used to open a fresh duplicate modal.
+        // Drop the broadcast if firedEvents already contains the event id.
+        // Note we key on relatedEventId (or gameId as fallback) so multiple
+        // events of the SAME gameType don't suppress each other.
+        const eventKey = msg.relatedEventId || msg.gameId
+        if (matchId && eventKey) {
+          const fired = _readFiredEvents(matchId, matchStartedAt)
+          if (fired.includes(eventKey)) return prev
+          _writeFiredEvents(matchId, matchStartedAt, [...fired, eventKey])
         }
         return {
           gameId:           msg.gameId,
