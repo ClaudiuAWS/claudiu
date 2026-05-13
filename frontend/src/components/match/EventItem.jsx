@@ -1,171 +1,401 @@
 import { gameTimeToSeconds, formatFootballTime } from '../../utils/matchEvents'
 
-const EVENT_CONFIG = {
+/**
+ * Visual tier drives layout shape.
+ * - hero    → goal (full photo card, score arrow, assist)
+ * - major   → card (red), saved_shot, offside (row with photo)
+ * - minor   → card (yellow) (row with compact photo)
+ * - marker  → halftime / fulltime / secondhalf (centered chip divider)
+ */
+
+const EVENT_META = {
   goal: {
-    icon: () => (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="1.5"/>
-        <path d="M12 3C12 3 9 7 9 12s3 9 3 9M12 3c0 0 3 4 3 9s-3 9-3 9M3 12h18M5 7.5C7 9 9.5 9.5 12 9.5s5-0.5 7-2M5 16.5C7 15 9.5 14.5 12 14.5s5 0.5 7 2" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
-    bg: 'bg-green-500',
+    tier: 'hero',
     label: 'Goal',
-    accent: 'text-green-400',
-    card: 'border-green-500/20 bg-green-500/5',
+    accent: '#22c55e', // green-500
+    glow: 'rgba(34,197,94,0.18)',
   },
   card: {
-    icon: () => (
-      <svg width="14" height="18" viewBox="0 0 14 18" fill="none">
-        <rect x="1" y="1" width="12" height="16" rx="2" fill="#eab308"/>
-      </svg>
-    ),
-    bg: 'bg-yellow-500',
+    tier: 'major', // downgraded to minor at runtime if yellow
     label: 'Card',
-    accent: 'text-yellow-400',
-    card: 'border-yellow-500/15 bg-yellow-500/5',
-  },
-  substitution: {
-    icon: () => (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-        <path d="M7 16V4M7 4L4 7M7 4l3 3" stroke="#60a5fa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M17 8v12M17 20l-3-3M17 20l3-3" stroke="#f87171" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    ),
-    bg: 'bg-blue-500',
-    label: 'Sub',
-    accent: 'text-blue-400',
-    card: 'border-blue-500/15 bg-blue-500/5',
-  },
-  halftime: {
-    icon: () => <span className="text-base">🔔</span>,
-    bg: 'bg-yellow-600',
-    label: 'Half Time',
-    accent: 'text-yellow-400',
-    card: 'border-yellow-600/15 bg-yellow-600/5',
-  },
-  secondhalf: {
-    icon: () => <span className="text-base">▶️</span>,
-    bg: 'bg-green-600',
-    label: '2nd Half',
-    accent: 'text-green-400',
-    card: 'border-green-600/15 bg-green-600/5',
-  },
-  fulltime: {
-    icon: () => <span className="text-base">🏁</span>,
-    bg: 'bg-gray-600',
-    label: 'Full Time',
-    accent: 'text-gray-400',
-    card: 'border-white/10 bg-white/[0.03]',
+    accent: '#eab308', // yellow-500
+    glow: 'rgba(234,179,8,0.12)',
   },
   saved_shot: {
-    icon: () => <span className="text-base">🧤</span>,
-    bg: 'bg-blue-600',
+    tier: 'major',
     label: 'Save',
-    accent: 'text-blue-400',
-    card: 'border-blue-600/15 bg-blue-600/5',
-  },
-  nutmeg: {
-    icon: () => <span className="text-base">🤌</span>,
-    bg: 'bg-purple-500',
-    label: 'Nutmeg',
-    accent: 'text-purple-400',
-    card: 'border-purple-500/15 bg-purple-500/5',
-  },
-  spectacular_play: {
-    icon: () => <span className="text-base">✨</span>,
-    bg: 'bg-pink-500',
-    label: 'Skill',
-    accent: 'text-pink-400',
-    card: 'border-pink-500/15 bg-pink-500/5',
+    accent: '#3b82f6', // blue-500
+    glow: 'rgba(59,130,246,0.12)',
   },
   offside: {
-    icon: () => <span className="text-base">🚩</span>,
-    bg: 'bg-orange-500',
+    tier: 'major',
     label: 'Offside',
-    accent: 'text-orange-400',
-    card: 'border-orange-500/15 bg-orange-500/5',
+    accent: '#f97316', // orange-500
+    glow: 'rgba(249,115,22,0.12)',
+  },
+  substitution: {
+    tier: 'major',
+    label: 'Sub',
+    accent: '#60a5fa', // blue-400
+    glow: 'rgba(96,165,250,0.12)',
+  },
+  halftime:   { tier: 'marker', label: 'Half Time', accent: '#eab308' },
+  fulltime:   { tier: 'marker', label: 'Full Time', accent: '#9ca3af' },
+  secondhalf: { tier: 'marker', label: '2nd Half',  accent: '#22c55e' },
+  nutmeg: {
+    tier: 'major',
+    label: 'Nutmeg',
+    accent: '#a855f7',
+    glow: 'rgba(168,85,247,0.12)',
+  },
+  spectacular_play: {
+    tier: 'major',
+    label: 'Skill',
+    accent: '#ec4899',
+    glow: 'rgba(236,72,153,0.12)',
   },
 }
 
-function getDescription(event) {
-  switch (event.eventType) {
-    case 'goal':
-      return {
-        primary: `${event.scoringDisplay}${event.isPenalty ? ' (pen)' : ''}`,
-        secondary: event.currentResult ? `Score: ${event.currentResult}` : null,
-      }
-    case 'card':
-      return {
-        primary: event.playerDisplay,
-        secondary: event.cardColor ? `${event.cardColor.charAt(0).toUpperCase() + event.cardColor.slice(1)} card` : null,
-      }
-    case 'substitution':
-      return {
-        primary: `${event.playerInDisplay} on`,
-        secondary: `${event.playerOutDisplay} off`,
-      }
-    case 'halftime':
-      return { primary: 'Half Time', secondary: event.finalResult ?? null }
-    case 'fulltime':
-      return { primary: 'Full Time', secondary: event.finalResult ?? null }
-    case 'secondhalf':
-      return { primary: 'Second Half Kick-off', secondary: null }
-    case 'saved_shot':
-      return { primary: event.goalKeeperDisplay ?? 'Goalkeeper', secondary: event.saveResult ?? null }
-    case 'nutmeg':
-      return { primary: event.playerDisplay ?? 'Unknown', secondary: event.affectedDisplay ? `vs ${event.affectedDisplay}` : null }
-    case 'spectacular_play':
-      return { primary: event.playerDisplay ?? 'Unknown', secondary: event.playType ?? null }
-    case 'offside':
-      return { primary: event.playerDisplay ?? 'Unknown', secondary: 'caught offside' }
-    default:
-      return { primary: event.eventType, secondary: null }
-  }
+// Fallback meta for any event type we don't know about.
+const FALLBACK_META = {
+  tier: 'major',
+  label: 'Event',
+  accent: '#6b7280',
+  glow: 'rgba(107,114,128,0.10)',
 }
 
-export default function EventItem({ event, htStoredSec = -1 }) {
-  const cfg = EVENT_CONFIG[event.eventType] ?? {
-    icon: () => <span className="text-sm">•</span>,
-    bg: 'bg-gray-700',
-    label: event.eventType,
-    accent: 'text-gray-400',
-    card: 'border-white/5 bg-white/[0.02]',
-  }
+// -----------------------------------------------------------------------------
+// Small pieces
+// -----------------------------------------------------------------------------
 
-  const { primary, secondary } = getDescription(event)
-  const isGoal = event.eventType === 'goal'
+function PlayerAvatar({ imageUrl, fallback, size = 40, accent = '#6b7280' }) {
+  return (
+    <div
+      className="relative rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center"
+      style={{
+        width: size,
+        height: size,
+        background: '#1f2937',
+        boxShadow: `0 0 0 1.5px ${accent}`,
+      }}
+    >
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt=""
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          onError={(e) => { e.currentTarget.style.display = 'none' }}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <span className="text-gray-400 text-[11px] font-bold tracking-wide">
+          {fallback}
+        </span>
+      )}
+    </div>
+  )
+}
 
-  // Football-convention time: "45+6'", "67'", etc.
-  const storedSec = gameTimeToSeconds(event.gameTime)
-  // Halftime / secondhalf / fulltime markers are boundary events — show them without a minute
-  const isBoundary = ['halftime', 'secondhalf', 'fulltime'].includes(event.eventType)
-  const displayTime = isBoundary ? null : formatFootballTime(storedSec, htStoredSec)
+function initials(name) {
+  if (!name) return '?'
+  return name.split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase()
+}
+
+function resolvePlayer(playerId, playerMap) {
+  if (!playerId || !playerMap) return null
+  return playerMap[playerId] || null
+}
+
+function teamRoleDot(role) {
+  if (role === 'home') return '#3b82f6' // blue
+  if (role === 'away') return '#ef4444' // red
+  return 'transparent'
+}
+
+// -----------------------------------------------------------------------------
+// Marker: halftime / fulltime / secondhalf — slim centered divider
+// -----------------------------------------------------------------------------
+
+function MarkerRow({ event, meta }) {
+  const secondary = event.finalResult ?? null
+  return (
+    <div className="match-event-in flex items-center gap-3 py-2">
+      <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, transparent, ${meta.accent}44, transparent)` }} />
+      <div
+        className="px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase flex items-center gap-2"
+        style={{
+          color: meta.accent,
+          background: `${meta.accent}14`,
+          border: `1px solid ${meta.accent}33`,
+        }}
+      >
+        {meta.label}
+        {secondary && <span className="text-gray-500 font-semibold">· {secondary}</span>}
+      </div>
+      <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, transparent, ${meta.accent}44, transparent)` }} />
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// Hero: Goal
+// -----------------------------------------------------------------------------
+
+function GoalHero({ event, meta, playerMap, displayTime }) {
+  const scorer   = resolvePlayer(event.scoringPlayerId, playerMap)
+  const assister = resolvePlayer(event.assistPlayerId,  playerMap)
+
+  // Score split: "2:1" → ["2","1"]
+  const [homeStr, awayStr] = (event.currentResult || '').split(':')
+  const homeScore = homeStr?.trim() ?? ''
+  const awayScore = awayStr?.trim() ?? ''
+  const scoringRole = event.scoringTeamRole // 'home' | 'away'
 
   return (
     <div
-      className={`match-event-in flex items-center gap-3 px-4 py-3 rounded-2xl border ${cfg.card} ${isGoal ? 'goal-flash' : ''}`}
+      className="match-event-in goal-hero relative overflow-hidden rounded-2xl"
+      style={{
+        background: `linear-gradient(135deg, ${meta.glow} 0%, transparent 60%), linear-gradient(145deg, #101827 0%, #0a0f1a 100%)`,
+        border: `1px solid ${meta.accent}33`,
+      }}
     >
-      {/* Icon bubble */}
-      <div className={`w-9 h-9 rounded-xl ${cfg.bg} flex items-center justify-center flex-shrink-0`}>
-        {cfg.icon()}
+      {/* Left accent bar */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-[3px]"
+        style={{ background: meta.accent }}
+      />
+
+      {/* Sweep shimmer (runs once on mount via CSS animation) */}
+      <div className="goal-sweep absolute inset-0 pointer-events-none" />
+
+      {/* Flying ball — arcs in from the left, spins, settles near the score */}
+      <div className="goal-ball absolute pointer-events-none" aria-hidden="true">
+        <SoccerBall size={26} />
+      </div>
+
+      <div className="relative px-4 py-4 flex items-center gap-4">
+        {/* Scorer photo */}
+        <PlayerAvatar
+          imageUrl={scorer?.imageUrl}
+          fallback={initials(event.scoringDisplay)}
+          size={52}
+          accent={meta.accent}
+        />
+
+        {/* Scorer + assist text */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span
+              className="text-[10px] font-bold tracking-widest uppercase"
+              style={{ color: meta.accent }}
+            >
+              Goal
+            </span>
+            {event.isPenalty && (
+              <span className="text-[9px] font-bold tracking-widest uppercase text-gray-400 bg-white/5 px-1.5 py-0.5 rounded">
+                PEN
+              </span>
+            )}
+            {displayTime && (
+              <>
+                <span className="text-gray-600 text-[10px]">·</span>
+                <span className="text-gray-500 text-[10px] font-semibold tabular-nums">{displayTime}</span>
+              </>
+            )}
+          </div>
+          <p className="text-white text-[15px] font-bold truncate mt-0.5">
+            {event.scoringDisplay}
+          </p>
+          {assister && event.assistDisplay && (
+            <p className="text-gray-500 text-[11px] truncate mt-0.5">
+              Assist · <span className="text-gray-300">{event.assistDisplay}</span>
+            </p>
+          )}
+        </div>
+
+        {/* Score pill */}
+        {homeScore && awayScore && (
+          <div className="flex-shrink-0 flex items-center gap-2 pl-3">
+            <span
+              className={`text-lg font-black tabular-nums ${scoringRole === 'home' ? 'text-white' : 'text-gray-500'}`}
+            >
+              {homeScore}
+            </span>
+            <span className="text-gray-600 text-xs font-bold">–</span>
+            <span
+              className={`text-lg font-black tabular-nums ${scoringRole === 'away' ? 'text-white' : 'text-gray-500'}`}
+            >
+              {awayScore}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Classic black-and-white soccer ball. Pure SVG, no deps.
+function SoccerBall({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="15" fill="white" stroke="#111" strokeWidth="1" />
+      {/* Center pentagon */}
+      <polygon
+        points="16,8 22,12.5 19.7,19.5 12.3,19.5 10,12.5"
+        fill="#111"
+      />
+      {/* Outer seams pointing to the 5 corners */}
+      <path d="M16 8 L16 3" stroke="#111" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M22 12.5 L27 10.5" stroke="#111" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M19.7 19.5 L23.5 24.5" stroke="#111" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M12.3 19.5 L8.5 24.5" stroke="#111" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M10 12.5 L5 10.5" stroke="#111" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// Standard row (major / minor) — used by everything that isn't goal or marker
+// -----------------------------------------------------------------------------
+
+function StandardRow({ event, meta, playerMap, displayTime }) {
+  // Pick the "primary player" for photo depending on event type.
+  let primaryPlayerId = null
+  let primaryName     = null
+  let secondaryName   = null
+  let teamRole        = null
+  let subtitle        = null
+
+  switch (event.eventType) {
+    case 'card':
+      primaryPlayerId = event.playerId
+      primaryName     = event.playerDisplay
+      teamRole        = event.teamRole
+      subtitle        = event.cardColor
+        ? `${event.cardColor.charAt(0).toUpperCase() + event.cardColor.slice(1)} card`
+        : null
+      break
+    case 'saved_shot':
+      primaryPlayerId = event.goalKeeperId
+      primaryName     = event.goalKeeperDisplay
+      teamRole        = event.teamRole
+      subtitle        = event.saveResult ?? null
+      break
+    case 'offside':
+      primaryPlayerId = event.playerId
+      primaryName     = event.playerDisplay
+      teamRole        = event.teamRole
+      subtitle        = 'Caught offside'
+      break
+    case 'substitution':
+      primaryPlayerId = event.playerInId
+      primaryName     = event.playerInDisplay
+      secondaryName   = event.playerOutDisplay
+      teamRole        = event.teamRole
+      subtitle        = secondaryName ? `${secondaryName} off` : null
+      break
+    case 'nutmeg':
+      primaryPlayerId = event.playerId
+      primaryName     = event.playerDisplay
+      teamRole        = event.teamRole
+      subtitle        = event.affectedDisplay ? `vs ${event.affectedDisplay}` : null
+      break
+    case 'spectacular_play':
+      primaryPlayerId = event.playerId
+      primaryName     = event.playerDisplay
+      teamRole        = event.teamRole
+      subtitle        = event.playType ?? null
+      break
+    default:
+      primaryName = event.eventType
+  }
+
+  const player = resolvePlayer(primaryPlayerId, playerMap)
+  const isYellowCard = event.eventType === 'card' && event.cardColor === 'yellow'
+
+  return (
+    <div
+      className="match-event-in relative flex items-center gap-3 pl-4 pr-4 py-3 rounded-xl overflow-hidden"
+      style={{
+        background: 'rgba(255,255,255,0.025)',
+        border: '1px solid rgba(255,255,255,0.05)',
+      }}
+    >
+      {/* Left accent stripe */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-[3px]"
+        style={{ background: meta.accent, opacity: isYellowCard ? 0.6 : 1 }}
+      />
+
+      {/* Player photo (or fallback dot) */}
+      <div className="relative flex-shrink-0">
+        <PlayerAvatar
+          imageUrl={player?.imageUrl}
+          fallback={initials(primaryName)}
+          size={36}
+          accent={meta.accent}
+        />
+        {/* Team dot */}
+        {teamRole && (
+          <span
+            className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
+            style={{
+              background: teamRoleDot(teamRole),
+              borderColor: '#0a0f1a',
+            }}
+          />
+        )}
       </div>
 
       {/* Text */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-bold tracking-widest uppercase ${cfg.accent}`}>{cfg.label}</span>
-          {secondary && <span className="text-gray-600 text-[10px]">·</span>}
-          {secondary && <span className="text-gray-500 text-[10px]">{secondary}</span>}
+        <div className="flex items-center gap-1.5">
+          <span
+            className="text-[10px] font-bold tracking-widest uppercase"
+            style={{ color: meta.accent }}
+          >
+            {isYellowCard ? 'Yellow' : (event.eventType === 'card' && event.cardColor === 'red' ? 'Red' : meta.label)}
+          </span>
+          {subtitle && <span className="text-gray-700 text-[10px]">·</span>}
+          {subtitle && <span className="text-gray-500 text-[10px] truncate">{subtitle}</span>}
         </div>
-        <p className="text-white text-sm font-medium mt-0.5 truncate">{primary}</p>
+        <p className="text-white text-sm font-medium mt-0.5 truncate">
+          {primaryName}
+          {event.eventType === 'substitution' && secondaryName && (
+            <span className="text-gray-500 font-normal"> on</span>
+          )}
+        </p>
       </div>
 
-      {/* Game time */}
+      {/* Time */}
       {displayTime && (
-        <div className="flex-shrink-0 text-right">
-          <span className="text-gray-500 text-xs font-semibold tabular-nums">{displayTime}</span>
+        <div className="flex-shrink-0">
+          <span className="text-gray-500 text-xs font-semibold tabular-nums">
+            {displayTime}
+          </span>
         </div>
       )}
     </div>
   )
+}
+
+// -----------------------------------------------------------------------------
+// Public component
+// -----------------------------------------------------------------------------
+
+export default function EventItem({ event, htStoredSec = -1, playerMap = {} }) {
+  const meta = EVENT_META[event.eventType] ?? FALLBACK_META
+
+  const storedSec = gameTimeToSeconds(event.gameTime)
+  const isBoundary = ['halftime', 'secondhalf', 'fulltime'].includes(event.eventType)
+  const displayTime = isBoundary ? null : formatFootballTime(storedSec, htStoredSec)
+
+  if (meta.tier === 'marker') {
+    return <MarkerRow event={event} meta={meta} />
+  }
+  if (event.eventType === 'goal') {
+    return <GoalHero event={event} meta={meta} playerMap={playerMap} displayTime={displayTime} />
+  }
+  return <StandardRow event={event} meta={meta} playerMap={playerMap} displayTime={displayTime} />
 }

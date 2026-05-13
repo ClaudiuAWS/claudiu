@@ -55,3 +55,8 @@ export const matchesApi = {
   getEvents:  (matchId) => request(`/matches/${matchId}/events`),
   getPlayers: (matchId) => request(`/matches/${matchId}/players`),
 }
+
+export const profileApi = {
+  getUploadUrl: (contentType) => request('/profile/avatar-upload-url', 'POST', { contentType }),
+  update:       (avatarUrl)   => request('/profile', 'PUT', { avatarUrl }),
+}

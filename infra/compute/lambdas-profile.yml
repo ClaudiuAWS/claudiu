@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu Lambda Functions - Profile Feature
+
+Resources:
+        ProfileLambdaRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-profile-lambda-role
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Service: lambda.amazonaws.com
+                                          Action: sts:AssumeRole
+                        ManagedPolicyArns:
+                                - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+                        Policies:
+                                - PolicyName: claudiu-profile-lambda-policy
+                                  PolicyDocument:
+                                          Version: "2012-10-17"
+                                          Statement:
+                                                  - Sid: S3PresignedUrl
+                                                    Effect: Allow
+                                                    Action:
+                                                            - s3:PutObject
+                                                    Resource: !Sub
+                                                            - arn:aws:s3:::${Bucket}/avatars/*
+                                                            - Bucket: !ImportValue claudiu-profile-pictures-bucket
+                                                  - Sid: CognitoUpdateAttributes
+                                                    Effect: Allow
+                                                    Action:
+                                                            - cognito-idp:AdminUpdateUserAttributes
+                                                    Resource: !Sub arn:aws:cognito-idp:eu-central-1:${AWS::AccountId}:userpool/eu-central-1_xMo5k0VLO
+
+        ProfileLambda:
+                Type: AWS::Lambda::Function
+                Properties:
+                        FunctionName: claudiu-profile
+                        Runtime: python3.14
+                        Handler: handler.handler
+                        Role: !GetAtt ProfileLambdaRole.Arn
+                        Timeout: 15
+                        MemorySize: 128
+                        Environment:
+                                Variables:
+                                        PROFILE_PICTURES_BUCKET: !ImportValue claudiu-profile-pictures-bucket
+                                        USER_POOL_ID: !Sub eu-central-1_xMo5k0VLO
+                        Code:
+                                ZipFile: |
+                                        def handler(event, context):
+                                            return {'statusCode': 200, 'body': 'ok'}
+
+Outputs:
+        ProfileLambdaArn:
+                Value: !GetAtt ProfileLambda.Arn
+                Export:
+                        Name: claudiu-profile-lambda-arn

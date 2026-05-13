@@ -40,15 +40,16 @@ export const logout = async () => {
   return signOut()
 }
 
-export const getUser = async () => {
+export const getUser = async (forceRefresh = false) => {
   try {
     const user = await getCurrentUser()
-    const session = await fetchAuthSession()
+    const session = await fetchAuthSession({ forceRefresh })
     const claims = session.tokens?.idToken?.payload
     const profile = {
       userId: user.userId,
       email: claims?.email,
       displayName: claims?.name,
+      avatarUrl: claims?.['custom:avatar_url'] || null,
     }
     logger.info('Auth', 'Got current user', profile)
     return profile

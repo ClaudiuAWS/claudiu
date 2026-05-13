@@ -28,4 +28,6 @@ jobs:
                                     --template-file infra/compute/api-gateway.yml \
                                     --stack-name api-gateway-claudiu \
                                     --capabilities CAPABILITY_NAMED_IAM \
-                                    --no-fail-on-empty-changeset
+                                    --no-fail-on-empty-changeset \
+                                    --s3-bucket claudiu-profile-pictures-507609143109 \
+                                    --s3-prefix cfn-templates

@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
   }
 
   const refreshUser = async () => {
-    const u = await getUser()
+    const u = await getUser(true)
     setUser(u)
   }
 

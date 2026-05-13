@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu S3 Bucket - Profile Pictures
+
+Resources:
+        ProfilePicturesBucket:
+                Type: AWS::S3::Bucket
+                Properties:
+                        BucketName: !Sub claudiu-profile-pictures-${AWS::AccountId}
+                        CorsConfiguration:
+                                CorsRules:
+                                        - AllowedOrigins:
+                                                  - "*"
+                                          AllowedMethods:
+                                                  - PUT
+                                                  - GET
+                                          AllowedHeaders:
+                                                  - "*"
+                                          ExposedHeaders:
+                                                  - ETag
+                                          MaxAge: 3600
+                        PublicAccessBlockConfiguration:
+                                BlockPublicAcls: false
+                                BlockPublicPolicy: false
+                                IgnorePublicAcls: false
+                                RestrictPublicBuckets: false
+                        LifecycleConfiguration:
+                                Rules:
+                                        - Id: delete-old-avatars
+                                          Status: Enabled
+                                          NoncurrentVersionExpirationInDays: 30
+
+        ProfilePicturesBucketPolicy:
+                Type: AWS::S3::BucketPolicy
+                Properties:
+                        Bucket: !Ref ProfilePicturesBucket
+                        PolicyDocument:
+                                Statement:
+                                        - Sid: PublicRead
+                                          Effect: Allow
+                                          Principal: "*"
+                                          Action: s3:GetObject
+                                          Resource: !Sub arn:aws:s3:::claudiu-profile-pictures-${AWS::AccountId}/avatars/*
+
+Outputs:
+        BucketName:
+                Value: !Ref ProfilePicturesBucket
+                Export:
+                        Name: claudiu-profile-pictures-bucket
+
+        BucketDomainName:
+                Value: !GetAtt ProfilePicturesBucket.RegionalDomainName
+                Export:
+                        Name: claudiu-profile-pictures-domain
