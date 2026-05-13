@@ -537,6 +537,12 @@ def _compute_ownership_context(room: dict, event_type: str, data: dict) -> dict:
                 owners.append(m['userId'])
     return {
         'matchEventType':     event_type,
+        # Frontend MatchMiniGameModal looks up the player avatar by
+        # `state.ownershipContext?.playerId`. The frontend reveal trigger
+        # produces that exact key, so keep both backend and frontend in
+        # sync by emitting both `playerId` (canonical for the modal) and
+        # `involvedPlayerId` (legacy / context name).
+        'playerId':           involved_player_id,
         'involvedPlayerId':   involved_player_id,
         'involvedPlayerName': data.get('playerDisplay') or data.get('playerName'),
         'ownerUserIds':       owners,
