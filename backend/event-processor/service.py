@@ -281,7 +281,14 @@ def _score_rooms_for_event(match_id: str, event_type: str, data: dict) -> None:
         # frontend toast can read like "+6 — Olise scored for your squad".
         member_changes = _calculate_member_changes(fresh, event_type, data)
         if any(c['delta'] != 0 for c in member_changes):
-            _apply_member_changes(fresh, member_changes, event_type)
+            # Thread the source event id through so the WS broadcast can
+            # carry it on each score_change — the frontend uses it as the
+            # ironclad dedup key between its optimistic append and this
+            # WS broadcast.
+            _apply_member_changes(
+                fresh, member_changes, event_type,
+                source_event_id=data.get('eventId') or '',
+            )
 
 
 def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
@@ -373,7 +380,12 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
     return out
 
 
-def _apply_member_changes(room: dict, member_changes: list, event_type: str) -> None:
+def _apply_member_changes(
+    room: dict,
+    member_changes: list,
+    event_type: str,
+    source_event_id: str = '',
+) -> None:
     members       = room.get('members', [])
     score_changes = []
     by_user       = {c['userId']: c for c in member_changes}
@@ -385,12 +397,15 @@ def _apply_member_changes(room: dict, member_changes: list, event_type: str) -> 
         new_score  = int(m.get('score', 0)) + c['delta']
         m['score'] = new_score
         score_changes.append({
-            'userId':     m['userId'],
-            'delta':      c['delta'],
-            'newScore':   new_score,
-            'eventType':  event_type,
-            'reason':     c.get('reason') or '',
-            'playerName': c.get('playerName') or '',
+            'userId':        m['userId'],
+            'delta':         c['delta'],
+            'newScore':      new_score,
+            'eventType':     event_type,
+            'reason':        c.get('reason') or '',
+            'playerName':    c.get('playerName') or '',
+            # Stable id used by the frontend score_update handler to
+            # dedup the optimistic append against this WS broadcast.
+            'sourceEventId': source_event_id or '',
         })
 
     if not score_changes:

@@ -184,27 +184,29 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
         setScoreEvents(prev => {
           // Dedup against existing entries (optimistic appends or earlier
           // WS appends). Match order:
-          //   1. Exact _sourceEventId + userId (set by optimistic
-          //      applyOptimisticDeltas, and by handleReactTap → ws path
-          //      if backend ever ships it).
-          //   2. Reaction fingerprint: (userId, reason, delta) within
-          //      ±2.5s — covers the handleReactTap HTTP-then-WS pair.
-          //   3. In-feed fingerprint: (userId, reason, delta) within
-          //      30s — covers Lambda cold start latencies between the
-          //      optimistic append (on event reveal) and the eventual
-          //      score_update broadcast.
+          //   1. Exact _sourceEventId + userId — ironclad. The backend
+          //      now ships `sourceEventId` on every score_change via
+          //      event-processor / claim_reaction / apply_minigame_score.
+          //   2. Reaction fingerprint: (userId, reason, delta, playerName)
+          //      within ±2.5s — covers the handleReactTap HTTP-then-WS
+          //      pair for older clients / pre-deploy.
+          //   3. In-feed fingerprint: same tuple within 90s — wider safety
+          //      net for Lambda cold start (typically <30s end-to-end,
+          //      but EventBridge + SQS scheduling + replay-emitter add up).
+          // playerName is in the fingerprint so two distinct same-type
+          // events for different players (e.g., two different scorers
+          // both worth +5) don't false-dedup.
           const filtered = incoming.filter(inc => !prev.some(e => {
             if (inc._sourceEventId
                 && e._sourceEventId === inc._sourceEventId
                 && e.userId === inc.userId) return true
-            if (e.userId !== inc.userId)   return false
-            if (e.reason !== inc.reason)   return false
-            if (e.delta  !== inc.delta)    return false
+            if (e.userId !== inc.userId)             return false
+            if (e.reason !== inc.reason)             return false
+            if (e.delta  !== inc.delta)              return false
+            if ((e.playerName || '') !== (inc.playerName || '')) return false
             const dt = Math.abs((Number(e.ts) || 0) - inc.ts)
-            // Reactions: 2.5s — quick HTTP→WS round-trip.
-            // In-feed events: 30s — Lambda cold start tolerance.
             const reactionish = (inc.reason || '').toLowerCase().includes('react')
-            return dt < (reactionish ? 2500 : 30000)
+            return dt < (reactionish ? 2500 : 90000)
           }))
           if (!filtered.length) return prev
           const next = [...prev, ...filtered]
