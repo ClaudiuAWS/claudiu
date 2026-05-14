@@ -95,7 +95,9 @@ export default function BottomNav() {
                                 <div className="grid grid-cols-4 gap-1">
                                         {tabs.map((tab) => {
                                                 const active = location.pathname === tab.path;
-                                                const color = active ? "#22c55e" : "#6b7280";
+                                                // Bundesliga-red active state, matches the rest of the
+                                                // brand palette (CTAs, leaderboard "you" highlight, LIVE).
+                                                const color = active ? "#f87171" : "#6b7280";
                                                 return (
                                                         <button
                                                                 key={tab.path}
@@ -105,8 +107,11 @@ export default function BottomNav() {
                                                                 className="flex flex-col items-center gap-1 py-2 px-1 rounded-xl transition-all"
                                                                 style={{
                                                                         background: active
-                                                                                ? "rgba(34,197,94,0.08)"
+                                                                                ? "rgba(220,38,38,0.10)"
                                                                                 : "transparent",
+                                                                        boxShadow: active
+                                                                                ? "inset 0 0 0 1px rgba(248,113,113,0.25)"
+                                                                                : "none",
                                                                 }}
                                                         >
                                                                 {tab.icon(color)}
