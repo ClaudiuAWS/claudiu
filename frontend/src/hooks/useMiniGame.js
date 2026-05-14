@@ -110,6 +110,13 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
   const expireTimerRef = useRef(null)
   const resultDismissTimerRef = useRef(null)
   const userPayloadRef = useRef(null)
+  // Ref to the latest `_resolveBoth`. The WS handler `onMinigameMessage` is
+  // cached with [matchId, matchStartedAt] deps and would otherwise capture
+  // the initial render's `_resolveBoth` — which closed over state=null. When
+  // the microtask fires, that stale function throws on `state.gameType` and
+  // the optimistic resolution never runs, leaving both clients on
+  // "No points awarded this round" for multi-user penalties.
+  const resolveBothRef = useRef(null)
 
   // Reset per-game refs when a new game starts.
   useEffect(() => {
@@ -281,6 +288,10 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
     )
   }, [state, currentUserId, room?.roomCode, room?.members])
 
+  // Keep the ref pointing at the latest state-bound callback. See note on
+  // resolveBothRef declaration for why this matters for multi-user penalty.
+  resolveBothRef.current = _resolveBoth
+
   const _resolve = useCallback((userPayload) => {
     // Two cases: bot already submitted (we have _botPayload) → resolve now.
     // Otherwise wait for bot (or expire timer falls through with empty deltas).
@@ -398,7 +409,8 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
             && opponentPick) {
           const localPick = s._localPick
           const oppPick   = opponentPick
-          Promise.resolve().then(() => _resolveBoth(localPick, oppPick))
+          // Call via ref — see resolveBothRef declaration for the why.
+          Promise.resolve().then(() => resolveBothRef.current?.(localPick, oppPick))
         }
 
         // Non-submitter case (existing): keep playing.
