@@ -222,37 +222,12 @@ def _reset_match_after_failed_start(match_id: str) -> None:
         print(f"Failed to reset match {match_id}: {e}")
 
 
-# Mirrors `backend/matches/service.py::HALFTIME_BREAK_SECONDS`. Shifts the
-# wall-clock fire time of secondhalf + every post-halftime event forward so
-# the halftime mini-game has 15 in-game minutes of breathing room (~180s
-# wall time at 5× speed) before second-half events resume. Both this and
-# the matches API must apply the same shift or frontend reveal and backend
-# scheduling go out of sync.
+# 15 in-game minutes of halftime break. Applied as a wall-clock fire-time
+# delay to post-halftime events (not as a gameTime mutation — that would
+# bleed into the displayed match minute, e.g. second half rendering as
+# `60'` instead of `45'`). Frontend's reveal filter applies the same
+# wall-clock delay so visibility stays in sync.
 HALFTIME_BREAK_SECONDS = 15 * 60
-
-
-def _apply_halftime_break_shift(events: list) -> list:
-    """Shift post-halftime events' gameTime forward by HALFTIME_BREAK_SECONDS.
-    Operates on a copy so the caller's original list isn't mutated."""
-    out = [dict(e) for e in events]
-    halftime_sec = None
-    for e in out:
-        if e.get('eventType') == 'halftime':
-            halftime_sec = _game_clock_seconds(e.get('gameTime'))
-            break
-    if halftime_sec is None:
-        return out
-    for e in out:
-        if e.get('eventType') == 'halftime':
-            continue
-        sec = _game_clock_seconds(e.get('gameTime'))
-        if sec is None or sec <= halftime_sec:
-            continue
-        new_sec = sec + HALFTIME_BREAK_SECONDS
-        mm = new_sec // 60
-        ss = new_sec % 60
-        e['gameTime'] = f"{mm}:{ss:02d}"
-    return out
 
 
 def _schedule_events(
@@ -289,17 +264,25 @@ def _schedule_events(
     Feed gameTime is continuous across half-time (51:00 → 51:01) thanks to
     `_recalculate_second_half_match_clock` in the loader.
 
-    Halftime break: a 15-game-minute pad is added to all post-halftime events
-    here (in lockstep with the matches API). Without it the halftime mini-game
-    would compete with second-half events firing 1 second after halftime on
-    the match clock.
+    Halftime break: a 15-game-minute pad is applied to post-halftime events
+    as a wall-clock fire-time delay (see `halftime_break_wall_delay` below).
+    We deliberately do NOT mutate gameTime — that would shift the displayed
+    match minute (kickoff of 2H rendering as `60'` instead of `45'`).
     """
-    # Shift secondhalf + post-halftime events forward by HALFTIME_BREAK_SECONDS.
-    # Must match `backend/matches/service.py::_apply_halftime_break_shift`
-    # so the frontend reveal clock and backend firing schedule stay aligned.
-    events = _apply_halftime_break_shift(events)
-
     now = datetime.now(timezone.utc)
+
+    # Locate halftime's gameTime so we know which subsequent events to
+    # delay by HALFTIME_BREAK_SECONDS. None when the match has no halftime
+    # event (rare; safety net).
+    halftime_sec = None
+    for e in events:
+        if e.get('eventType') == 'halftime':
+            halftime_sec = _game_clock_seconds(e.get('gameTime'))
+            break
+    halftime_break_wall_delta = (
+        timedelta(seconds=HALFTIME_BREAK_SECONDS / max(speed_multiplier, 1e-6))
+        if halftime_sec is not None else timedelta(0)
+    )
 
     # Compute each event's natural target wall-second once.
     targets = []
@@ -324,7 +307,16 @@ def _schedule_events(
             offset_wall = math.ceil(offset_seconds / speed_multiplier - 1e-12)
             print(f"        offset_wall = {offset_wall}")
 
-        targets.append(now + timedelta(seconds=max(1, offset_wall)))
+        natural_target = now + timedelta(seconds=max(1, offset_wall))
+        # Halftime break: delay post-halftime events by the wall-clock
+        # equivalent of HALFTIME_BREAK_SECONDS so the halftime mini-game
+        # has room to play. The halftime event itself is NOT delayed.
+        if (halftime_sec is not None
+                and sec is not None
+                and sec > halftime_sec
+                and event.get('eventType') != 'halftime'):
+            natural_target = natural_target + halftime_break_wall_delta
+        targets.append(natural_target)
 
     # Pre-pass: assign boundary events their own slots in gameTime order,
     # enforcing monotonicity among themselves. Loader sets secondhalf

@@ -460,7 +460,12 @@ def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, g
         already = room.get('triggeredMinigames') or set()
         # DynamoDB returns string sets as Python sets when read; make tolerant.
         already_set = set(already) if not isinstance(already, set) else already
-        if event_type in already_set:
+        # Per-event idempotency (was per-event_type previously). With the
+        # event_id key, multiple events of the same type — e.g. several
+        # offsides in a match — each get to broadcast their own mini-game
+        # exactly once. Halftime/penalty events are single-occurrence so
+        # they're still naturally once-per-match.
+        if event_id in already_set:
             continue
 
         # Mark BEFORE pushing so a retry can't re-open the modal.
@@ -468,7 +473,7 @@ def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, g
             rooms_table.update_item(
                 Key={'roomCode': room_code},
                 UpdateExpression='ADD triggeredMinigames :v',
-                ExpressionAttributeValues={':v': {event_type}},
+                ExpressionAttributeValues={':v': {event_id}},
             )
         except Exception as e:
             print(f"Failed to mark minigame trigger on room {room_code}: {e}")

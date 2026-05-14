@@ -103,16 +103,14 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                 # NOT trigger the shootout.
                 if ok and game_type == 'PENALTY_SHOOTOUT' and not trigger_event.get('isPenalty'):
                         ok = False
-                # Once-per-match hard gate: the prompt asks the AI to respect
-                # `minigamesFired`, but Nova Micro doesn't always obey. Enforce
-                # it server-side so a second offside (etc.) can't re-fire the
-                # same gameType and clobber the room. snapshot.minigamesFired
-                # is already in gameType space (useDirector translates from
-                # event-type before sending).
-                already_fired = snapshot.get('minigamesFired') or []
-                if ok and game_type in already_fired:
-                        print(f"director: {game_type} already fired this match (minigamesFired={already_fired!r}) -> downgrade")
-                        ok = False
+                # No once-per-gameType gate any more — idempotency is now
+                # per-EVENT (driven by the event-processor's
+                # `triggeredMinigames` SS keyed on event_id, and the
+                # frontend's per-eventId firedEvents). Multiple offsides
+                # each get to fire their own OFFSIDE_REFLEX modal.
+                # The prompt still informs the AI of which game types
+                # already played so it can vary commentary; it's just
+                # advisory, not enforced.
                 if not ok:
                         downgrade_text = decision.get('prompt') or decision.get('title')
                         if downgrade_text:
