@@ -31,9 +31,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
-        <h1 className="text-white text-3xl font-bold text-center mb-2">
-          Join BundesDuell
-        </h1>
+        <img src="/logo.png" alt="" className="h-20 w-auto mx-auto mb-4" />
         <p className="text-gray-400 text-center mb-8">
           Create your account
         </p>
