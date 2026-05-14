@@ -335,9 +335,11 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
                     delta -= 1
                     if not reason:
                         reason = 'conceded'
-                        # GK display name isn't on the goal event — leave a
-                        # generic label rather than fake one.
-                        name   = 'your keeper'
+                        # select_team now persists displayName on each
+                        # teamSelectionDetails entry. Fall back to the old
+                        # generic label only for rooms that pre-date that
+                        # change (still in flight when this rolled out).
+                        name   = conceding_gk.get('displayName') or 'your keeper'
 
             out.append({'userId': uid, 'delta': delta, 'reason': reason, 'playerName': name})
 

@@ -3,7 +3,7 @@ import { CombinedPitchView } from './CombinedPitchView'
 import { PlayerStatsPopup } from './PlayerStatsPopup'
 import { gameTimeToSeconds, formatFootballTime } from '../../utils/matchEvents'
 import { detectFormation } from '../../utils/formationPositions'
-import { scoreIcon, styleForReason, formatDelta } from '../../utils/scoreFormatting'
+import { scoreIcon, styleForReason, formatDelta, scoreEventClass } from '../../utils/scoreFormatting'
 
 const HOME_COLOR = '#DC2626'
 const AWAY_COLOR = '#2563EB'
@@ -229,7 +229,7 @@ export function SquadVisualization({
                       </button>
 
                       {isExpanded && (
-                        <div className="mt-1 ml-7 mr-1 mb-1 pl-2 border-l border-white/10 space-y-1">
+                        <div className="mt-1.5 ml-6 mr-1 mb-1 space-y-1.5">
                           {hasEvents ? (
                             userEvents.map((ev, idx) => {
                               const style = styleForReason(ev.reason, ev.delta)
@@ -237,33 +237,68 @@ export function SquadVisualization({
                               const deltaColor = ev.delta > 0
                                 ? 'text-emerald-300'
                                 : ev.delta < 0 ? 'text-rose-300' : 'text-slate-400'
+                              const deltaGlow = ev.delta > 0
+                                ? 'drop-shadow(0 0 6px rgba(16,185,129,0.55))'
+                                : ev.delta < 0 ? 'drop-shadow(0 0 6px rgba(244,63,94,0.55))' : 'none'
+                              // Accent strip colour by event class. Tailwind needs literals.
+                              const stripBg = {
+                                emerald:  '#10b981',
+                                sky:      '#0ea5e9',
+                                cyan:     '#06b6d4',
+                                amber:    '#f59e0b',
+                                rose:     '#f43f5e',
+                                violet:   '#8b5cf6',
+                                fuchsia:  '#d946ef',
+                                orange:   '#fb923c',
+                                indigo:   '#6366f1',
+                                slate:    '#94a3b8',
+                              }[scoreEventClass(ev.reason, ev.delta)] || '#94a3b8'
                               return (
                                 <div
                                   key={`${ev.ts}-${idx}`}
-                                  className={`flex items-center gap-2 rounded-md border ${style.border}
-                                              bg-gradient-to-r ${style.gradient} px-2 py-1.5`}
+                                  className={`relative flex items-center gap-2.5 rounded-lg border ${style.border}
+                                              bg-gradient-to-r ${style.gradient}
+                                              pl-3 pr-2.5 py-2 overflow-hidden`}
+                                  style={{
+                                    animation: `scoreRowIn 320ms cubic-bezier(.22,1.4,.36,1) ${idx * 40}ms both`,
+                                  }}
                                 >
-                                  <span className={`w-6 h-6 rounded-full flex items-center justify-center ring-1 ${style.ring} flex-shrink-0`}>
-                                    <span className="text-[11px] leading-none">{icon}</span>
+                                  {/* Left accent strip — sport-stat-card feel */}
+                                  <span
+                                    aria-hidden="true"
+                                    className="absolute left-0 top-0 bottom-0 w-[3px] rounded-r-sm"
+                                    style={{ background: stripBg, boxShadow: `0 0 8px ${stripBg}66` }}
+                                  />
+                                  {/* Emoji halo */}
+                                  <span
+                                    className={`relative w-8 h-8 rounded-full flex items-center justify-center ring-2 ${style.ring} flex-shrink-0`}
+                                    style={{ boxShadow: `0 0 12px ${stripBg}33 inset` }}
+                                  >
+                                    <span className="text-base leading-none">{icon}</span>
                                   </span>
+                                  {/* Reason + player */}
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-[11px] text-white/85 truncate leading-tight">
+                                    <p className={`font-stadium ${style.text} text-[14px] tracking-wider uppercase truncate leading-tight`}>
                                       {ev.reason || 'Score event'}
                                     </p>
                                     {ev.playerName && (
-                                      <p className="text-[9.5px] text-white/45 truncate leading-tight">
+                                      <p className="text-[10px] text-white/55 truncate leading-tight mt-0.5">
                                         {ev.playerName}
                                       </p>
                                     )}
                                   </div>
-                                  <span className={`text-[12px] font-black tabular-nums ${deltaColor}`}>
+                                  {/* Delta — stadium scoreboard treatment */}
+                                  <span
+                                    className={`font-stadium tabular-nums text-2xl leading-none ${deltaColor}`}
+                                    style={{ filter: deltaGlow, letterSpacing: '0.04em' }}
+                                  >
                                     {formatDelta(ev.delta)}
                                   </span>
                                 </div>
                               )
                             })
                           ) : (
-                            <p className="text-[10px] text-gray-500 italic py-1.5">
+                            <p className="text-[10.5px] text-gray-500 italic py-1.5 pl-1">
                               No scoring activity yet — points show up as the match progresses.
                             </p>
                           )}
@@ -384,6 +419,16 @@ export function SquadVisualization({
           </div>
         </div>
       )}
+
+      {/* Keyframe used by the leaderboard score-event timeline rows.
+          Declared once at root so it's available regardless of which user
+          is expanded. */}
+      <style>{`
+        @keyframes scoreRowIn {
+          0%   { opacity: 0; transform: translateX(-8px) scale(0.97); }
+          100% { opacity: 1; transform: translateX(0)    scale(1);    }
+        }
+      `}</style>
 
       <PlayerStatsPopup
         player={selectedPlayer}

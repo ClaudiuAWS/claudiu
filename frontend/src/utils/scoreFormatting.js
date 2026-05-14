@@ -12,15 +12,24 @@
  * delta sign so unknown reasons still get a sensible icon.
  */
 
+// Emoji set leans into game-show / arcade vibes — bigger, more expressive
+// symbols over the generic football iconography (🟨/🟥). Goal + save keep
+// the iconic ⚽/🧤 because football fans pattern-match those instantly;
+// everything else is dialled up for fun. ORDER MATTERS — earlier matchers
+// win, so the more specific reasons ('conceded', 'closest', 'penalty save')
+// come before the broad ones ('goal', 'save').
 const REASON_MATCHERS = [
-  { key: 'goal',         test: r => r.includes('goal') || r.includes('scored'), icon: '⚽', cls: 'emerald' },
+  { key: 'conceded',     test: r => r.includes('conced'),                        icon: '💥', cls: 'rose' },
+  { key: 'penalty-save', test: r => r.includes('penalty') && r.includes('save'), icon: '🧤', cls: 'sky' },
+  { key: 'penalty-goal', test: r => r.includes('penalty') && r.includes('goal'), icon: '⚽', cls: 'emerald' },
+  { key: 'penalty',      test: r => r.includes('penalty'),                       icon: '🎯', cls: 'emerald' },
+  { key: 'goal',         test: r => r.includes('goal') || r.includes('scored'),  icon: '⚽', cls: 'emerald' },
   { key: 'save',         test: r => r.includes('save'),                          icon: '🧤', cls: 'sky' },
-  { key: 'assist',       test: r => r.includes('assist'),                        icon: '🎯', cls: 'cyan' },
-  { key: 'penalty',      test: r => r.includes('penalty'),                       icon: '🥅', cls: 'emerald' },
-  { key: 'yellow',       test: r => r.includes('yellow'),                        icon: '🟨', cls: 'amber' },
-  { key: 'red',          test: r => r.includes('red'),                           icon: '🟥', cls: 'rose' },
-  { key: 'nutmeg',       test: r => r.includes('nutmeg'),                        icon: '🪄', cls: 'violet' },
-  { key: 'spectacular',  test: r => r.includes('spectacular'),                   icon: '✨', cls: 'fuchsia' },
+  { key: 'assist',       test: r => r.includes('assist'),                        icon: '🪄', cls: 'cyan' },
+  { key: 'yellow',       test: r => r.includes('yellow') || r.includes('book'),  icon: '🟨', cls: 'amber' },
+  { key: 'red',          test: r => r.includes('red') || r.includes('sent off'), icon: '🟥', cls: 'rose' },
+  { key: 'nutmeg',       test: r => r.includes('nutmeg'),                        icon: '🌀', cls: 'violet' },
+  { key: 'spectacular',  test: r => r.includes('spectacular'),                   icon: '💫', cls: 'fuchsia' },
   { key: 'offside',      test: r => r.includes('offside'),                       icon: '🚩', cls: 'orange' },
   { key: 'quiz',         test: r => r.includes('quiz'),                          icon: '🧠', cls: 'indigo' },
   { key: 'closest',      test: r => r.includes('closest'),                       icon: '🎯', cls: 'cyan' },

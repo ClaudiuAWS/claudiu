@@ -224,7 +224,7 @@ function ResultBanner({ state, onClose }) {
           </div>
           <div className="min-w-0">
             <p className="text-[9px] font-black tracking-widest uppercase text-white/60">Result</p>
-            <h3 className={`text-xl font-black leading-tight ${headerStyle.text}`}>
+            <h3 className={`font-stadium leading-none ${headerStyle.text}`} style={{ fontSize: '2rem', letterSpacing: '0.05em' }}>
               {outcome.verb}
             </h3>
             {outcome.sub && (
@@ -264,12 +264,15 @@ function ResultBanner({ state, onClose }) {
                     {d.displayName || d.userId || 'Player'}
                   </p>
                   {d.reason && (
-                    <p className="text-[10px] text-white/55 truncate leading-tight mt-0.5">
+                    <p className="font-stadium text-[12px] tracking-wider uppercase text-white/65 truncate leading-tight mt-0.5">
                       {d.reason}
                     </p>
                   )}
                 </div>
-                <span className={`font-black tabular-nums text-base ${deltaColor}`}>
+                <span
+                  className={`font-stadium tabular-nums ${deltaColor}`}
+                  style={{ fontSize: '1.55rem', letterSpacing: '0.04em', lineHeight: 1 }}
+                >
                   {formatDelta(delta)}
                 </span>
               </div>
