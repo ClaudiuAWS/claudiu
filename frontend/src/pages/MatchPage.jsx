@@ -37,7 +37,7 @@ export default function MatchPage() {
   // arg. We construct a ref-stable forwarder here and feed it both ways.
   const minigameMsgRef = useRef(null)
   const minigameMsgHandler = useCallback((msg) => minigameMsgRef.current?.(msg), [])
-  const { room, loading: roomLoading, scoreEvents, applyOptimisticDeltas } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler)
+  const { room, loading: roomLoading, scoreEvents, applyOptimisticDeltas, applyAuthoritativeScoreChange } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler)
 
   // Optimistic local scoring — when an event reveals on the displayed clock,
   // compute deltas client-side and bump the leaderboard immediately. The
@@ -128,15 +128,25 @@ export default function MatchPage() {
   }, [awayTeamPlayers, awayLocalPicks, playerMap])
 
   // Reaction tap on a nutmeg / spectacular_play badge → +2 backend bonus.
-  // The success toast fires here optimistically (the backend score_update
-  // WS that follows is intentionally silent on score-toast emission so we
-  // don't double-fire). Duplicate replies stay silent; real failures
-  // surface a small error toast so misconfigurations don't hide.
+  // Three things happen on success:
+  //  1. The reactor's leaderboard + scoreEvents are bumped from the HTTP
+  //     response immediately via applyAuthoritativeScoreChange. This
+  //     guarantees the +2 lands in the per-user timeline even if AWS
+  //     API Gateway WS drops the follow-up broadcast (which used to
+  //     leave the timeline's sum lower than the leaderboard total).
+  //  2. The toast fires for instant visual feedback.
+  //  3. The backend's WS score_update arrives ~500ms later; useRoom's
+  //     ±2.5s dedup on (userId, reason, delta) drops the duplicate.
+  // Other room members still see this user's reaction via the WS path
+  // (their tab didn't run #1 so no dedup conflict on their end).
   const handleReactTap = useCallback((event) => {
     if (!room?.roomCode || !event?.eventId) return
     roomsApi.react(room.roomCode, event.eventId, event.eventType)
       .then(result => {
         if (result?.duplicate) return
+        for (const c of (result?.changes || [])) {
+          applyAuthoritativeScoreChange(c)
+        }
         const reasonText = event.eventType === 'nutmeg'
           ? 'reacted to nutmeg'
           : 'reacted to spectacular play'
@@ -148,7 +158,7 @@ export default function MatchPage() {
         if (msg.includes('duplicate')) return
         toast.error('Reaction did not register', { duration: 2500 })
       })
-  }, [room?.roomCode])
+  }, [room?.roomCode, applyAuthoritativeScoreChange])
 
   if (loading || roomLoading) return <LoadingSpinner />
   if (!room) return <Navigate to={`/lobby/${matchId}`} replace />
