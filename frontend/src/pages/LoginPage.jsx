@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { login } from '../services/auth'
 import { useAuth } from '../hooks/useAuth'
+import { useBgAmbientAudio } from '../hooks/useBgAmbientAudio'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const bgVideoRef = useBgAmbientAudio()
   const navigate = useNavigate()
   const { refreshUser } = useAuth()
 
@@ -27,55 +29,100 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6">
-      <div className="w-full max-w-sm">
-        <img src="/logo.png" alt="" className="h-20 w-auto mx-auto mb-3" />
-        <p
-          className="font-stadium text-white text-center text-2xl mb-1"
-          style={{ letterSpacing: '0.12em' }}
-        >
-          FANTASY
-        </p>
-        <p className="text-gray-400 text-center mb-8">
-          Sign in to play
-        </p>
+    <div className="min-h-screen relative flex flex-col items-center justify-center px-6 overflow-hidden">
+      <video
+        ref={bgVideoRef}
+        src="/bg-login-mobile.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+        poster="/intro-poster.jpg"
+        className="absolute inset-0 w-full h-full object-cover"
+      />
 
-        <div className="space-y-4">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            className="w-full bg-gray-900 text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-red-500"
+      <div className="relative w-full max-w-sm">
+        {/* Logo / Brand */}
+        <div className="text-center mb-8">
+          <img
+            src="/logo.png"
+            alt=""
+            className="w-20 h-auto mx-auto mb-3 drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
           />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            className="w-full bg-gray-900 text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-red-500"
-          />
+          <p
+            className="font-stadium text-white text-2xl tracking-[0.12em] [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]"
+          >
+            FANTASY
+          </p>
+          <p className="text-white/80 text-sm mt-1 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
+            Sign in to play
+          </p>
+        </div>
+
+        {/* Form card */}
+        <div
+          className="rounded-3xl p-6 space-y-4"
+          style={{
+            background: 'rgba(15, 15, 20, 0.6)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div>
+            <label className="text-[11px] font-semibold tracking-widest uppercase text-white/40 mb-1.5 block">Email</label>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-red-500/60 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
+            />
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold tracking-widest uppercase text-white/40 mb-1.5 block">Password</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-red-500/60 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
+            />
+          </div>
 
           {error && (
-            <p className="text-red-400 text-sm text-center">{error}</p>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5">
+              <p className="text-red-400 text-xs text-center">{error}</p>
+            </div>
           )}
 
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="w-full bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-bold py-3 rounded-xl disabled:opacity-50 transition-colors"
+            className="w-full py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all disabled:opacity-50 active:scale-[0.98]"
+            style={{
+              background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+              boxShadow: '0 8px 24px -4px rgba(220,38,38,0.45)',
+            }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Signing in…
+              </span>
+            ) : 'Sign In'}
           </button>
-
-          <p className="text-gray-400 text-center text-sm">
-            No account?{' '}
-            <Link to="/register" className="text-red-400">
-              Create one
-            </Link>
-          </p>
         </div>
+
+        <p className="text-white/80 text-center text-sm mt-6 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
+          Don't have an account?{' '}
+          <Link to="/register" className="text-red-400 font-medium hover:text-red-300 transition-colors [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
+            Create one
+          </Link>
+        </p>
       </div>
     </div>
   )

@@ -6,7 +6,7 @@ export default function MembersList({ members, hostUserId, teamReadyIds = new Se
       style={{ background: 'linear-gradient(145deg,#111827,#0d1117)', border: '1px solid rgba(255,255,255,0.06)' }}>
 
       <div className="px-5 pt-4 pb-3 border-b border-white/5 flex items-center justify-between">
-        <p className="text-gray-500 text-xs font-semibold tracking-widest uppercase">Squad</p>
+        <p className="text-gray-500 text-xs font-semibold tracking-widest uppercase">Party</p>
         <p className="text-gray-600 text-xs">{members.length} {members.length === 1 ? 'player' : 'players'}</p>
       </div>
 

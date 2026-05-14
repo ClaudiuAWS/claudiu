@@ -29,7 +29,7 @@ export default function JoinRoom({ onJoin, onSwitch, loading }) {
             <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             Joining…
           </span>
-        ) : 'Join Squad'}
+        ) : 'Join Party'}
       </button>
 
       <button
@@ -37,7 +37,7 @@ export default function JoinRoom({ onJoin, onSwitch, loading }) {
         disabled={loading}
         className="w-full py-3 text-gray-600 text-sm hover:text-gray-400 transition-colors disabled:opacity-50"
       >
-        Create a new squad instead
+        Create a new party instead
       </button>
     </div>
   )

@@ -16,24 +16,15 @@ const tabs = [
                 ),
         },
         {
-                label: "LEADERBOARD",
-                path: "/leaderboard",
+                label: "FRIENDS",
+                path: "/friends",
                 icon: (color) => (
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                                <path
-                                        d="M6 9H18M8 9V6C8 4.9 8.9 4 10 4H14C15.1 4 16 4.9 16 6V9M5 9L6 19H18L19 9"
-                                        stroke={color}
-                                        strokeWidth="1.8"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                />
-                                <path
-                                        d="M9 14L11 16L15 12"
-                                        stroke={color}
-                                        strokeWidth="1.8"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                />
+                                <circle cx="9" cy="7" r="3" stroke={color} strokeWidth="1.8" />
+                                <path d="M3 20c0-3 2.7-5 6-5s6 2 6 5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+                                <path d="M16 11c1.7 0 3 1.3 3 3" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+                                <path d="M19 8a2 2 0 110 4" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+                                <path d="M19 14c1.5.5 3 1.8 3 4" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
                         </svg>
                 ),
         },

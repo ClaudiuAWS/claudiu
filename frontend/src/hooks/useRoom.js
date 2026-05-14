@@ -110,7 +110,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     } else if (msg.type === 'room_closed') {
       sessionStorage.removeItem(ROOM_CODE_KEY)
       setRoom(null)
-      toast('Room was closed')
+      toast('Party was closed')
       logger.info('useRoom', 'WS room_closed')
     } else if (msg.type === 'match_ended') {
       toast('Full time! 🏁')
@@ -281,7 +281,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       setRoom(data)
       sessionStorage.setItem(ROOM_CODE_KEY, data.roomCode)
       logger.success('useRoom', 'Room created', data)
-      toast.success('Room created!')
+      toast.success('Party created!')
       return data
     } catch (err) {
       logger.error('useRoom', 'Failed to create room', err)
@@ -299,7 +299,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       setRoom(data)
       sessionStorage.setItem(ROOM_CODE_KEY, data.roomCode)
       logger.success('useRoom', 'Room joined', data)
-      toast.success('Joined room!')
+      toast.success('Joined party!')
       return data
     } catch (err) {
       logger.error('useRoom', 'Failed to join room', err)
@@ -321,10 +321,10 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
 
       if (result.deleted) {
         logger.info('useRoom', 'Room was deleted')
-        toast.success('Room destroyed')
+        toast.success('Party disbanded')
       } else {
         logger.success('useRoom', 'Left room')
-        toast.success('Left room')
+        toast.success('Left party')
       }
     } catch (err) {
       logger.error('useRoom', 'Failed to leave room', err)

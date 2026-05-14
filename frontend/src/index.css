@@ -10,6 +10,11 @@
   letter-spacing: 0.02em;
 }
 
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes match-event-in {
   0%   { opacity: 0; transform: translateX(-24px) scale(0.96); filter: blur(4px); }
   60%  { opacity: 1; filter: blur(0); }
