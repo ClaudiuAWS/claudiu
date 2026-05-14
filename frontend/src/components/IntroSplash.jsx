@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { getIntroAudioPrefs } from '../hooks/useAppAudio'
-import { getTrackById } from '../utils/tracks'
 
 const STORAGE_KEY = 'claudiu_intro_seen'
-const BUMPER_AT = 29.5            // seconds — brand bumper fades in
-const FADE_AT = 31.0              // seconds — splash fade-out begins
-const FADE_DURATION_MS = 1000     // splash opacity + scale + audio ramp
+const BUMPER_AT = 29.5            // seconds — brand bumper fades in, video pauses, waits for tap
+const FADE_DURATION_MS = 1000     // splash opacity + scale + audio ramp on tap
 
 function pickSrc() {
   if (typeof window === 'undefined') return '/intro-mobile.mp4'
@@ -21,25 +19,21 @@ function pickFit() {
 /**
  * Intro splash.
  *
- * - Plays the intro video (full-bleed).
- * - At t≈29.5s, the brand bumper (cropped Bundesliga emblem + white
- *   BUNDESLIGA / FANTASY wordmark, lightly 3D-tilted) fades in,
- *   together with a pulsing "TAP ANYWHERE" hint below it.
- * - At t≈31s, or on any tap anywhere on the splash, fade out and
- *   call `onFinish`.
- * - Audio: defaults to sound-ON. Persists via localStorage
- *   `introAudioEnabled` (toggle lives in Profile post-auth). If the
- *   user picked a custom intro track, the video plays muted and we
- *   play their chosen mp3 as a separate `<audio>` element. If
- *   nothing's set / track has no file, the video's bundled audio
- *   plays at full volume.
- * - Browser autoplay block: try unmuted first, fall back to muted
- *   if rejected. No more "Tap for sound" button — the user explicitly
- *   asked us to remove it; first-load silence is the trade-off.
+ * - Plays the intro video full-bleed with its bundled audio
+ *   (subject to introEnabled — user can mute future runs from
+ *   Profile post-auth).
+ * - At t≈BUMPER_AT, the brand bumper (cropped Bundesliga emblem +
+ *   white BUNDESLIGA / FANTASY wordmark, lightly 3D-tilted) fades
+ *   in AND the video pauses. A pulsing "TAP ANYWHERE" hint sits
+ *   below it.
+ * - The splash stays frozen on that frame until the user taps
+ *   anywhere; there's no auto-finish anymore. On tap, fade out
+ *   and signal the bg-video cross-fade for the auth pages.
+ * - No more "Tap for sound" or "Skip" buttons. The entire splash
+ *   is one tap target. Autoplay-block falls back to muted.
  */
 export default function IntroSplash({ onFinish }) {
   const videoRef = useRef(null)
-  const audioRef = useRef(null)
   const finishedRef = useRef(false)
   const bumperShownRef = useRef(false)
   const [src] = useState(pickSrc)
@@ -53,22 +47,23 @@ export default function IntroSplash({ onFinish }) {
     setFadingOut(true)
     try { sessionStorage.setItem(STORAGE_KEY, '1') } catch {}
 
-    // Signal LoginPage / RegisterPage to start ramping bg audio in (cross-fade).
+    // Signal AuthLayout's bg video to cross-fade its audio in.
     try { window.dispatchEvent(new CustomEvent('claudiu:intro-ending', { detail: { durationMs: FADE_DURATION_MS } })) } catch {}
 
-    // Audio volume ramp 1.0 → 0.0 over FADE_DURATION_MS.
-    const sources = [videoRef.current, audioRef.current].filter(Boolean)
-    sources.forEach(el => {
-      const startVol = el.volume || 1
+    // Volume ramp on whatever is still playing (the video could be
+    // paused at BUMPER_AT already, in which case the ramp is a no-op).
+    const v = videoRef.current
+    if (v) {
+      const startVol = v.volume || 1
       const startTime = performance.now()
       const tick = (now) => {
         const t = Math.min(1, (now - startTime) / FADE_DURATION_MS)
-        try { el.volume = startVol * (1 - t) } catch {}
+        try { v.volume = startVol * (1 - t) } catch {}
         if (t < 1) requestAnimationFrame(tick)
-        else { try { el.pause() } catch {} }
+        else { try { v.pause() } catch {} }
       }
       requestAnimationFrame(tick)
-    })
+    }
 
     setTimeout(() => onFinish?.(), FADE_DURATION_MS)
   }
@@ -78,16 +73,8 @@ export default function IntroSplash({ onFinish }) {
     if (!v) return
 
     const prefs = getIntroAudioPrefs()
-    const introTrack = getTrackById(prefs.trackId)
-    const useCustomAudio = !!(prefs.enabled && introTrack?.file)
-
-    // Video starts unmuted unless the user has opted out of intro
-    // sound or they've picked a custom track (in which case the
-    // custom audio carries the sound).
     if (!prefs.enabled) {
       v.muted = true
-    } else if (useCustomAudio) {
-      v.muted = true   // visuals only; mp3 plays the audio
     } else {
       v.muted = false
       v.volume = 1
@@ -96,45 +83,20 @@ export default function IntroSplash({ onFinish }) {
     const playPromise = v.play()
     if (playPromise && typeof playPromise.then === 'function') {
       playPromise.catch(() => {
-        // Autoplay block — fall back to muted. The user's choice to
-        // remove the "Tap for sound" button means we accept silent
-        // playback on browsers that block unmuted autoplay.
+        // Autoplay block → fall back to muted (no recovery button).
         v.muted = true
         v.play().catch(() => {})
       })
-    }
-
-    // Custom intro audio (separate from the video's bundled track).
-    if (useCustomAudio) {
-      const a = audioRef.current
-      if (a) {
-        a.src = introTrack.file
-        a.volume = 1
-        a.loop = false
-        const p = a.play()
-        if (p && typeof p.catch === 'function') {
-          p.catch(() => {
-            // Audio autoplay can also be blocked. Retry on first
-            // user gesture — usually the tap-anywhere to skip.
-            const retry = () => {
-              window.removeEventListener('pointerdown', retry)
-              window.removeEventListener('keydown',     retry)
-              try { a.play() } catch {}
-            }
-            window.addEventListener('pointerdown', retry, { once: true })
-            window.addEventListener('keydown',     retry, { once: true })
-          })
-        }
-      }
     }
 
     const onTimeUpdate = () => {
       if (v.currentTime >= BUMPER_AT && !bumperShownRef.current) {
         bumperShownRef.current = true
         setShowBumper(true)
-      }
-      if (v.currentTime >= FADE_AT && !finishedRef.current) {
-        finish()
+        // Hold the splash on this frame. The user has to tap to
+        // advance — no auto-fade. If autoplay let audio through,
+        // pausing here mutes naturally because the element is paused.
+        try { v.pause() } catch {}
       }
     }
     v.addEventListener('timeupdate', onTimeUpdate)
@@ -163,7 +125,6 @@ export default function IntroSplash({ onFinish }) {
         autoPlay
         playsInline
         poster="/intro-poster.jpg"
-        onEnded={finish}
         className={fit === 'cover' ? 'object-cover' : 'object-contain'}
         style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
@@ -171,13 +132,9 @@ export default function IntroSplash({ onFinish }) {
         }}
       />
 
-      {/* Optional custom audio element — only used when the user has
-          set a per-intro track in Profile and intro sound is enabled. */}
-      <audio ref={audioRef} preload="auto" playsInline style={{ display: 'none' }} />
-
       {/* Brand bumper: cropped Bundesliga emblem + white BUNDESLIGA /
-          FANTASY wordmark, lightly 3D-tilted. Stacks vertically with
-          a "TAP ANYWHERE" hint below. */}
+          FANTASY wordmark, lightly 3D-tilted, with a "TAP ANYWHERE"
+          hint below. Visible from BUMPER_AT until tap. */}
       <div
         className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-6"
         style={{
@@ -186,8 +143,6 @@ export default function IntroSplash({ onFinish }) {
           transition: 'opacity 700ms ease-out, transform 700ms ease-out',
         }}
       >
-        {/* Logo + wordmark stack (matches the auth-page composition
-            so the splash → login handover feels seamless). */}
         <div
           className="text-center"
           style={{
@@ -232,8 +187,6 @@ export default function IntroSplash({ onFinish }) {
           </p>
         </div>
 
-        {/* TAP ANYWHERE hint — slightly below centre, like FIFA's
-            "PRESS START or SPACE". Pulses gently to draw the eye. */}
         <p
           className="font-stadium text-white/80 mt-10"
           style={{
