@@ -169,29 +169,43 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       // Dedup against any entry the reactor's HTTP-driven optimistic
       // append already added (see applyAuthoritativeScoreChange below).
       const incoming = (msg.changes || []).map(c => ({
-        userId:      c.userId,
-        delta:       Number(c.delta) || 0,
-        newScore:    Number(c.newScore) || 0,
-        reason:      c.reason || '',
-        eventType:   c.eventType || '',
-        playerName:  c.playerName || c.displayName || '',
-        displayName: c.displayName || '',
-        source:      c.source || '',
-        ts:          Date.now(),
+        userId:         c.userId,
+        delta:          Number(c.delta) || 0,
+        newScore:       Number(c.newScore) || 0,
+        reason:         c.reason || '',
+        eventType:      c.eventType || '',
+        playerName:     c.playerName || c.displayName || '',
+        displayName:    c.displayName || '',
+        source:         c.source || '',
+        _sourceEventId: c.sourceEventId || c.eventId || '',
+        ts:             Date.now(),
       }))
       if (incoming.length) {
         setScoreEvents(prev => {
-          // Drop incoming entries that match an existing one in the
-          // ±2.5s window. Match on (userId, reason, delta) — narrow
-          // enough that legitimate rapid same-type events still both
-          // land, but wide enough to catch optimistic-vs-WS pairs from
-          // handleReactTap's HTTP path.
-          const filtered = incoming.filter(inc => !prev.some(e =>
-            e.userId === inc.userId
-            && e.reason === inc.reason
-            && e.delta  === inc.delta
-            && Math.abs((Number(e.ts) || 0) - inc.ts) < 2500
-          ))
+          // Dedup against existing entries (optimistic appends or earlier
+          // WS appends). Match order:
+          //   1. Exact _sourceEventId + userId (set by optimistic
+          //      applyOptimisticDeltas, and by handleReactTap → ws path
+          //      if backend ever ships it).
+          //   2. Reaction fingerprint: (userId, reason, delta) within
+          //      ±2.5s — covers the handleReactTap HTTP-then-WS pair.
+          //   3. In-feed fingerprint: (userId, reason, delta) within
+          //      30s — covers Lambda cold start latencies between the
+          //      optimistic append (on event reveal) and the eventual
+          //      score_update broadcast.
+          const filtered = incoming.filter(inc => !prev.some(e => {
+            if (inc._sourceEventId
+                && e._sourceEventId === inc._sourceEventId
+                && e.userId === inc.userId) return true
+            if (e.userId !== inc.userId)   return false
+            if (e.reason !== inc.reason)   return false
+            if (e.delta  !== inc.delta)    return false
+            const dt = Math.abs((Number(e.ts) || 0) - inc.ts)
+            // Reactions: 2.5s — quick HTTP→WS round-trip.
+            // In-feed events: 30s — Lambda cold start tolerance.
+            const reactionish = (inc.reason || '').toLowerCase().includes('react')
+            return dt < (reactionish ? 2500 : 30000)
+          }))
           if (!filtered.length) return prev
           const next = [...prev, ...filtered]
           _writeScoreEvents(roomCodeRef.current, next)
@@ -325,6 +339,12 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
   // event reveal and the backend score_update broadcast (which can take
   // 1–24s with cold-start latency). The next score_update WS reconciles
   // to the authoritative DDB value, silently correcting any drift.
+  //
+  // Also appends to scoreEvents so the leaderboard's tap-to-expand
+  // timeline reflects the event at the same instant as the score bumps.
+  // Each entry carries _sourceEventId (when the caller provides one) so
+  // the eventual WS broadcast can ironclad-dedup; without it, the WS
+  // handler falls back to a 30s reason/delta window match.
   const applyOptimisticDeltas = useCallback((deltas) => {
     if (!Array.isArray(deltas) || !deltas.length) return
     const byUid = Object.fromEntries(deltas.map(d => [d.userId, Number(d.delta) || 0]))
@@ -336,6 +356,42 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
         return { ...m, score: (Number(m.score) || 0) + bump }
       }),
     } : prev)
+
+    // Append to scoreEvents so the per-user timeline mirrors the
+    // leaderboard immediately. Score updates that match an existing
+    // entry (replay race, double-fire from useMatch reveal) are
+    // dropped via _sourceEventId.
+    const ts = Date.now()
+    const entries = deltas
+      .filter(d => (Number(d.delta) || 0) !== 0 && d.userId)
+      .map(d => ({
+        userId:         d.userId,
+        delta:          Number(d.delta) || 0,
+        newScore:       0,
+        reason:         d.reason || '',
+        eventType:      '',
+        playerName:     d.playerName || '',
+        displayName:    '',
+        source:         'optimistic',
+        _sourceEventId: d._sourceEventId || '',
+        ts,
+      }))
+    if (entries.length) {
+      setScoreEvents(prev => {
+        // Dedup against any pre-existing entry from this same source
+        // event (covers re-reveals from event list churn).
+        const newEntries = entries.filter(inc => !prev.some(e =>
+          inc._sourceEventId
+          && e._sourceEventId === inc._sourceEventId
+          && e.userId === inc.userId
+        ))
+        if (!newEntries.length) return prev
+        const next = [...prev, ...newEntries]
+        _writeScoreEvents(roomCodeRef.current, next)
+        return next
+      })
+    }
+
     // Per-event toast for the current user. Mirrors the score_update toast
     // logic so optimistic bumps surface immediately rather than waiting on
     // the backend round-trip.
