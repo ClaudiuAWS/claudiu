@@ -166,7 +166,8 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       //
       // Append every change to the per-room scoreEvents log so the
       // leaderboard tap-to-expand timeline can show a user's history.
-      // Cap + persist in one shot for the storage write.
+      // Dedup against any entry the reactor's HTTP-driven optimistic
+      // append already added (see applyAuthoritativeScoreChange below).
       const incoming = (msg.changes || []).map(c => ({
         userId:      c.userId,
         delta:       Number(c.delta) || 0,
@@ -180,7 +181,19 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       }))
       if (incoming.length) {
         setScoreEvents(prev => {
-          const next = [...prev, ...incoming]
+          // Drop incoming entries that match an existing one in the
+          // ±2.5s window. Match on (userId, reason, delta) — narrow
+          // enough that legitimate rapid same-type events still both
+          // land, but wide enough to catch optimistic-vs-WS pairs from
+          // handleReactTap's HTTP path.
+          const filtered = incoming.filter(inc => !prev.some(e =>
+            e.userId === inc.userId
+            && e.reason === inc.reason
+            && e.delta  === inc.delta
+            && Math.abs((Number(e.ts) || 0) - inc.ts) < 2500
+          ))
+          if (!filtered.length) return prev
+          const next = [...prev, ...filtered]
           _writeScoreEvents(roomCodeRef.current, next)
           return next
         })
@@ -336,6 +349,49 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     }
   }, [currentUserId])
 
+  // Ingest an authoritative score change (from an HTTP success response —
+  // most commonly the reaction-tap path). Bumps the leaderboard to the
+  // change's newScore (or by delta if newScore missing) AND appends to
+  // scoreEvents immediately, without waiting for the follow-up WS
+  // broadcast — which may not arrive if the AWS API Gateway WS dropped
+  // the message during a momentary disconnect. The WS handler's append
+  // path dedups against this entry via a ±2.5s match on
+  // (userId, reason, delta), so we don't double-count.
+  const applyAuthoritativeScoreChange = useCallback((change) => {
+    if (!change || !change.userId) return
+    const delta    = Number(change.delta) || 0
+    const newScore = (typeof change.newScore === 'number') ? change.newScore : null
+
+    setRoom(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        members: prev.members.map(m => {
+          if (m.userId !== change.userId) return m
+          const base = Number(m.score) || 0
+          return { ...m, score: newScore !== null ? newScore : base + delta }
+        }),
+      }
+    })
+
+    const entry = {
+      userId:      change.userId,
+      delta:       delta,
+      newScore:    newScore !== null ? newScore : 0,
+      reason:      change.reason || '',
+      eventType:   change.eventType || '',
+      playerName:  change.playerName || change.displayName || '',
+      displayName: change.displayName || '',
+      source:      change.source || '',
+      ts:          Date.now(),
+    }
+    setScoreEvents(prev => {
+      const next = [...prev, entry]
+      _writeScoreEvents(roomCodeRef.current, next)
+      return next
+    })
+  }, [])
+
   return {
     room,
     loading,
@@ -344,5 +400,6 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     joinRoom,
     leaveRoom,
     applyOptimisticDeltas,
+    applyAuthoritativeScoreChange,
   }
 }

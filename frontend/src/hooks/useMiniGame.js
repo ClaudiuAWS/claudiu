@@ -284,8 +284,21 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
     // gets dropped or delayed. When the real broadcast arrives, the existing
     // minigame_result handler merges in the opponent's delta and resets the
     // dismiss timer, so the panel naturally upgrades.
+    //
+    // CRITICAL: MERGE with existing state.deltas instead of overwriting.
+    // If the opponent finished first, their broadcast already populated
+    // state.deltas via the non-submitter branch in minigame_result. A blind
+    // overwrite here would clobber that — the late-finisher's modal would
+    // end up showing only their own delta, while the early-finisher's modal
+    // correctly shows both. (That's exactly the bug the user reported on
+    // the halftime quiz result panel.)
     const lockedGameId = state.gameId
-    setState(s => s && s.gameId === lockedGameId ? { ...s, status: 'resolved', deltas } : s)
+    setState(s => {
+      if (!s || s.gameId !== lockedGameId) return s
+      const byUid = new Map((s.deltas || []).map(d => [d.userId, d]))
+      for (const d of deltas) byUid.set(d.userId, d)
+      return { ...s, status: 'resolved', deltas: Array.from(byUid.values()) }
+    })
     if (resultDismissTimerRef.current) clearTimeout(resultDismissTimerRef.current)
     // Hold the dismiss until after the game window closes so a slow
     // opponent's broadcast can still merge into the result panel before
