@@ -57,8 +57,14 @@ export default function IntroSplash({ onFinish }) {
 
   return (
     <div
-      className={`fixed inset-0 z-[100] bg-black transition-opacity ${fadingOut ? 'opacity-0' : 'opacity-100'}`}
-      style={{ transitionDuration: '400ms' }}
+      className={`fixed top-0 left-0 z-[100] bg-black transition-opacity ${fadingOut ? 'opacity-0' : 'opacity-100'}`}
+      style={{
+        width: '100dvw',
+        height: '100dvh',
+        minWidth: '100vw',
+        minHeight: '100vh',
+        transitionDuration: '400ms',
+      }}
     >
       <video
         ref={videoRef}
@@ -67,7 +73,8 @@ export default function IntroSplash({ onFinish }) {
         playsInline
         poster="/intro-poster.jpg"
         onEnded={finish}
-        className={`absolute inset-0 w-full h-full ${fit === 'cover' ? 'object-cover' : 'object-contain'}`}
+        className={fit === 'cover' ? 'object-cover' : 'object-contain'}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
       />
 
       {needsUnmute && (
