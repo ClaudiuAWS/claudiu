@@ -227,16 +227,20 @@ def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, g
             # 0-point tap and the opponent's positive tap on the same modal,
             # rather than the "No points awarded this round" empty fallback.
             score_changes.append({
-                'userId':      submitter_user_id,
-                'displayName': m.get('displayName'),
-                'delta':       raw_delta,
-                'newScore':    new_score,
-                'eventType':   game_type or 'minigame',
-                'reason':      submitter_delta.get('reason') or game_type,
+                'userId':        submitter_user_id,
+                'displayName':   m.get('displayName'),
+                'delta':         raw_delta,
+                'newScore':      new_score,
+                'eventType':     game_type or 'minigame',
+                'reason':        submitter_delta.get('reason') or game_type,
                 # Lets the frontend score_update handler suppress its toast
                 # for mini-game deltas — the modal's result panel already
                 # surfaces these.
-                'source':      'minigame',
+                'source':        'minigame',
+                # Stable id used by the frontend dedup. Each game has a
+                # unique id, so a duplicate WS delivery (or a re-broadcast
+                # on retry) won't double-count in the leaderboard timeline.
+                'sourceEventId': game_id or '',
             })
             break
 
@@ -335,12 +339,16 @@ def claim_reaction(room_code: str, user_id: str, event_id: str, reaction_type: s
 
     label = 'nutmeg' if reaction_type == 'nutmeg' else 'spectacular play'
     score_changes = [{
-        'userId':     user_id,
-        'delta':      REACTION_BONUS,
-        'newScore':   new_score,
-        'eventType':  reaction_type or 'reaction',
-        'reason':     f'reacted to {label}',
-        'playerName': member.get('displayName') or '',
+        'userId':        user_id,
+        'delta':         REACTION_BONUS,
+        'newScore':      new_score,
+        'eventType':     reaction_type or 'reaction',
+        'reason':        f'reacted to {label}',
+        'playerName':    member.get('displayName') or '',
+        # Stable id for frontend dedup against handleReactTap's
+        # optimistic HTTP-driven append (see applyAuthoritativeScoreChange
+        # in useRoom.js).
+        'sourceEventId': event_id,
     }]
 
     leaderboard = sorted(
