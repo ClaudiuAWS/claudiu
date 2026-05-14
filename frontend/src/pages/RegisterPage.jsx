@@ -31,16 +31,14 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen relative flex flex-col items-center justify-center px-6 overflow-hidden">
       <video
+        src="/bg-login-mobile.mp4"
         autoPlay
         loop
         muted
         playsInline
+        poster="/intro-poster.jpg"
         className="absolute inset-0 w-full h-full object-cover"
-      >
-        <source src="/background-login.mp4" type="video/mp4" />
-      </video>
-
-      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/70 to-black/90" />
+      />
 
       <div className="relative w-full max-w-sm">
         {/* Logo / Brand */}
@@ -53,8 +51,8 @@ export default function RegisterPage() {
               <path d="M2.5 9h19M2.5 15h19" stroke="white" strokeWidth="1.5" />
             </svg>
           </div>
-          <h1 className="text-white text-2xl font-bold tracking-tight">Create account</h1>
-          <p className="text-white/50 text-sm mt-1">Join the game</p>
+          <h1 className="text-white text-2xl font-bold tracking-tight [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]">Create account</h1>
+          <p className="text-white/80 text-sm mt-1 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">Join the game</p>
         </div>
 
         {/* Form card */}
@@ -126,9 +124,9 @@ export default function RegisterPage() {
           </button>
         </div>
 
-        <p className="text-white/40 text-center text-sm mt-6">
+        <p className="text-white/80 text-center text-sm mt-6 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
           Already have an account?{' '}
-          <Link to="/login" className="text-emerald-400 font-medium hover:text-emerald-300 transition-colors">
+          <Link to="/login" className="text-emerald-400 font-medium hover:text-emerald-300 transition-colors [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
             Sign in
           </Link>
         </p>

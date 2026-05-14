@@ -29,23 +29,21 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen relative flex flex-col items-center justify-center px-6 overflow-hidden">
       <video
+        src="/bg-login-mobile.mp4"
         autoPlay
         loop
         muted
         playsInline
+        poster="/intro-poster.jpg"
         className="absolute inset-0 w-full h-full object-cover"
-      >
-        <source src="/background-login.mp4" type="video/mp4" />
-      </video>
-
-      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/70 to-black/90" />
+      />
 
       <div className="relative w-full max-w-sm">
         {/* Logo / Brand */}
         <div className="text-center mb-10">
-          <img src="/logo-dark-bg.png" alt="Claudiu" className="w-20 h-20 mx-auto mb-4 rounded-2xl" />
-          <h1 className="text-white text-2xl font-bold tracking-tight">Welcome back</h1>
-          <p className="text-white/50 text-sm mt-1">Sign in to continue</p>
+          <img src="/logo-dark-bg.png" alt="Claudiu" className="w-20 h-20 mx-auto mb-4 rounded-2xl drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]" />
+          <h1 className="text-white text-2xl font-bold tracking-tight [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]">Welcome back</h1>
+          <p className="text-white/80 text-sm mt-1 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">Sign in to continue</p>
         </div>
 
         {/* Form card */}
@@ -106,9 +104,9 @@ export default function LoginPage() {
           </button>
         </div>
 
-        <p className="text-white/40 text-center text-sm mt-6">
+        <p className="text-white/80 text-center text-sm mt-6 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
           Don't have an account?{' '}
-          <Link to="/register" className="text-emerald-400 font-medium hover:text-emerald-300 transition-colors">
+          <Link to="/register" className="text-emerald-400 font-medium hover:text-emerald-300 transition-colors [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
             Create one
           </Link>
         </p>

@@ -1,10 +1,11 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { Component } from 'react'
+import { Component, useState } from 'react'
 import { useAuth } from './hooks/useAuth'
 import ProtectedRoute from './components/ProtectedRoute'
 import BottomNav from './components/BottomNav'
 import TopNav from './components/TopNav'
 import ToastProvider from './components/ToastProvider'
+import IntroSplash from './components/IntroSplash'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import ConfirmPage from './pages/ConfirmPage'
@@ -54,11 +55,15 @@ const Layout = ({ children }) => (
 
 export default function App() {
   const { user } = useAuth()
+  const [showIntro, setShowIntro] = useState(() => {
+    try { return sessionStorage.getItem('claudiu_intro_seen') !== '1' } catch { return false }
+  })
 
   return (
     <div className="min-h-screen bg-gray-950">
       <ToastProvider />
       <InviteListener />
+      {showIntro && <IntroSplash onFinish={() => setShowIntro(false)} />}
       <ErrorBoundary>
         <Routes>
           <Route path="/login"   element={user ? <Navigate to="/" replace /> : <LoginPage />} />
