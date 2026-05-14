@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { getIntroAudioPrefs } from '../hooks/useAppAudio'
 
 const STORAGE_KEY = 'claudiu_intro_seen'
-const TRIM_START = 5.0             // loop-back point, skipping the silver-trophy opening
+const TRIM_START = 6.0             // loop-back point, past the Ribéry silver-trophy "wooow" beat
 const BUMPER_AT = 29.5             // when the geometric brand panel fades in over the still-playing video
 const FADE_DURATION_MS = 1000
 
