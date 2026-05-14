@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu DynamoDB Table - Friends
+
+Resources:
+        FriendsTable:
+                Type: AWS::DynamoDB::Table
+                Properties:
+                        TableName: claudiu-friends
+                        BillingMode: PAY_PER_REQUEST
+                        AttributeDefinitions:
+                                - AttributeName: userId
+                                  AttributeType: S
+                                - AttributeName: friendId
+                                  AttributeType: S
+                        KeySchema:
+                                - AttributeName: userId
+                                  KeyType: HASH
+                                - AttributeName: friendId
+                                  KeyType: RANGE
+
+Outputs:
+        FriendsTableName:
+                Value: !Ref FriendsTable
+                Export:
+                        Name: claudiu-friends-table
+
+        FriendsTableArn:
+                Value: !GetAtt FriendsTable.Arn
+                Export:
+                        Name: claudiu-friends-table-arn

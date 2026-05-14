@@ -60,3 +60,10 @@ export const profileApi = {
   getUploadUrl: (contentType) => request('/profile/avatar-upload-url', 'POST', { contentType }),
   update:       (avatarUrl)   => request('/profile', 'PUT', { avatarUrl }),
 }
+
+export const friendsApi = {
+  list:   ()         => request('/friends'),
+  add:    (email)    => request('/friends', 'POST', { email }),
+  accept: (friendId) => request(`/friends/${friendId}/accept`, 'POST'),
+  remove: (friendId) => request(`/friends/${friendId}`, 'DELETE'),
+}

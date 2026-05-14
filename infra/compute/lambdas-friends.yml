@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu Lambda Functions - Friends Feature
+
+Resources:
+        FriendsLambdaRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-friends-lambda-role
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Service: lambda.amazonaws.com
+                                          Action: sts:AssumeRole
+                        ManagedPolicyArns:
+                                - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+                        Policies:
+                                - PolicyName: claudiu-friends-lambda-policy
+                                  PolicyDocument:
+                                          Version: "2012-10-17"
+                                          Statement:
+                                                  - Sid: DynamoDBFriends
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:GetItem
+                                                            - dynamodb:PutItem
+                                                            - dynamodb:DeleteItem
+                                                            - dynamodb:Query
+                                                    Resource: !ImportValue claudiu-friends-table-arn
+                                                  - Sid: CognitoListUsers
+                                                    Effect: Allow
+                                                    Action:
+                                                            - cognito-idp:ListUsers
+                                                    Resource: !Sub arn:aws:cognito-idp:eu-central-1:${AWS::AccountId}:userpool/eu-central-1_xMo5k0VLO
+
+        FriendsLambda:
+                Type: AWS::Lambda::Function
+                Properties:
+                        FunctionName: claudiu-friends
+                        Runtime: python3.14
+                        Handler: handler.handler
+                        Role: !GetAtt FriendsLambdaRole.Arn
+                        Timeout: 15
+                        MemorySize: 128
+                        Environment:
+                                Variables:
+                                        FRIENDS_TABLE: !ImportValue claudiu-friends-table
+                                        USER_POOL_ID: eu-central-1_xMo5k0VLO
+                        Code:
+                                ZipFile: |
+                                        def handler(event, context):
+                                            return {'statusCode': 200, 'body': 'ok'}
+
+Outputs:
+        FriendsLambdaArn:
+                Value: !GetAtt FriendsLambda.Arn
+                Export:
+                        Name: claudiu-friends-lambda-arn
