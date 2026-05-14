@@ -73,13 +73,13 @@ export default function App() {
       <ErrorBoundary>
         <Routes>
           {/* Auth pages share a single <AuthLayout/> so the bg video
-              survives navigation between /login and /register —
-              only the form swaps via the nested <Outlet/>. */}
+              survives navigation between /login, /register, and
+              /confirm — only the form swaps via the nested <Outlet/>. */}
           <Route element={user ? <Navigate to="/" replace /> : <AuthLayout />}>
             <Route path="/login"    element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/confirm"  element={<ConfirmPage />} />
           </Route>
-          <Route path="/confirm"  element={<ConfirmPage />} />
 
           <Route path="/" element={
             <ProtectedRoute><Layout><HomePage /></Layout></ProtectedRoute>
