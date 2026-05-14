@@ -27,8 +27,20 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen relative flex flex-col items-center justify-center px-6 overflow-hidden">
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+      >
+        <source src="/background-login.mp4" type="video/mp4" />
+      </video>
+
+      <div className="absolute inset-0 bg-black/70" />
+
+      <div className="relative w-full max-w-sm">
         <h1 className="text-white text-3xl font-bold text-center mb-2">
           Claudiu
         </h1>
@@ -42,7 +54,7 @@ export default function LoginPage() {
             placeholder="Email"
             value={email}
             onChange={e => setEmail(e.target.value)}
-            className="w-full bg-gray-900 text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+            className="w-full bg-gray-900/80 backdrop-blur text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
           />
           <input
             type="password"
@@ -50,7 +62,7 @@ export default function LoginPage() {
             value={password}
             onChange={e => setPassword(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            className="w-full bg-gray-900 text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+            className="w-full bg-gray-900/80 backdrop-blur text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
           />
 
           {error && (
