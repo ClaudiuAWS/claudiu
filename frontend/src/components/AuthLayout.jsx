@@ -66,7 +66,7 @@ export default function AuthLayout() {
   }, [bgVideoRef])
 
   return (
-    <div className="min-h-screen relative flex flex-col items-center justify-center px-6 overflow-hidden">
+    <div className="fixed inset-0 flex flex-col items-center justify-center px-6 overflow-hidden">
       <video
         ref={bgVideoRef}
         src="/intro-mobile.mp4"
