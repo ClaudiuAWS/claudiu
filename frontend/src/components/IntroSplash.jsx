@@ -8,9 +8,17 @@ function pickSrc() {
   return isHighDpr ? '/intro-mobile-4k.mp4' : '/intro-mobile.mp4'
 }
 
+function pickFit() {
+  if (typeof window === 'undefined') return 'contain'
+  // Desktop landscape: cover the viewport (the source's baked-in letterbox gets cropped out, content fills width).
+  // Mobile portrait: contain (preserves the source's native cinematic 9:16 framing).
+  return window.matchMedia('(min-width: 769px)').matches ? 'cover' : 'contain'
+}
+
 export default function IntroSplash({ onFinish }) {
   const videoRef = useRef(null)
   const [src] = useState(pickSrc)
+  const [fit] = useState(pickFit)
   const [showSkip, setShowSkip] = useState(false)
   const [needsUnmute, setNeedsUnmute] = useState(false)
   const [fadingOut, setFadingOut] = useState(false)
@@ -59,7 +67,7 @@ export default function IntroSplash({ onFinish }) {
         playsInline
         poster="/intro-poster.jpg"
         onEnded={finish}
-        className="absolute inset-0 w-full h-full object-contain"
+        className={`absolute inset-0 w-full h-full ${fit === 'cover' ? 'object-cover' : 'object-contain'}`}
       />
 
       {needsUnmute && (
