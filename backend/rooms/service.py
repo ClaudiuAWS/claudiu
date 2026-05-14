@@ -701,6 +701,11 @@ def select_team(room_code: str, user_id: str, player_ids: list) -> dict:
             'position':    fetched[pid].get('position', ''),
             'teamRole':    fetched[pid].get('teamRole', ''),
             'shirtNumber': fetched[pid].get('shirtNumber', ''),
+            # Persist displayName so downstream scoring can name the owner
+            # of a card / conceded penalty without a second DDB hop. Older
+            # rooms without this field still work — callers default to a
+            # generic "your keeper" label.
+            'displayName': fetched[pid].get('displayName', ''),
         }
         for pid in player_ids
     ]

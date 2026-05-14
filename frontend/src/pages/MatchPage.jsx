@@ -228,6 +228,7 @@ export default function MatchPage() {
               members={room?.members}
               currentUserId={user?.userId}
               scoreEvents={scoreEvents}
+              playerMap={playerMap}
             />
           </div>
         )}

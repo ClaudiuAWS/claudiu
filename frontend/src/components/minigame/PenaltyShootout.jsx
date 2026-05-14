@@ -44,30 +44,41 @@ import { useRef, useState } from 'react'
 //   x centres: {20, 50, 80} → spans 8–32, 38–62, 68–92.
 //   y centres: {16, 38, 60} → spans 8–24, 30–46, 52–68.
 const ZONES = [
-  { key: 'TL', label: '↖', x: 20, y: 16, points: 8 },
-  { key: 'TM', label: '⬆', x: 50, y: 16, points: 7 },
-  { key: 'TR', label: '↗', x: 80, y: 16, points: 8 },
-  { key: 'ML', label: '←', x: 20, y: 38, points: 5 },
-  { key: 'MM', label: '•', x: 50, y: 38, points: 3 },
-  { key: 'MR', label: '→', x: 80, y: 38, points: 5 },
-  { key: 'BL', label: '↙', x: 20, y: 60, points: 6 },
-  { key: 'BM', label: '⬇', x: 50, y: 60, points: 4 },
-  { key: 'BR', label: '↘', x: 80, y: 60, points: 6 },
+  { key: 'TL', label: '◤', x: 20, y: 16, points: 8 },
+  { key: 'TM', label: '▲', x: 50, y: 16, points: 7 },
+  { key: 'TR', label: '◥', x: 80, y: 16, points: 8 },
+  { key: 'ML', label: '◀', x: 20, y: 38, points: 5 },
+  { key: 'MM', label: '●', x: 50, y: 38, points: 3 },
+  { key: 'MR', label: '▶', x: 80, y: 38, points: 5 },
+  { key: 'BL', label: '◣', x: 20, y: 60, points: 6 },
+  { key: 'BM', label: '▼', x: 50, y: 60, points: 4 },
+  { key: 'BR', label: '◢', x: 80, y: 60, points: 6 },
 ]
 
-// Per-zone gradient + border tint, chosen so the higher-reward zones
-// "glow" warmer (gold/orange) and the lower-reward zones cool down
-// (sky/slate). Tailwind JIT needs literal class names — list them out.
+// Per-zone gradient + border tint. Coherent three-tier warm→cool palette
+// keyed off reward:
+//   high (+7/+8 corners + Panenka)  → amber
+//   medium (+5/+6 sides + bottom corners) → emerald
+//   low (+3/+4 centre + bottom-mid) → slate
+// Fewer hues feel more designed. Tailwind JIT needs literal class names.
 const TILE_GRADIENT = {
-  TL: 'from-amber-400/30 to-amber-600/10 border-amber-300/40',
-  TM: 'from-orange-400/30 to-orange-600/10 border-orange-300/40',
-  TR: 'from-amber-400/30 to-amber-600/10 border-amber-300/40',
+  TL: 'from-amber-400/35 to-amber-600/10 border-amber-300/40',
+  TM: 'from-amber-400/30 to-amber-600/10 border-amber-300/40',
+  TR: 'from-amber-400/35 to-amber-600/10 border-amber-300/40',
   ML: 'from-emerald-400/30 to-emerald-600/10 border-emerald-300/40',
   MM: 'from-slate-400/25 to-slate-600/10 border-slate-300/40',
   MR: 'from-emerald-400/30 to-emerald-600/10 border-emerald-300/40',
-  BL: 'from-teal-400/30 to-teal-600/10 border-teal-300/40',
-  BM: 'from-sky-400/25 to-sky-600/10 border-sky-300/40',
-  BR: 'from-teal-400/30 to-teal-600/10 border-teal-300/40',
+  BL: 'from-emerald-400/28 to-emerald-600/10 border-emerald-300/40',
+  BM: 'from-slate-400/22 to-slate-600/10 border-slate-300/40',
+  BR: 'from-emerald-400/28 to-emerald-600/10 border-emerald-300/40',
+}
+
+// Glow colour applied to the radiating box-shadow on pick — matches the
+// tile tier so the burst feels native to the zone.
+const TILE_GLOW = {
+  TL: 'rgba(251,191,36,0.55)', TM: 'rgba(251,191,36,0.55)', TR: 'rgba(251,191,36,0.55)',
+  ML: 'rgba(16,185,129,0.50)', MM: 'rgba(148,163,184,0.45)', MR: 'rgba(16,185,129,0.50)',
+  BL: 'rgba(16,185,129,0.45)', BM: 'rgba(148,163,184,0.40)', BR: 'rgba(16,185,129,0.45)',
 }
 
 const BALL_START = { x: 50, y: 90 } // bottom of the goal panel, on the spot
@@ -116,9 +127,14 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
       <div
         className="relative w-full rounded-xl overflow-hidden border-2 border-white/15"
         style={{
-          background: 'radial-gradient(ellipse at 50% 30%, #15703a 0%, #0e5320 45%, #0a3a14 100%)',
+          background:
+            // Faint vertical mowing stripes layered on the existing radial
+            // grass gradient — adds stadium feel without heavy texture.
+            'repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 6%, transparent 6% 12%),' +
+            'radial-gradient(ellipse at 50% 30%, #16753c 0%, #0f5722 45%, #093913 100%)',
           aspectRatio: '5 / 3',
-          boxShadow: 'inset 0 -20px 40px rgba(0,0,0,0.35)',
+          boxShadow: 'inset 0 -20px 40px rgba(0,0,0,0.38), 0 18px 40px -18px rgba(0,0,0,0.55)',
+          animation: 'penModalIn 320ms cubic-bezier(.22,1.4,.36,1)',
         }}
       >
         {/* Pitch lines: faint penalty arc + 6-yard box hint */}
@@ -165,13 +181,13 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
               borderRadius: '2px',
             }}
           />
-          {/* net — crossing diamond stitch */}
+          {/* net — denser crossing diamond stitch */}
           <div
             className="absolute inset-[4px]"
             style={{
               backgroundImage:
-                'repeating-linear-gradient(45deg, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 1px, transparent 1px, transparent 13px),' +
-                'repeating-linear-gradient(-45deg, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 1px, transparent 1px, transparent 13px)',
+                'repeating-linear-gradient(45deg, rgba(255,255,255,0.20) 0, rgba(255,255,255,0.20) 1px, transparent 1px, transparent 10px),' +
+                'repeating-linear-gradient(-45deg, rgba(255,255,255,0.20) 0, rgba(255,255,255,0.20) 1px, transparent 1px, transparent 10px)',
             }}
           />
         </div>
@@ -268,14 +284,18 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
         </div>
 
         {/* Zone overlay buttons */}
-        {ZONES.map(z => {
+        {ZONES.map((z, idx) => {
           const picked = pick === z.key
           const pickedClass = picked
             ? (isShooter
-                ? 'border-emerald-200 ring-2 ring-emerald-300/70 bg-gradient-to-br from-emerald-300/50 to-emerald-500/20'
-                : 'border-sky-200 ring-2 ring-sky-300/70 bg-gradient-to-br from-sky-300/50 to-sky-500/20')
+                ? 'border-emerald-200 ring-2 ring-emerald-300/70 bg-gradient-to-br from-emerald-300/55 to-emerald-500/20'
+                : 'border-sky-200 ring-2 ring-sky-300/70 bg-gradient-to-br from-sky-300/55 to-sky-500/20')
             : `bg-gradient-to-br ${TILE_GRADIENT[z.key]}`
-          const dim = pick !== null && !picked ? 'opacity-35' : ''
+          const dim = pick !== null && !picked ? 'opacity-30' : ''
+          // Stagger reveal: row*3 + col gives a left-to-right, top-to-bottom
+          // ripple (0ms, 60ms, 120ms … 480ms).
+          const staggerDelay = idx * 50
+          const glow = picked ? TILE_GLOW[z.key] : null
           return (
             <button
               key={z.key}
@@ -284,7 +304,7 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
               disabled={pick !== null}
               className={`absolute rounded-xl border-2 transition-all
                 ${pickedClass}
-                ${pick === null ? 'hover:brightness-125 hover:scale-[1.03] active:scale-95' : ''}
+                ${pick === null ? 'hover:brightness-125 hover:scale-[1.04] active:scale-95' : ''}
                 ${dim}
                 flex flex-col items-center justify-center
                 backdrop-blur-[1px]
@@ -298,13 +318,22 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
                 top: `${z.y - 8}%`,
                 width: '24%',
                 height: '16%',
-                animation: picked ? 'penTilePop 0.32s ease-out' : undefined,
-                boxShadow: picked ? '0 0 18px rgba(16,185,129,0.45)' : undefined,
+                animation: picked
+                  ? `penTilePop 0.32s ease-out, penTileGlow 0.9s ease-out`
+                  : `penTileReveal 360ms cubic-bezier(.22,1.4,.36,1) ${staggerDelay}ms both`,
+                boxShadow: glow ? `0 0 0 0 ${glow}` : undefined,
+                ['--pen-glow']: glow || undefined,
               }}
             >
-              <span className="text-xl font-black text-white drop-shadow-md leading-none">{z.label}</span>
+              <span
+                className="font-black text-white leading-none"
+                style={{
+                  fontSize: '1.35rem',
+                  textShadow: '0 1px 3px rgba(0,0,0,0.55), 0 0 8px rgba(0,0,0,0.25)',
+                }}
+              >{z.label}</span>
               {isShooter && (
-                <span className="text-[9px] text-white/85 font-extrabold uppercase tracking-wider mt-0.5">
+                <span className="text-[10px] text-white/90 font-extrabold uppercase tracking-wider mt-0.5 drop-shadow">
                   +{z.points}
                 </span>
               )}
@@ -343,6 +372,10 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
       </div>
 
       <style>{`
+        @keyframes penModalIn {
+          0%   { opacity: 0; transform: translateY(10px) scale(0.97); }
+          100% { opacity: 1; transform: translateY(0)    scale(1);    }
+        }
         @keyframes penBallBounce {
           0%, 100% { transform: translate(-50%, -50%) scale(1); }
           50%      { transform: translate(-50%, -54%) scale(1.06); }
@@ -359,10 +392,20 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
           0%, 100% { transform: translate(-50%, -50%) translateX(-7px) rotate(-3deg); }
           50%      { transform: translate(-50%, -50%) translateX( 7px) rotate( 3deg); }
         }
+        @keyframes penTileReveal {
+          0%   { opacity: 0; transform: scale(0.86); }
+          100% { opacity: 1; transform: scale(1);    }
+        }
         @keyframes penTilePop {
           0%   { transform: scale(1); }
-          45%  { transform: scale(1.08); }
-          100% { transform: scale(1); }
+          45%  { transform: scale(1.10); }
+          100% { transform: scale(1.02); }
+        }
+        @keyframes penTileGlow {
+          0%   { box-shadow: 0 0 0 0   var(--pen-glow, rgba(16,185,129,0.55)); }
+          70%  { box-shadow: 0 0 0 24px var(--pen-glow, rgba(16,185,129,0)),
+                              0 0 36px var(--pen-glow, rgba(16,185,129,0)); }
+          100% { box-shadow: 0 0 0 0   transparent; }
         }
         @keyframes penLockedPulse {
           0%, 100% { opacity: 1;   transform: scale(1);     }

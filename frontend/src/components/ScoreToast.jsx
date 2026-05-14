@@ -47,10 +47,13 @@ export default function ScoreToast({ t, reason, delta, playerName, subtitle }) {
       {/* Body */}
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
-          <span className={`text-lg font-black tabular-nums leading-none ${deltaColor}`}>
+          <span
+            className={`font-stadium tabular-nums leading-none ${deltaColor}`}
+            style={{ fontSize: '1.7rem', letterSpacing: '0.04em' }}
+          >
             {delta_s}
           </span>
-          <span className="text-white/90 text-[12px] font-semibold leading-tight truncate">
+          <span className="font-stadium text-white/90 text-[14px] tracking-wider uppercase leading-tight truncate">
             {reason || (delta > 0 ? 'Awarded' : 'Penalty')}
           </span>
         </div>

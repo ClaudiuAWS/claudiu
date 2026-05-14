@@ -76,7 +76,10 @@ export function computeOptimisticDeltas(event, members) {
           delta -= 1
           if (!reason) {
             reason = 'conceded'
-            name   = 'your keeper'
+            // select_team persists displayName on each teamSelectionDetails
+            // entry (since the keeper-name fix). Fall back to the generic
+            // label only for legacy rooms saved before that schema bump.
+            name   = concedingGK.displayName || 'your keeper'
           }
         }
       }
