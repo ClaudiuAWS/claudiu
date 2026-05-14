@@ -260,6 +260,10 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
         gameType: state.gameType,
         deltas,
         result:   { userPayload, botPayload },
+        // 'final' = real deltas. Backend marks (gameId, userId) as resolved
+        // and applies the score. Penalty's 'announce' phase POST earlier
+        // skipped that mark so this one still goes through.
+        phase:    'final',
       }).catch(err => logger.warn('useMiniGame', 'postMinigameScore failed', err))
     }
 
@@ -310,6 +314,9 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
         gameType: state.gameType,
         deltas:   [],
         result:   { pick: payload },
+        // 'announce' tells the backend not to mark this user as resolved —
+        // the real deltas POST from _resolveBoth will do that later.
+        phase:    'announce',
       }).catch(err => logger.warn('useMiniGame', 'penalty pick announce failed', err))
       setState(s => s ? { ...s, _localPick: payload } : s)
       return

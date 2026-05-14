@@ -41,12 +41,39 @@ export function useMatchClock(match, events) {
   const anchorRef = useRef({ gameSec: 0, wallMs: 0 })
   const eventsRef = useRef(events)
   eventsRef.current = events
+  // Track whether we've already snapped the anchor at second-half kickoff.
+  // During the 3-wall-minute halftime break, wall-time interpolation drags
+  // the anchor forward (cap hides this from display). When sh reveals,
+  // the rewind-rejection in the match.currentMinute effect would refuse to
+  // reset the anchor back to sh's gameTime, leaving the clock reading
+  // 45+breakDrift. This ref triggers a one-time hard snap that overrides
+  // the rewind guard.
+  const sh2hSnappedRef = useRef(false)
 
   useEffect(() => {
     lastServerMinuteRef.current = ''
     lastAcceptedServerSecRef.current = -1
     anchorRef.current = { gameSec: 0, wallMs: Date.now() }
+    sh2hSnappedRef.current = false
   }, [match?.matchId, match?.startedAt])
+
+  // One-shot: when secondhalf first becomes visible in the events list,
+  // force the anchor back to its gameTime and restart wall extrapolation.
+  // Without this, the clock displays 60'+ after the 15-game-min halftime
+  // break drained into local interpolation. See note on sh2hSnappedRef.
+  useEffect(() => {
+    if (sh2hSnappedRef.current) return
+    const sh = (events ?? []).find(e => e.eventType === 'secondhalf')
+    if (!sh) return
+    const shSec = gameTimeToSeconds(sh.gameTime)
+    if (shSec < 0) return
+    sh2hSnappedRef.current = true
+    anchorRef.current = { gameSec: shSec, wallMs: Date.now() }
+    lastAcceptedServerSecRef.current = shSec
+    const ht = (events ?? []).find(e => e.eventType === 'halftime')
+    const htSec = ht ? gameTimeToSeconds(ht.gameTime) : -1
+    setDisplay(formatFootballClock(shSec, htSec))
+  }, [events])
 
   // True 'live' phases: 1H (status='live' before halftime fires) and 2H. Detect
   // 2H from the events list rather than match.status alone — the WS reorder

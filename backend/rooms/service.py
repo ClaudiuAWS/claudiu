@@ -145,7 +145,7 @@ def send_message(room_code: str, user_id: str, display_name: str, text: str) -> 
     })
 
 
-def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, game_type: str, deltas: list, result: dict) -> dict:
+def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, game_type: str, deltas: list, result: dict, phase: str = 'final') -> dict:
     """Resolve a mini-game's score deltas onto the room's leaderboard.
 
     Mini-games run client-side for v1 (timing UI + bot all in browser). Each
@@ -166,6 +166,22 @@ def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, g
         raise ValueError('Room not found')
     if not any(m['userId'] == submitter_user_id for m in room.get('members', [])):
         raise ValueError('You are not in this room')
+
+    # Penalty announce-only POST: shooter or keeper broadcasting their pick
+    # before the outcome is computed. Skip idempotency / DDB writes / score
+    # updates — this is purely a pub/sub of `result.pick` so the opponent's
+    # client knows which corner was chosen. The follow-up `phase: 'final'`
+    # POST from `_resolveBoth` carries the real deltas and goes through the
+    # normal path below.
+    if phase == 'announce':
+        ws.push_to_channel(f"room#{room_code}", {
+            'type':     'minigame_result',
+            'gameId':   game_id,
+            'gameType': game_type,
+            'result':   result,
+            'deltas':   [],
+        })
+        return {'ok': True, 'announce': True}
 
     resolved = set(room.get('resolvedMinigames') or [])
     submitter_key = f"{game_id}:{submitter_user_id}" if game_id else None
