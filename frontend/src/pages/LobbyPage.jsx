@@ -15,7 +15,6 @@ import TeamSelectionModal from '../components/lobby/TeamSelectionModal'
 export default function LobbyPage() {
   const { matchId } = useParams()
   const { user } = useAuth()
-  const { room, loading, createRoom, joinRoom, leaveRoom } = useRoom(null, user?.userId)
   const { match } = useMatch(matchId)
   const [mode, setMode] = useState('create')
   const [error, setError] = useState('')
@@ -23,6 +22,25 @@ export default function LobbyPage() {
   const [starting, setStarting] = useState(false)
   const [speedMultiplier, setSpeedMultiplier] = useState(5)
   const navigate = useNavigate()
+
+  // Host pushes a `match_started` WS broadcast on Start; every member
+  // (including the host's other tabs) lands on /match within the WS
+  // round-trip. Guarded by the same sessionStorage flag the isLive
+  // effect below uses so a manual back-nav to the lobby isn't bounced.
+  const handleMatchStarted = (mid) => {
+    if (!mid) return
+    const flagKey = `lobby_auto_redirected_${mid}`
+    if (sessionStorage.getItem(flagKey)) return
+    sessionStorage.setItem(flagKey, '1')
+    navigate(`/match/${mid}`)
+  }
+  const { room, loading, createRoom, joinRoom, leaveRoom } = useRoom(
+    null,
+    user?.userId,
+    null,
+    null,
+    handleMatchStarted,
+  )
 
   const myMember = room?.members?.find(m => m.userId === user?.userId)
   const hasTeam  = myMember?.teamSelection?.length === 11

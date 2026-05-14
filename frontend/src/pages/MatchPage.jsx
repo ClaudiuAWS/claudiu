@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth'
 import { matchesApi, roomsApi } from '../services/api'
 import { logger } from '../services/logger'
 import toast from 'react-hot-toast'
+import { emitScoreToast } from '../components/ScoreToast'
 import Scoreboard from '../components/match/Scoreboard'
 import MatchFeed from '../components/match/MatchFeed'
 import ChatPanel from '../components/match/ChatPanel'
@@ -36,7 +37,7 @@ export default function MatchPage() {
   // arg. We construct a ref-stable forwarder here and feed it both ways.
   const minigameMsgRef = useRef(null)
   const minigameMsgHandler = useCallback((msg) => minigameMsgRef.current?.(msg), [])
-  const { room, loading: roomLoading, applyOptimisticDeltas } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler)
+  const { room, loading: roomLoading, scoreEvents, applyOptimisticDeltas } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler)
 
   // Optimistic local scoring — when an event reveals on the displayed clock,
   // compute deltas client-side and bump the leaderboard immediately. The
@@ -127,17 +128,23 @@ export default function MatchPage() {
   }, [awayTeamPlayers, awayLocalPicks, playerMap])
 
   // Reaction tap on a nutmeg / spectacular_play badge → +2 backend bonus.
-  // The score_update WS that follows surfaces the actual delta toast via
-  // useRoom. Errors used to be silently swallowed here, which masked a
-  // real prod bug (missing API Gateway route returning 403) — now we log
-  // and surface a small toast on failure so misconfigurations don't hide.
+  // The success toast fires here optimistically (the backend score_update
+  // WS that follows is intentionally silent on score-toast emission so we
+  // don't double-fire). Duplicate replies stay silent; real failures
+  // surface a small error toast so misconfigurations don't hide.
   const handleReactTap = useCallback((event) => {
     if (!room?.roomCode || !event?.eventId) return
     roomsApi.react(room.roomCode, event.eventId, event.eventType)
+      .then(result => {
+        if (result?.duplicate) return
+        const reasonText = event.eventType === 'nutmeg'
+          ? 'reacted to nutmeg'
+          : 'reacted to spectacular play'
+        emitScoreToast({ delta: 2, reason: reasonText })
+      })
       .catch(err => {
         logger.warn('MatchPage', 'react tap failed', err)
         const msg = String(err?.message || '').toLowerCase()
-        // Duplicate is expected after a re-tap and not user-actionable.
         if (msg.includes('duplicate')) return
         toast.error('Reaction did not register', { duration: 2500 })
       })
@@ -220,6 +227,7 @@ export default function MatchPage() {
               awayMemberName={room?.members?.[1]?.displayName}
               members={room?.members}
               currentUserId={user?.userId}
+              scoreEvents={scoreEvents}
             />
           </div>
         )}

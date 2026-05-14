@@ -1,18 +1,63 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { roomsApi } from '../services/api'
 import { logger } from '../services/logger'
 import { useWebSocket } from './useWebSocket'
 import toast from 'react-hot-toast'
+import { emitScoreToast } from '../components/ScoreToast'
 
 const ROOM_CODE_KEY = 'fan_squad_room_code'
+
+// Per-room score event log (used by the leaderboard tap-to-expand timeline).
+// Keyed by roomCode — every room session has a unique code, so a brand-new
+// match in a new room starts with an empty log automatically. Capped to
+// avoid unbounded sessionStorage growth on long matches.
+const SCORE_EVENTS_KEY = (code) => `scoreEvents_${code}`
+const SCORE_EVENTS_CAP = 300
+
+function _readScoreEvents(roomCode) {
+  if (!roomCode) return []
+  try {
+    const s = sessionStorage.getItem(SCORE_EVENTS_KEY(roomCode))
+    return s ? JSON.parse(s) : []
+  } catch { return [] }
+}
+
+function _writeScoreEvents(roomCode, events) {
+  if (!roomCode) return
+  try {
+    const slim = events.slice(-SCORE_EVENTS_CAP)
+    sessionStorage.setItem(SCORE_EVENTS_KEY(roomCode), JSON.stringify(slim))
+  } catch {}
+}
 
 // Listeners for mini-game lifecycle messages. Hooks like useMiniGame can
 // subscribe via useRoom's `onMinigameMessage` callback so the WS connection
 // stays single (one channel subscription per room).
 
-export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMinigameMessage = null) {
+export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMinigameMessage = null, onMatchStarted = null) {
   const [room, setRoom] = useState(initialRoom)
   const [loading, setLoading] = useState(initialRoom ? false : true)
+  const [scoreEvents, setScoreEvents] = useState([])
+  // Held in a ref so handleMessage stays stable even when the callback
+  // identity changes between renders — same pattern as _resolveBoth in
+  // useMiniGame.
+  const onMatchStartedRef = useRef(onMatchStarted)
+  onMatchStartedRef.current = onMatchStarted
+  // The WS handler is stable across renders, but we still need the latest
+  // roomCode at the moment a score_update arrives to namespace the
+  // sessionStorage write.
+  const roomCodeRef = useRef(room?.roomCode || null)
+  roomCodeRef.current = room?.roomCode || null
+
+  // Hydrate scoreEvents from sessionStorage whenever the room code changes
+  // (initial mount, room join, or room switch).
+  useEffect(() => {
+    if (!room?.roomCode) {
+      setScoreEvents([])
+      return
+    }
+    setScoreEvents(_readScoreEvents(room.roomCode))
+  }, [room?.roomCode])
 
   // Restore room from sessionStorage on mount (skip if we already have room from nav state)
   useEffect(() => {
@@ -70,6 +115,12 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     } else if (msg.type === 'match_ended') {
       toast('Full time! 🏁')
       logger.info('useRoom', 'WS match_ended', msg.finalResult)
+    } else if (msg.type === 'match_started') {
+      // Host's `start_match_for_room` pushes this once the replay-emitter
+      // confirms the match is live. Non-host clients use it to navigate to
+      // /match immediately rather than waiting on the next match-status poll.
+      onMatchStartedRef.current?.(msg.matchId)
+      logger.info('useRoom', 'WS match_started', msg.matchId)
     } else if (msg.type === 'chat_message') {
       onChatMessage?.(msg)
     } else if (msg.type === 'score_update') {
@@ -112,6 +163,28 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       // gave users two notifications for the same event. The reaction-tap
       // path still posts its own confirmation toast at tap time, and
       // mini-game results show in the modal panel.
+      //
+      // Append every change to the per-room scoreEvents log so the
+      // leaderboard tap-to-expand timeline can show a user's history.
+      // Cap + persist in one shot for the storage write.
+      const incoming = (msg.changes || []).map(c => ({
+        userId:      c.userId,
+        delta:       Number(c.delta) || 0,
+        newScore:    Number(c.newScore) || 0,
+        reason:      c.reason || '',
+        eventType:   c.eventType || '',
+        playerName:  c.playerName || c.displayName || '',
+        displayName: c.displayName || '',
+        source:      c.source || '',
+        ts:          Date.now(),
+      }))
+      if (incoming.length) {
+        setScoreEvents(prev => {
+          const next = [...prev, ...incoming]
+          _writeScoreEvents(roomCodeRef.current, next)
+          return next
+        })
+      }
       logger.info('useRoom', 'WS score_update', msg.changes)
     } else if (msg.type === 'minigame_start' || msg.type === 'minigame_result' || msg.type === 'minigame_expired') {
       // Mini-game lifecycle messages — forward to the dedicated useMiniGame
@@ -255,19 +328,18 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     // the backend round-trip.
     const myDelta = deltas.find(d => d.userId === currentUserId && d.delta !== 0)
     if (myDelta) {
-      const sign  = myDelta.delta > 0 ? '+' : '−'
-      const value = Math.abs(myDelta.delta)
-      const who   = myDelta.playerName || ''
-      const verb  = myDelta.reason || (myDelta.delta > 0 ? 'awarded' : 'penalty')
-      const text  = who ? `${sign}${value} — ${who} ${verb}` : `${sign}${value} — ${verb}`
-      const icon  = myDelta.delta > 0 ? '⚽' : '🟨'
-      toast(text, { icon, duration: 3000 })
+      emitScoreToast({
+        delta:      myDelta.delta,
+        reason:     myDelta.reason,
+        playerName: myDelta.playerName,
+      })
     }
   }, [currentUserId])
 
   return {
     room,
     loading,
+    scoreEvents,
     createRoom,
     joinRoom,
     leaveRoom,

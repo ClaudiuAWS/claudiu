@@ -750,6 +750,13 @@ def start_match_for_room(room_code: str, user_id: str, speed_multiplier: float =
     if result.get('statusCode', 200) >= 400:
         body = json.loads(result.get('body', '{}'))
         raise ValueError(body.get('error', 'Failed to start match'))
+    # Push to the room's WS channel so every member navigates to /match in
+    # lockstep with the host — no waiting on the next match-status poll.
+    # Scoped: only subscribers of `room#<code>` receive the push.
+    ws.push_to_channel(f"room#{room_code}", {
+        'type':    'match_started',
+        'matchId': match_id,
+    })
     return {'ok': True, 'matchId': match_id}
 
 
