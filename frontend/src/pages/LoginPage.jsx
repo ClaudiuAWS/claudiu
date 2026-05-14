@@ -42,19 +42,34 @@ export default function LoginPage() {
       />
 
       <div className="relative w-full max-w-sm">
-        {/* Logo / Brand */}
+        {/* Logo / Brand — emblem cropped to drop the baked-in black
+            BUNDESLIGA text; both wordmarks rendered as white HTML so
+            the stack reads as one. */}
         <div className="text-center mb-8">
-          <img
-            src="/logo.png"
-            alt=""
-            className="w-20 h-auto mx-auto mb-3 drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
-          />
+          <div
+            className="mx-auto overflow-hidden"
+            style={{ width: 80, height: 64 }}
+          >
+            <img
+              src="/logo.png"
+              alt=""
+              className="block drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
+              style={{ width: 80, height: 80 }}
+            />
+          </div>
           <p
-            className="font-stadium text-white text-2xl tracking-[0.12em] [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]"
+            className="font-stadium text-white text-base leading-none mt-2 [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]"
+            style={{ letterSpacing: '0.18em' }}
+          >
+            BUNDESLIGA
+          </p>
+          <p
+            className="font-stadium text-white text-2xl leading-none mt-1 [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]"
+            style={{ letterSpacing: '0.12em' }}
           >
             FANTASY
           </p>
-          <p className="text-white/80 text-sm mt-1 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
+          <p className="text-white/80 text-sm mt-2 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
             Sign in to play
           </p>
         </div>
