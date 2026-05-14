@@ -13,8 +13,8 @@
 export const TRACKS = [
   {
     id:            'intro',
-    title:         'Intro Anthem',
-    artist:        '—',
+    title:         'A Fresh Energy',
+    artist:        'Gaskin',
     file:          '/songs/intro.mp3',
     requiredBadge: null,   // null = default, always unlocked
   },
