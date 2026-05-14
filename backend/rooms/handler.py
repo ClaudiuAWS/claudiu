@@ -121,6 +121,9 @@ def _post_minigame_score(event, user_id):
         game_type = body.get('gameType') or ''
         deltas    = body.get('deltas') or []
         result    = body.get('result') or {}
+        # `phase` controls penalty's two-phase resolution. 'announce' = pure
+        # broadcast of the local pick (no score), 'final' = real deltas (default).
+        phase     = body.get('phase') if body.get('phase') in ('announce', 'final') else 'final'
         if not isinstance(deltas, list):
             return _response(400, {'error': 'deltas must be a list'})
         # Validation: each delta has userId + integer delta + reason. Cap |delta|
@@ -137,7 +140,7 @@ def _post_minigame_score(event, user_id):
                 clean.append({'userId': uid, 'delta': amt, 'reason': rsn})
             except (TypeError, ValueError):
                 continue
-        out = service.apply_minigame_score(room_code, user_id, game_id, game_type, clean, result)
+        out = service.apply_minigame_score(room_code, user_id, game_id, game_type, clean, result, phase=phase)
         return _response(200, out)
 
 def _post_draft_ready(event, user_id):
