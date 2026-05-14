@@ -241,7 +241,7 @@ export default function ProfilePage() {
 function MusicCard() {
   const {
     appEnabled, toggleApp, appTrackId, setAppTrack,
-    introEnabled, toggleIntro, introTrackId, setIntroTrack,
+    introEnabled, toggleIntro,
     tracks,
   } = useAppAudio()
 
@@ -275,19 +275,19 @@ function MusicCard() {
         onToggle={toggleIntro}
       />
 
-      {/* Track picker (wallpaper-style assignment) */}
+      {/* Track picker for the App-music slot only. The intro
+          always uses the splash video's bundled audio — its track
+          isn't user-pickable; only the on/off toggle above is. */}
       <div className="mt-4 pt-4 border-t border-white/5">
         <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-500 mb-2">
-          Tracks ({tracks.length} unlocked)
+          App tracks ({tracks.length} unlocked)
         </p>
         <div className="space-y-2">
           {tracks.map(t => (
             <TrackRow
               key={t.id}
               track={t}
-              isIntro={introTrackId === t.id}
               isApp={appTrackId === t.id}
-              onSetIntro={() => setIntroTrack(t.id)}
               onSetApp={() => setAppTrack(t.id)}
             />
           ))}
@@ -347,7 +347,7 @@ function MusicToggleRow({ icon, title, sub, enabled, onToggle }) {
   )
 }
 
-function TrackRow({ track, isIntro, isApp, onSetIntro, onSetApp }) {
+function TrackRow({ track, isApp, onSetApp }) {
   return (
     <div
       className="flex items-center gap-3 rounded-xl p-2.5"
@@ -374,9 +374,8 @@ function TrackRow({ track, isIntro, isApp, onSetIntro, onSetApp }) {
           {track.artist || '—'}
         </p>
       </div>
-      <div className="flex flex-col gap-1 flex-shrink-0">
-        <AssignPill label="Intro" active={isIntro} onClick={onSetIntro} />
-        <AssignPill label="App"   active={isApp}   onClick={onSetApp} />
+      <div className="flex-shrink-0">
+        <AssignPill label="App" active={isApp} onClick={onSetApp} />
       </div>
     </div>
   )

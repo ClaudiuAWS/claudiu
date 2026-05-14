@@ -6,6 +6,7 @@ import BottomNav from './components/BottomNav'
 import TopNav from './components/TopNav'
 import ToastProvider from './components/ToastProvider'
 import IntroSplash from './components/IntroSplash'
+import AuthLayout from './components/AuthLayout'
 import { AppAudioProvider } from './hooks/useAppAudio'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -71,8 +72,13 @@ export default function App() {
       {showIntro && <IntroSplash onFinish={() => setShowIntro(false)} />}
       <ErrorBoundary>
         <Routes>
-          <Route path="/login"   element={user ? <Navigate to="/" replace /> : <LoginPage />} />
-          <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegisterPage />} />
+          {/* Auth pages share a single <AuthLayout/> so the bg video
+              survives navigation between /login and /register —
+              only the form swaps via the nested <Outlet/>. */}
+          <Route element={user ? <Navigate to="/" replace /> : <AuthLayout />}>
+            <Route path="/login"    element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+          </Route>
           <Route path="/confirm"  element={<ConfirmPage />} />
 
           <Route path="/" element={
