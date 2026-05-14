@@ -49,7 +49,12 @@ export default function MatchPage() {
   const handleScoreEvent = useCallback((event) => {
     const members = roomMembersRef.current
     if (!members?.length) return
+    // Attach the source event id so applyOptimisticDeltas can stamp a
+    // stable dedup key on each scoreEvents entry. The eventual WS
+    // score_update broadcast may not carry the id (yet) — useRoom's
+    // dedup falls back to a 30s reason/delta window in that case.
     const deltas = computeOptimisticDeltas(event, members)
+      .map(d => ({ ...d, _sourceEventId: event.eventId || '' }))
     if (deltas.length) applyOptimisticDeltas(deltas)
   }, [applyOptimisticDeltas])
 
