@@ -29,7 +29,13 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
-        <img src="/logo.png" alt="" className="h-20 w-auto mx-auto mb-4" />
+        <img src="/logo.png" alt="" className="h-20 w-auto mx-auto mb-3" />
+        <p
+          className="font-stadium text-white text-center text-2xl mb-1"
+          style={{ letterSpacing: '0.12em' }}
+        >
+          FANTASY
+        </p>
         <p className="text-gray-400 text-center mb-8">
           Sign in to play
         </p>
