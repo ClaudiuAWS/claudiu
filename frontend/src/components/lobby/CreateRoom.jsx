@@ -4,11 +4,11 @@ export default function CreateRoom({ onCreate, onSwitch, loading }) {
       <button
         onClick={onCreate}
         disabled={loading}
-        className="w-full bg-green-500 text-black font-bold py-4 rounded-2xl text-base tracking-wide disabled:opacity-50 transition-all active:scale-[0.98] hover:bg-green-400"
+        className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl text-base tracking-wide disabled:opacity-50 transition-all active:scale-[0.98] hover:bg-red-500"
       >
         {loading ? (
           <span className="flex items-center justify-center gap-2">
-            <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             Creating…
           </span>
         ) : 'Create Party'}

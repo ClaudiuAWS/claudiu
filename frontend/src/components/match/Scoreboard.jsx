@@ -7,7 +7,7 @@ const TEAM_LOGOS = {
 }
 
 const STATUS = {
-  live:     { label: 'LIVE',      dot: true,  clockColor: 'text-green-400' },
+  live:     { label: 'LIVE',      dot: true,  clockColor: 'text-red-400' },
   halftime: { label: 'HT',        dot: false, clockColor: 'text-yellow-400' },
   fulltime: { label: 'FT',        dot: false, clockColor: 'text-gray-500' },
 }
@@ -85,7 +85,7 @@ export default function Scoreboard({ match, events }) {
       {isLive && (
         <div
           className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 80%, rgba(34,197,94,0.07) 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 80%, rgba(220,38,38,0.10) 0%, transparent 70%)' }}
         />
       )}
 
@@ -109,8 +109,8 @@ export default function Scoreboard({ match, events }) {
           )}
           {s && (
             <div className="flex items-center gap-1 mt-1">
-              {s.dot && <span className="w-1 h-1 rounded-full bg-green-400 live-dot" />}
-              <span className={`text-[9px] font-bold tracking-widest ${s.dot ? 'text-green-400' : 'text-gray-500'}`}>
+              {s.dot && <span className="w-1 h-1 rounded-full bg-red-500 live-dot" />}
+              <span className={`text-[9px] font-bold tracking-widest ${s.dot ? 'text-red-400' : 'text-gray-500'}`}>
                 {s.label}
               </span>
               {(match.startedAt || match.currentMinute) && s.clockColor && (

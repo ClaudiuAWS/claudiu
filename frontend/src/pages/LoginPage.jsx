@@ -43,10 +43,20 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-sm">
         {/* Logo / Brand */}
-        <div className="text-center mb-10">
-          <img src="/logo-dark-bg.png" alt="Claudiu" className="w-20 h-20 mx-auto mb-4 rounded-2xl drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]" />
-          <h1 className="text-white text-2xl font-bold tracking-tight [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]">Welcome back</h1>
-          <p className="text-white/80 text-sm mt-1 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">Sign in to continue</p>
+        <div className="text-center mb-8">
+          <img
+            src="/logo.png"
+            alt=""
+            className="w-20 h-auto mx-auto mb-3 drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
+          />
+          <p
+            className="font-stadium text-white text-2xl tracking-[0.12em] [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]"
+          >
+            FANTASY
+          </p>
+          <p className="text-white/80 text-sm mt-1 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
+            Sign in to play
+          </p>
         </div>
 
         {/* Form card */}
@@ -67,7 +77,7 @@ export default function LoginPage() {
               placeholder="you@example.com"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-emerald-500/50 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
+              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-red-500/60 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
             />
           </div>
 
@@ -79,7 +89,7 @@ export default function LoginPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-emerald-500/50 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
+              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-red-500/60 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
             />
           </div>
 
@@ -94,8 +104,8 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all disabled:opacity-50 active:scale-[0.98]"
             style={{
-              background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-              boxShadow: '0 8px 24px -4px rgba(34,197,94,0.3)',
+              background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+              boxShadow: '0 8px 24px -4px rgba(220,38,38,0.45)',
             }}
           >
             {loading ? (
@@ -109,7 +119,7 @@ export default function LoginPage() {
 
         <p className="text-white/80 text-center text-sm mt-6 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
           Don't have an account?{' '}
-          <Link to="/register" className="text-emerald-400 font-medium hover:text-emerald-300 transition-colors [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
+          <Link to="/register" className="text-red-400 font-medium hover:text-red-300 transition-colors [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
             Create one
           </Link>
         </p>

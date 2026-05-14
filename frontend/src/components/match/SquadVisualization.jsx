@@ -206,16 +206,16 @@ export function SquadVisualization({
                         type="button"
                         onClick={() => setExpandedUserId(isExpanded ? null : m.userId)}
                         className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors text-left ${
-                          isMe ? 'bg-green-500/10 border border-green-500/30' : 'bg-white/[0.02] hover:bg-white/[0.05]'
+                          isMe ? 'bg-red-500/10 border border-red-500/30' : 'bg-white/[0.02] hover:bg-white/[0.05]'
                         }`}
                       >
                         <span className="w-4 text-center text-[10px] text-gray-500 font-bold">
                           {i + 1}
                         </span>
                         <MemberAvatar member={m} size={24} colorIndex={i} />
-                        <span className={`flex-1 text-[12px] truncate ${isMe ? 'text-green-300 font-semibold' : 'text-gray-200'}`}>
+                        <span className={`flex-1 text-[12px] truncate ${isMe ? 'text-red-300 font-semibold' : 'text-gray-200'}`}>
                           {m.displayName || 'Player'}
-                          {isMe && <span className="ml-1.5 text-[9px] text-green-500 font-normal">you</span>}
+                          {isMe && <span className="ml-1.5 text-[9px] text-red-500 font-normal">you</span>}
                         </span>
                         <span className={`text-[12px] font-bold tabular-nums ${
                           score > 0 ? 'text-white' : score < 0 ? 'text-red-400' : 'text-gray-500'

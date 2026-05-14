@@ -152,8 +152,8 @@ export default function LobbyPage() {
               disabled={draftReadying}
               className={`w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
                 ${draftReadying
-                  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
-                  : 'bg-green-500 hover:bg-green-400 active:bg-green-600 text-white'}`}
+                  ? 'bg-red-500/15 border border-red-500/30 text-red-400'
+                  : 'bg-red-600 hover:bg-red-500 active:bg-red-700 text-white'}`}
             >
               {draftReadying
                 ? `⏳ Waiting for opponent (${draft.readyUserIds.length}/${memberCount} ready)`
@@ -164,8 +164,8 @@ export default function LobbyPage() {
               onClick={() => setTeamModalOpen(true)}
               className={`w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
                 ${hasTeam
-                  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
-                  : 'bg-green-500 hover:bg-green-400 active:bg-green-600 text-white'}`}
+                  ? 'bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25'
+                  : 'bg-red-600 hover:bg-red-500 active:bg-red-700 text-white'}`}
             >
               {hasTeam ? '✓ Squad selected — Edit' : 'Pick Your Squad'}
             </button>

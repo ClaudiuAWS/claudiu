@@ -215,7 +215,7 @@ export default function MatchPage() {
             }`}
           >
             {t === 'chat' && messages.length > 0 && tab !== 'chat' && (
-              <span className="absolute top-2.5 right-[calc(50%-22px)] w-1.5 h-1.5 rounded-full bg-green-400" />
+              <span className="absolute top-2.5 right-[calc(50%-22px)] w-1.5 h-1.5 rounded-full bg-red-500" />
             )}
             {t}
             {tab === t && (

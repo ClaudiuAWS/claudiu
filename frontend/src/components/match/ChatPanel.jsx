@@ -49,7 +49,7 @@ export default function ChatPanel({ messages, onSend, room }) {
                   <div
                     className={`px-3 py-2 rounded-2xl text-sm leading-snug ${
                       isMe
-                        ? 'bg-green-500 text-black font-medium rounded-br-sm'
+                        ? 'bg-red-600 text-white font-medium rounded-br-sm'
                         : 'text-white rounded-bl-sm'
                     }`}
                     style={!isMe ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.06)' } : {}}
@@ -82,10 +82,10 @@ export default function ChatPanel({ messages, onSend, room }) {
           <button
             onClick={submit}
             disabled={!text.trim()}
-            className="w-8 h-8 rounded-xl bg-green-500 disabled:opacity-30 flex items-center justify-center transition-opacity flex-shrink-0"
+            className="w-8 h-8 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-30 flex items-center justify-center transition-opacity flex-shrink-0"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M1 7h12M7.5 2L13 7l-5.5 5" stroke="black" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M1 7h12M7.5 2L13 7l-5.5 5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
         </div>

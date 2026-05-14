@@ -21,7 +21,7 @@ export default function MembersList({ members, hostUserId, teamReadyIds = new Se
               </span>
             )}
             {member.userId === hostUserId && (
-              <span className="text-[10px] font-semibold tracking-widest uppercase text-green-400 bg-green-400/10 px-2.5 py-1 rounded-full">
+              <span className="text-[10px] font-semibold tracking-widest uppercase text-red-400 bg-red-400/10 px-2.5 py-1 rounded-full">
                 Host
               </span>
             )}

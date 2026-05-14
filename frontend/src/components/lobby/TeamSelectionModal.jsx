@@ -168,14 +168,14 @@ function DraftCard({ player, state, onClick }) {
       className={`
         flex-1 rounded-2xl overflow-hidden flex flex-col text-left
         transition-all duration-300 ease-out select-none
-        ${state === 'chosen'   ? 'scale-105 ring-4 ring-green-400' : ''}
+        ${state === 'chosen'   ? 'scale-105 ring-4 ring-red-400' : ''}
         ${state === 'rejected' ? 'scale-95 opacity-20 pointer-events-none' : ''}
         ${state === 'idle'     ? 'hover:scale-[1.025] active:scale-[0.98]' : ''}
       `}
       style={{
         background: '#161d2e',
         border: `1px solid rgba(255,255,255,0.07)`,
-        boxShadow: state === 'chosen' ? '0 0 28px rgba(74,222,128,0.3)' : undefined,
+        boxShadow: state === 'chosen' ? '0 0 28px rgba(248,113,113,0.4)' : undefined,
       }}
     >
       <div className="h-1.5 w-full flex-shrink-0" style={{ background: tc.solid }} />
@@ -219,7 +219,7 @@ function DraftCard({ player, state, onClick }) {
         <StatBadges stats={player.stats} group={statGroup} />
       </div>
       {state === 'chosen' && (
-        <p className="text-green-400 text-[10px] font-bold text-center pb-2.5">✓ PICKED</p>
+        <p className="text-red-400 text-[10px] font-bold text-center pb-2.5">✓ PICKED</p>
       )}
     </button>
   )
@@ -281,7 +281,7 @@ function PlayerChip({ player, isStarter, onToggle, disabled }) {
         flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl border text-left
         transition-all duration-200
         ${isStarter
-          ? 'ring-2 ring-green-400 border-green-500/40 bg-green-500/10'
+          ? 'ring-2 ring-red-400 border-red-500/40 bg-red-500/10'
           : disabled
             ? 'opacity-40 cursor-not-allowed border-white/5 bg-white/[0.02]'
             : 'border-white/8 bg-white/[0.03] hover:bg-white/[0.06]'
@@ -333,7 +333,7 @@ function PlayerChip({ player, isStarter, onToggle, disabled }) {
 
       {/* Starter checkmark */}
       {isStarter && (
-        <span className="text-green-400 text-sm flex-shrink-0">✓</span>
+        <span className="text-red-400 text-sm flex-shrink-0">✓</span>
       )}
     </button>
   )
@@ -719,7 +719,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
           phase === 'draft'
             ? 'bg-white/10 text-gray-300'
             : starterCount === 11
-              ? 'bg-green-500/20 text-green-400'
+              ? 'bg-red-500/20 text-red-400'
               : 'bg-white/10 text-gray-300'
         }`}>
           {phase === 'draft' ? `${decisionsMade} / ${effectiveTotalPairs}` : `${starterCount} / 11`}
@@ -786,7 +786,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
           <div className="w-full max-w-sm">
             <div className="h-1 rounded-full bg-white/10">
               <div
-                className="h-1 rounded-full bg-green-500 transition-all duration-300"
+                className="h-1 rounded-full bg-red-600 transition-all duration-300"
                 style={{ width: `${(decisionsMade / Math.max(effectiveTotalPairs, 1)) * 100}%` }}
               />
             </div>
@@ -837,7 +837,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
                 {pills.map(p => (
                   <span key={p.label}
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      p.ok ? 'bg-green-700/50 text-green-300' : 'bg-red-700/50 text-red-300'
+                      p.ok ? 'bg-emerald-700/50 text-emerald-300' : 'bg-red-700/50 text-red-300'
                     }`}>
                     {p.label} {p.count}
                   </span>
@@ -849,7 +849,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
           {/* ── Swap hint bar ── */}
           <div className="flex-shrink-0 px-4 py-1.5 text-center min-h-[28px]">
             {selectedId ? (
-              <p className="text-green-400 text-[11px] font-semibold animate-pulse">
+              <p className="text-red-400 text-[11px] font-semibold animate-pulse">
                 ⇄ Tap another player to swap · tap same to cancel
               </p>
             ) : starterCount < 11 ? (
@@ -883,7 +883,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
                       onClick={() => handleSelectXiClick(player)}
                       className={`flex-shrink-0 flex flex-col items-center gap-1 px-2 py-2 rounded-xl border transition-all
                         ${isSel
-                          ? 'ring-2 ring-green-400 border-green-500/40 bg-green-500/10'
+                          ? 'ring-2 ring-red-400 border-red-500/40 bg-red-500/10'
                           : 'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07]'
                         }`}
                       style={{ minWidth: 52 }}
@@ -977,7 +977,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
               onClick={confirm}
               disabled={submitting}
               className="flex-[2] py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
-                bg-green-500 hover:bg-green-400 active:bg-green-600 text-white
+                bg-red-600 hover:bg-red-500 active:bg-red-700 text-white
                 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {submitting ? 'Locking in…' : '⚡ Lock In Squad'}

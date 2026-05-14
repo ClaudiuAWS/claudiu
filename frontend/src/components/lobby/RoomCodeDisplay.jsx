@@ -19,7 +19,7 @@ export default function RoomCodeDisplay({ code }) {
       <p className="text-gray-500 text-xs font-semibold tracking-widest uppercase mb-3">Party Code</p>
       <p className="text-white font-bold tracking-[0.3em] text-4xl">{code}</p>
       <p className="text-gray-600 text-xs mt-3 transition-colors">
-        {copied ? <span className="text-green-400">Copied!</span> : 'Tap to copy · Share with friends'}
+        {copied ? <span className="text-red-400">Copied!</span> : 'Tap to copy · Share with friends'}
       </p>
     </button>
   )

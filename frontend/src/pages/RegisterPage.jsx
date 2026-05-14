@@ -45,17 +45,20 @@ export default function RegisterPage() {
 
       <div className="relative w-full max-w-sm">
         {/* Logo / Brand */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/10 mb-4 shadow-2xl">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="1.5" />
-              <path d="M12 2C12 2 14.5 6 14.5 12S12 22 12 22" stroke="white" strokeWidth="1.5" />
-              <path d="M12 2C12 2 9.5 6 9.5 12S12 22 12 22" stroke="white" strokeWidth="1.5" />
-              <path d="M2.5 9h19M2.5 15h19" stroke="white" strokeWidth="1.5" />
-            </svg>
-          </div>
-          <h1 className="text-white text-2xl font-bold tracking-tight [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]">Create account</h1>
-          <p className="text-white/80 text-sm mt-1 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">Join the game</p>
+        <div className="text-center mb-8">
+          <img
+            src="/logo.png"
+            alt=""
+            className="w-20 h-auto mx-auto mb-3 drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
+          />
+          <p
+            className="font-stadium text-white text-2xl tracking-[0.12em] [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]"
+          >
+            FANTASY
+          </p>
+          <p className="text-white/80 text-sm mt-1 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
+            Join the game
+          </p>
         </div>
 
         {/* Form card */}
@@ -76,7 +79,7 @@ export default function RegisterPage() {
               placeholder="How others see you"
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
-              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-emerald-500/50 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
+              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-red-500/60 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
             />
           </div>
 
@@ -87,7 +90,7 @@ export default function RegisterPage() {
               placeholder="you@example.com"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-emerald-500/50 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
+              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-red-500/60 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
             />
           </div>
 
@@ -99,7 +102,7 @@ export default function RegisterPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleRegister()}
-              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-emerald-500/50 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
+              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-red-500/60 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
             />
           </div>
 
@@ -114,8 +117,8 @@ export default function RegisterPage() {
             disabled={loading}
             className="w-full py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all disabled:opacity-50 active:scale-[0.98]"
             style={{
-              background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-              boxShadow: '0 8px 24px -4px rgba(34,197,94,0.3)',
+              background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+              boxShadow: '0 8px 24px -4px rgba(220,38,38,0.45)',
             }}
           >
             {loading ? (
@@ -129,7 +132,7 @@ export default function RegisterPage() {
 
         <p className="text-white/80 text-center text-sm mt-6 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
           Already have an account?{' '}
-          <Link to="/login" className="text-emerald-400 font-medium hover:text-emerald-300 transition-colors [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
+          <Link to="/login" className="text-red-400 font-medium hover:text-red-300 transition-colors [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
             Sign in
           </Link>
         </p>
