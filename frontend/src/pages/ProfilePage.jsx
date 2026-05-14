@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { profileApi } from '../services/api'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
+import { useAppAudio } from '../hooks/useAppAudio'
 
 const AVATAR_COLORS = [
   'from-violet-500 to-fuchsia-600',
@@ -197,6 +198,9 @@ export default function ProfilePage() {
         <Row label="User ID" value={user.userId} divider mono />
       </div>
 
+      {/* Music */}
+      <MusicCard />
+
       {/* Logout */}
       <button
         onClick={handleLogout}
@@ -210,6 +214,83 @@ export default function ProfilePage() {
       >
         {signingOut ? 'Signing out…' : 'Log out'}
       </button>
+    </div>
+  )
+}
+
+/**
+ * Music preferences card — toggle the app's ambient background
+ * track on or off. Preference persists across reloads via
+ * localStorage (handled inside `useAppAudio`). When more tracks
+ * unlock via badges, this card grows a track picker.
+ */
+function MusicCard() {
+  const { enabled, toggle, currentTrack } = useAppAudio()
+  const title  = currentTrack?.title  || 'Intro Anthem'
+  const artist = currentTrack?.artist || '—'
+
+  return (
+    <div
+      className="mt-4 rounded-2xl p-5"
+      style={{
+        background: 'linear-gradient(145deg, #111827 0%, #0d1117 100%)',
+        border: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{
+              background: enabled
+                ? 'linear-gradient(135deg, rgba(220,38,38,0.30) 0%, rgba(153,27,27,0.20) 100%)'
+                : 'rgba(255,255,255,0.06)',
+              border: `1px solid ${enabled ? 'rgba(248,113,113,0.45)' : 'rgba(255,255,255,0.10)'}`,
+              boxShadow: enabled ? '0 0 18px -4px rgba(220,38,38,0.45)' : 'none',
+              transition: 'background 0.2s, box-shadow 0.2s, border-color 0.2s',
+            }}
+          >
+            <span className="text-lg leading-none">{enabled ? '🎵' : '🎧'}</span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-500">
+              Music
+            </p>
+            <p className="text-white text-sm font-semibold truncate leading-tight">
+              {title}
+            </p>
+            <p className="text-gray-500 text-[11px] truncate leading-tight">
+              {artist}
+            </p>
+          </div>
+        </div>
+
+        {/* Toggle switch */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          onClick={toggle}
+          className="flex-shrink-0 relative w-12 h-7 rounded-full transition-colors"
+          style={{
+            background: enabled ? '#dc2626' : 'rgba(255,255,255,0.10)',
+            boxShadow: enabled ? '0 0 14px -2px rgba(220,38,38,0.55)' : 'none',
+          }}
+        >
+          <span
+            className="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition-transform"
+            style={{
+              transform: enabled ? 'translateX(20px)' : 'translateX(0)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+            }}
+          />
+        </button>
+      </div>
+
+      <p className="text-gray-500 text-[11px] mt-3 leading-snug">
+        Plays softly while you watch matches. Earn song discs as
+        badges to unlock more.
+      </p>
     </div>
   )
 }

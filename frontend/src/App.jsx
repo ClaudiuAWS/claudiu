@@ -6,6 +6,7 @@ import BottomNav from './components/BottomNav'
 import TopNav from './components/TopNav'
 import ToastProvider from './components/ToastProvider'
 import IntroSplash from './components/IntroSplash'
+import { AppAudioProvider } from './hooks/useAppAudio'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import ConfirmPage from './pages/ConfirmPage'
@@ -44,13 +45,17 @@ const Placeholder = ({ title }) => (
 )
 
 const Layout = ({ children }) => (
-  <>
+  // AppAudioProvider mounts a single <audio> element scoped to the
+  // post-auth area. The login/register screens have their own ambient
+  // audio via `useBgAmbientAudio` and are outside Layout, so the two
+  // sources never play simultaneously.
+  <AppAudioProvider>
     <TopNav />
     <div className="pt-16 pb-24">
       {children}
     </div>
     <BottomNav />
-  </>
+  </AppAudioProvider>
 )
 
 export default function App() {
