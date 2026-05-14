@@ -179,7 +179,7 @@ function EventTimeline({ events }) {
   if (!events.length) return null
 
   const typeColor = {
-    goal:    { bg: 'bg-green-500/20', border: 'border-green-500/30', text: 'text-green-300', pts: 'text-green-400' },
+    goal:    { bg: 'bg-emerald-500/20', border: 'border-emerald-500/30', text: 'text-emerald-300', pts: 'text-emerald-400' },
     assist:  { bg: 'bg-blue-500/20',  border: 'border-blue-500/30',  text: 'text-blue-300',  pts: 'text-blue-400' },
     save:    { bg: 'bg-purple-500/20',border: 'border-purple-500/30',text: 'text-purple-300',pts: 'text-purple-400' },
     concede: { bg: 'bg-red-500/10',   border: 'border-red-500/20',   text: 'text-red-300/80',pts: 'text-red-400' },
@@ -333,7 +333,7 @@ export function PlayerStatsPopup({ player, isOpen, onClose, events = [], htStore
                            border: `1px solid ${totalPoints >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}` }}
                 >
                   <span className="text-[10px] text-gray-400 uppercase tracking-wider">Match pts</span>
-                  <span className={`text-sm font-black tabular-nums ${totalPoints >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <span className={`text-sm font-black tabular-nums ${totalPoints >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {totalPoints > 0 ? `+${totalPoints}` : totalPoints || '0'}
                   </span>
                 </div>

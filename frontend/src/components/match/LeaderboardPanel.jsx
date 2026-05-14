@@ -98,7 +98,7 @@ export default function LeaderboardPanel({ members = [], currentUserId }) {
             key={member.userId}
             className={`px-4 pt-3 rounded-2xl transition-all border
               ${isMe
-                ? 'border-green-500/40 bg-green-500/10'
+                ? 'border-red-500/40 bg-red-500/10'
                 : 'border-white/[0.06] bg-white/[0.03]'}`}
           >
             {/* Row */}
@@ -117,9 +117,9 @@ export default function LeaderboardPanel({ members = [], currentUserId }) {
               </div>
 
               {/* Name */}
-              <span className={`flex-1 text-sm truncate text-left ${isMe ? 'text-green-300 font-semibold' : 'text-white'}`}>
+              <span className={`flex-1 text-sm truncate text-left ${isMe ? 'text-red-300 font-semibold' : 'text-white'}`}>
                 {member.displayName}
-                {isMe && <span className="ml-1.5 text-[10px] text-green-500 font-normal">you</span>}
+                {isMe && <span className="ml-1.5 text-[10px] text-red-500 font-normal">you</span>}
               </span>
 
               {/* Score */}

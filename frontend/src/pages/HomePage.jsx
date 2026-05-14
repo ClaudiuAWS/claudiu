@@ -5,7 +5,7 @@ import LoadingSpinner from '../components/ui/LoadingSpinner'
 
 const STATUS = {
   upcoming: { label: 'Upcoming',  pill: 'bg-white/5 text-gray-400',                dot: null },
-  live:     { label: 'Live',      pill: 'bg-green-500/15 text-green-400',           dot: 'bg-green-400 animate-pulse' },
+  live:     { label: 'Live',      pill: 'bg-red-500/15 text-red-400',               dot: 'bg-red-500 animate-pulse' },
   halftime: { label: 'Half Time', pill: 'bg-yellow-500/15 text-yellow-400',         dot: 'bg-yellow-400' },
   fulltime: { label: 'Full Time', pill: 'bg-white/5 text-gray-500',                 dot: null },
 }
@@ -49,7 +49,7 @@ function MatchCard({ match, onSelect }) {
                 {match.awayScore ?? 0}
               </p>
               {match.currentMinute && match.status !== 'fulltime' && (
-                <p className="text-green-400 text-xs mt-1 tabular-nums">{match.currentMinute}</p>
+                <p className="text-red-400 text-xs mt-1 tabular-nums">{match.currentMinute}</p>
               )}
             </>
           ) : (

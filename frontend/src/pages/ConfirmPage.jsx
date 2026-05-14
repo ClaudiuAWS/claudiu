@@ -51,7 +51,7 @@ export default function ConfirmPage() {
             value={code}
             onChange={e => setCode(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleConfirm()}
-            className="w-full bg-gray-900 text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-green-500 text-center text-2xl tracking-widest"
+            className="w-full bg-gray-900 text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-red-500 text-center text-2xl tracking-widest"
             maxLength={6}
           />
 
@@ -59,13 +59,13 @@ export default function ConfirmPage() {
             <p className="text-red-400 text-sm text-center">{error}</p>
           )}
           {resent && (
-            <p className="text-green-400 text-sm text-center">Code resent!</p>
+            <p className="text-red-400 text-sm text-center">Code resent!</p>
           )}
 
           <button
             onClick={handleConfirm}
             disabled={loading}
-            className="w-full bg-green-500 text-black font-bold py-3 rounded-xl disabled:opacity-50"
+            className="w-full bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-bold py-3 rounded-xl disabled:opacity-50 transition-colors"
           >
             {loading ? 'Verifying...' : 'Verify'}
           </button>

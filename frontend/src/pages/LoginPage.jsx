@@ -30,7 +30,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <h1 className="text-white text-3xl font-bold text-center mb-2">
-          Claudiu
+          BundesDuell
         </h1>
         <p className="text-gray-400 text-center mb-8">
           Sign in to play
@@ -42,7 +42,7 @@ export default function LoginPage() {
             placeholder="Email"
             value={email}
             onChange={e => setEmail(e.target.value)}
-            className="w-full bg-gray-900 text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+            className="w-full bg-gray-900 text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-red-500"
           />
           <input
             type="password"
@@ -50,7 +50,7 @@ export default function LoginPage() {
             value={password}
             onChange={e => setPassword(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            className="w-full bg-gray-900 text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
+            className="w-full bg-gray-900 text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-red-500"
           />
 
           {error && (
@@ -60,14 +60,14 @@ export default function LoginPage() {
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="w-full bg-green-500 text-black font-bold py-3 rounded-xl disabled:opacity-50"
+            className="w-full bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-bold py-3 rounded-xl disabled:opacity-50 transition-colors"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
 
           <p className="text-gray-400 text-center text-sm">
             No account?{' '}
-            <Link to="/register" className="text-green-400">
+            <Link to="/register" className="text-red-400">
               Create one
             </Link>
           </p>
