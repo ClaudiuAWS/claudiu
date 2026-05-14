@@ -4,6 +4,7 @@ import { PlayerStatsPopup } from './PlayerStatsPopup'
 import { gameTimeToSeconds, formatFootballTime } from '../../utils/matchEvents'
 import { detectFormation } from '../../utils/formationPositions'
 import { scoreIcon, styleForReason, formatDelta, scoreEventClass } from '../../utils/scoreFormatting'
+import MemberAvatar from '../ui/MemberAvatar'
 
 const HOME_COLOR = '#DC2626'
 const AWAY_COLOR = '#2563EB'
@@ -211,9 +212,7 @@ export function SquadVisualization({
                         <span className="w-4 text-center text-[10px] text-gray-500 font-bold">
                           {i + 1}
                         </span>
-                        <div className="w-6 h-6 rounded-full bg-violet-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
-                          {(m.displayName || '?')[0]?.toUpperCase()}
-                        </div>
+                        <MemberAvatar member={m} size={24} colorIndex={i} />
                         <span className={`flex-1 text-[12px] truncate ${isMe ? 'text-green-300 font-semibold' : 'text-gray-200'}`}>
                           {m.displayName || 'Player'}
                           {isMe && <span className="ml-1.5 text-[9px] text-green-500 font-normal">you</span>}

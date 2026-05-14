@@ -1,11 +1,4 @@
-const COLORS = [
-  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
-  'bg-orange-500', 'bg-pink-500', 'bg-cyan-500',
-]
-
-function avatar(name, index) {
-  return COLORS[index % COLORS.length]
-}
+import MemberAvatar from '../ui/MemberAvatar'
 
 export default function MembersList({ members, hostUserId, teamReadyIds = new Set() }) {
   return (
@@ -20,9 +13,7 @@ export default function MembersList({ members, hostUserId, teamReadyIds = new Se
       <div className="px-5 py-2">
         {members.map((member, i) => (
           <div key={member.userId} className="flex items-center gap-3 py-3 border-b border-white/[0.04] last:border-0">
-            <div className={`w-9 h-9 rounded-full ${avatar(member.displayName, i)} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
-              {member.displayName?.[0]?.toUpperCase() ?? '?'}
-            </div>
+            <MemberAvatar member={member} size={36} colorIndex={i} />
             <span className="text-white text-sm flex-1">{member.displayName}</span>
             {teamReadyIds.has(member.userId) && (
               <span className="text-[10px] font-semibold tracking-widest uppercase text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
