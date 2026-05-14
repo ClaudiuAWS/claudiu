@@ -28,6 +28,7 @@ import { useBgAmbientAudio } from '../hooks/useBgAmbientAudio'
 // Adjust if the silver-trophy moment is at a different timestamp
 // in your particular intro cut.
 const TRIM_START = 6.5  // seconds — past the Ribéry silver-trophy "wooow" beat so it doesn't replay every loop
+const END_PAD    = 0.5  // seconds before the end at which we seek back, so the dark trailing frames never paint
 
 export default function AuthLayout() {
   const bgVideoRef = useBgAmbientAudio()
@@ -42,14 +43,32 @@ export default function AuthLayout() {
       } catch {}
     }
 
-    // First load — seek as soon as metadata is available so the
-    // poster covers the brief pre-seek frame and we never paint
-    // the trimmed-out intro frames.
     if (v.readyState >= 1) seekToTrim()
     else v.addEventListener('loadedmetadata', seekToTrim, { once: true })
 
-    // Manual loop: jump back to TRIM_START (not 0) on every end so
-    // the bg never replays the trimmed opening.
+    // Pre-emptive loop: seek back to TRIM_START *before* the dark
+    // tail of the video paints. Watching `timeupdate` instead of
+    // `ended` keeps the seek inside continuous playback so the
+    // browser swaps frames smoothly with no black flash.
+    let isLooping = false
+    const onTimeUpdate = () => {
+      if (isLooping) return
+      const d = v.duration
+      if (!isFinite(d) || d <= 0) return
+      if (v.currentTime >= d - END_PAD) {
+        isLooping = true
+        try {
+          v.currentTime = TRIM_START
+          const p = v.play()
+          if (p && typeof p.catch === 'function') p.catch(() => {})
+        } catch {}
+        setTimeout(() => { isLooping = false }, 100)
+      }
+    }
+    v.addEventListener('timeupdate', onTimeUpdate)
+
+    // Fallback for browsers where `timeupdate` resolution is too
+    // coarse to land inside the END_PAD window.
     const onEnded = () => {
       try {
         v.currentTime = TRIM_START
@@ -61,6 +80,7 @@ export default function AuthLayout() {
 
     return () => {
       v.removeEventListener('loadedmetadata', seekToTrim)
+      v.removeEventListener('timeupdate', onTimeUpdate)
       v.removeEventListener('ended', onEnded)
     }
   }, [bgVideoRef])

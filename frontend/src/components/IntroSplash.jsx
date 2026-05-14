@@ -3,6 +3,7 @@ import { getIntroAudioPrefs } from '../hooks/useAppAudio'
 
 const STORAGE_KEY = 'claudiu_intro_seen'
 const TRIM_START = 6.5             // loop-back point, past the Ribéry silver-trophy "wooow" beat
+const END_PAD    = 0.5             // seek back this many seconds before duration so the dark tail never paints
 const BUMPER_AT = 29.5             // when the geometric brand panel fades in over the still-playing video
 const FADE_DURATION_MS = 1000
 
@@ -92,15 +93,32 @@ export default function IntroSplash({ onFinish }) {
       })
     }
 
+    // Pre-emptive loop on top of the bumper trigger — both run inside
+    // the same `timeupdate` handler. The refractory flag stops multiple
+    // `timeupdate` events from re-triggering the seek mid-flight.
+    let isLooping = false
     const onTimeUpdate = () => {
       if (v.currentTime >= BUMPER_AT && !bumperShownRef.current) {
         bumperShownRef.current = true
         setShowBumper(true)
         // Do NOT pause — the video keeps playing under the panel.
       }
+      if (isLooping) return
+      const d = v.duration
+      if (!isFinite(d) || d <= 0) return
+      if (v.currentTime >= d - END_PAD) {
+        isLooping = true
+        try {
+          v.currentTime = TRIM_START
+          const p = v.play()
+          if (p && typeof p.catch === 'function') p.catch(() => {})
+        } catch {}
+        setTimeout(() => { isLooping = false }, 100)
+      }
     }
     v.addEventListener('timeupdate', onTimeUpdate)
 
+    // Fallback if `timeupdate` resolution misses the END_PAD window.
     const onEnded = () => {
       try {
         v.currentTime = TRIM_START
