@@ -8,16 +8,23 @@ import { useEffect, useRef, useState } from 'react'
  * keeper; if neither, deterministic fallback by userId lex order).
  *
  * Mechanic — parallel commit within a 10s window:
- *   - Shooter: tap one of 5 target zones (TL TM TR BL BR) in the goal.
- *   - Keeper: tap one of the same 5 zones to dive.
+ *   - Shooter: tap one of 9 target zones on the 3×3 goal grid.
+ *   - Keeper: tap one of the same 9 zones to dive.
  *   - When BOTH have committed (or timer expires), the animation runs:
  *       ball flies to the shooter's zone, keeper silhouette dives to
  *       their zone. Match = SAVE, mismatch = GOAL.
  *
+ * The 3×3 grid (TL/TM/TR, ML/MM/MR, BL/BM/BR) follows the football
+ * analytics standard used by Opta, StatsBomb, and modern football
+ * video games for goal-mouth shot-zone segmentation.
+ *
  * Scoring (computed in minigameBot.js::_penaltyShootoutDeltas):
- *   Goal in TL/TR (top corners)  → shooter +8
- *   Goal in BL/BR                 → shooter +6
- *   Goal in TM/BM (middle)        → shooter +4
+ *   Top corners (TL/TR)          → shooter +8 (riskiest)
+ *   Top middle (TM, Panenka)     → shooter +7
+ *   Bottom corners (BL/BR)       → shooter +6
+ *   Mid-row sides (ML/MR)        → shooter +5
+ *   Bottom middle (BM)           → shooter +4
+ *   Dead centre (MM)             → shooter +3 (keeper's default)
  *   Save (keeper correct)         → keeper +5
  *   Both timed out                → 0 to both
  *
@@ -26,12 +33,21 @@ import { useEffect, useRef, useState } from 'react'
  * Doodle Jump (zero-friction tap with chunky icons), PvZ (lane-card layout).
  */
 
+// 3×3 goalmouth grid (Opta / StatsBomb analytics convention). Coordinates
+// are percentages within the goal-panel container. The goalmouth frame
+// occupies left:8% → right:92%, top:8% → bottom:68%, so zone centres
+// sit at x ∈ {18, 50, 82} and y ∈ {18, 38, 58}. Tile size below shrinks
+// proportionally to fit 9 buttons cleanly without overlap.
 const ZONES = [
-  { key: 'TL', label: '↖',  x: 18, y: 22, points: 8 },
-  { key: 'TM', label: '⬆',  x: 50, y: 22, points: 4 },
-  { key: 'TR', label: '↗',  x: 82, y: 22, points: 8 },
-  { key: 'BL', label: '↙',  x: 18, y: 65, points: 6 },
-  { key: 'BR', label: '↘',  x: 82, y: 65, points: 6 },
+  { key: 'TL', label: '↖', x: 18, y: 18, points: 8 },
+  { key: 'TM', label: '⬆', x: 50, y: 18, points: 7 },
+  { key: 'TR', label: '↗', x: 82, y: 18, points: 8 },
+  { key: 'ML', label: '←', x: 18, y: 38, points: 5 },
+  { key: 'MM', label: '•', x: 50, y: 38, points: 3 },
+  { key: 'MR', label: '→', x: 82, y: 38, points: 5 },
+  { key: 'BL', label: '↙', x: 18, y: 58, points: 6 },
+  { key: 'BM', label: '⬇', x: 50, y: 58, points: 4 },
+  { key: 'BR', label: '↘', x: 82, y: 58, points: 6 },
 ]
 
 const BALL_START = { x: 50, y: 90 } // bottom of the goal panel
@@ -141,10 +157,13 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
                 flex flex-col items-center justify-center
               `}
               style={{
-                left: `${z.x - 11}%`,
-                top: `${z.y - 13}%`,
-                width: '22%',
-                height: '26%',
+                // 3×3 grid: each tile ~26% wide × 16% tall, centred on the
+                // zone's (x, y). Half-width 13, half-height 8 → leaves
+                // small gaps between tiles for visual separation.
+                left: `${z.x - 13}%`,
+                top: `${z.y - 8}%`,
+                width: '26%',
+                height: '16%',
               }}
             >
               <span className="text-xl font-black text-white drop-shadow leading-none">{z.label}</span>
@@ -162,7 +181,9 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
       <div className="mt-3 text-center">
         {pick === null ? (
           <p className="text-gray-400 text-xs">
-            {isShooter ? 'Top corners worth more · middle is easier' : 'Pick a corner to dive — match for the save'}
+            {isShooter
+              ? 'Top corners +8 · sides +5 · centre +3'
+              : 'Pick a zone to dive — match the shooter for +5'}
           </p>
         ) : (
           <div className="space-y-1">
