@@ -219,15 +219,31 @@ export default function ProfilePage() {
 }
 
 /**
- * Music preferences card — toggle the app's ambient background
- * track on or off. Preference persists across reloads via
- * localStorage (handled inside `useAppAudio`). When more tracks
- * unlock via badges, this card grows a track picker.
+ * Music preferences card.
+ *
+ * Two independent on/off toggles + a wallpaper-style track picker:
+ *   - App music: ambient track that loops while you're in the app
+ *     (post-login).
+ *   - Intro music: plays during the splash screen.
+ *
+ * Each unlocked track shows two pills — "Intro" and "App" — and
+ * tapping a pill assigns this track to that role (like setting a
+ * wallpaper for the lock screen vs home screen). A track can be
+ * the active choice for both, neither (when more songs unlock and
+ * the user picks another), or just one.
+ *
+ * v1 ships one default track ("A Fresh Energy"); future unlocks
+ * come from badges and appear in the list automatically (`tracks`
+ * is the filtered, unlocked-only list from useAppAudio).
+ *
+ * All preferences persist via localStorage (handled in useAppAudio).
  */
 function MusicCard() {
-  const { enabled, toggle, currentTrack } = useAppAudio()
-  const title  = currentTrack?.title  || 'Intro Anthem'
-  const artist = currentTrack?.artist || '—'
+  const {
+    appEnabled, toggleApp, appTrackId, setAppTrack,
+    introEnabled, toggleIntro, introTrackId, setIntroTrack,
+    tracks,
+  } = useAppAudio()
 
   return (
     <div
@@ -237,61 +253,153 @@ function MusicCard() {
         border: '1px solid rgba(255,255,255,0.06)',
       }}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{
-              background: enabled
-                ? 'linear-gradient(135deg, rgba(220,38,38,0.30) 0%, rgba(153,27,27,0.20) 100%)'
-                : 'rgba(255,255,255,0.06)',
-              border: `1px solid ${enabled ? 'rgba(248,113,113,0.45)' : 'rgba(255,255,255,0.10)'}`,
-              boxShadow: enabled ? '0 0 18px -4px rgba(220,38,38,0.45)' : 'none',
-              transition: 'background 0.2s, box-shadow 0.2s, border-color 0.2s',
-            }}
-          >
-            <span className="text-lg leading-none">{enabled ? '🎵' : '🎧'}</span>
-          </div>
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-500">
-              Music
-            </p>
-            <p className="text-white text-sm font-semibold truncate leading-tight">
-              {title}
-            </p>
-            <p className="text-gray-500 text-[11px] truncate leading-tight">
-              {artist}
-            </p>
-          </div>
-        </div>
+      <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-500 mb-3">
+        Music
+      </p>
 
-        {/* Toggle switch */}
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled}
-          onClick={toggle}
-          className="flex-shrink-0 relative w-12 h-7 rounded-full transition-colors"
-          style={{
-            background: enabled ? '#dc2626' : 'rgba(255,255,255,0.10)',
-            boxShadow: enabled ? '0 0 14px -2px rgba(220,38,38,0.55)' : 'none',
-          }}
-        >
-          <span
-            className="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition-transform"
-            style={{
-              transform: enabled ? 'translateX(20px)' : 'translateX(0)',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-            }}
-          />
-        </button>
+      {/* App music toggle row */}
+      <MusicToggleRow
+        icon="🎵"
+        title="App music"
+        sub="Background track while you watch matches"
+        enabled={appEnabled}
+        onToggle={toggleApp}
+      />
+
+      {/* Intro music toggle row */}
+      <MusicToggleRow
+        icon="🎬"
+        title="Intro music"
+        sub="Plays during the splash screen"
+        enabled={introEnabled}
+        onToggle={toggleIntro}
+      />
+
+      {/* Track picker (wallpaper-style assignment) */}
+      <div className="mt-4 pt-4 border-t border-white/5">
+        <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-500 mb-2">
+          Tracks ({tracks.length} unlocked)
+        </p>
+        <div className="space-y-2">
+          {tracks.map(t => (
+            <TrackRow
+              key={t.id}
+              track={t}
+              isIntro={introTrackId === t.id}
+              isApp={appTrackId === t.id}
+              onSetIntro={() => setIntroTrack(t.id)}
+              onSetApp={() => setAppTrack(t.id)}
+            />
+          ))}
+        </div>
       </div>
 
       <p className="text-gray-500 text-[11px] mt-3 leading-snug">
-        Plays softly while you watch matches. Earn song discs as
-        badges to unlock more.
+        Earn song discs as badges to unlock more tracks.
       </p>
     </div>
+  )
+}
+
+function MusicToggleRow({ icon, title, sub, enabled, onToggle }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2">
+      <div className="flex items-center gap-3 min-w-0">
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+          style={{
+            background: enabled
+              ? 'linear-gradient(135deg, rgba(220,38,38,0.30) 0%, rgba(153,27,27,0.20) 100%)'
+              : 'rgba(255,255,255,0.06)',
+            border: `1px solid ${enabled ? 'rgba(248,113,113,0.45)' : 'rgba(255,255,255,0.10)'}`,
+            boxShadow: enabled ? '0 0 18px -4px rgba(220,38,38,0.45)' : 'none',
+            transition: 'background 0.2s, box-shadow 0.2s, border-color 0.2s',
+          }}
+        >
+          <span className="text-lg leading-none">{icon}</span>
+        </div>
+        <div className="min-w-0">
+          <p className="text-white text-sm font-semibold leading-tight">{title}</p>
+          <p className="text-gray-500 text-[11px] truncate leading-tight">{sub}</p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        onClick={onToggle}
+        className="flex-shrink-0 relative w-12 h-7 rounded-full transition-colors"
+        style={{
+          background: enabled ? '#dc2626' : 'rgba(255,255,255,0.10)',
+          boxShadow: enabled ? '0 0 14px -2px rgba(220,38,38,0.55)' : 'none',
+        }}
+      >
+        <span
+          className="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition-transform"
+          style={{
+            transform: enabled ? 'translateX(20px)' : 'translateX(0)',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+          }}
+        />
+      </button>
+    </div>
+  )
+}
+
+function TrackRow({ track, isIntro, isApp, onSetIntro, onSetApp }) {
+  return (
+    <div
+      className="flex items-center gap-3 rounded-xl p-2.5"
+      style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      {/* Disc icon */}
+      <div
+        className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+        style={{
+          background: 'linear-gradient(135deg, rgba(220,38,38,0.25) 0%, rgba(0,0,0,0.4) 100%)',
+          border: '1px solid rgba(248,113,113,0.30)',
+        }}
+      >
+        <span className="text-base leading-none">💿</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-white text-sm font-semibold truncate leading-tight">
+          {track.title}
+        </p>
+        <p className="text-gray-500 text-[11px] truncate leading-tight">
+          {track.artist || '—'}
+        </p>
+      </div>
+      <div className="flex flex-col gap-1 flex-shrink-0">
+        <AssignPill label="Intro" active={isIntro} onClick={onSetIntro} />
+        <AssignPill label="App"   active={isApp}   onClick={onSetApp} />
+      </div>
+    </div>
+  )
+}
+
+function AssignPill({ label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full transition-all active:scale-95"
+      style={{
+        background: active
+          ? 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)'
+          : 'rgba(255,255,255,0.06)',
+        color: active ? '#fff' : '#9ca3af',
+        border: `1px solid ${active ? 'rgba(248,113,113,0.55)' : 'rgba(255,255,255,0.10)'}`,
+        boxShadow: active ? '0 4px 12px -4px rgba(220,38,38,0.45)' : 'none',
+        minWidth: 60,
+      }}
+    >
+      {label}{active ? ' ✓' : ''}
+    </button>
   )
 }
 
