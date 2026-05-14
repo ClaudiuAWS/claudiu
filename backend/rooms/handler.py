@@ -8,16 +8,21 @@ def handler(event, context):
         claims = event['requestContext']['authorizer']['claims']
         user_id = claims['sub']
         display_name = claims.get('name', 'Anonymous')
-        
+        # Cognito custom attribute set by the profile-page upload flow.
+        # Empty string when the user hasn't picked a picture; persisted
+        # on the member dict so room mates render the photo in the lobby
+        # SQUAD panel and the leaderboard rows.
+        avatar_url = claims.get('custom:avatar_url') or ''
+
         try:
             if method == 'POST' and path == '/rooms':
-                return _create_room(event, user_id, display_name)
-            
+                return _create_room(event, user_id, display_name, avatar_url)
+
             elif method == 'GET' and '/rooms/' in path and '/join' not in path:
                 return _get_room(event)
-            
+
             elif method == 'POST' and '/join' in path:
-                return _join_room(event, user_id, display_name)
+                return _join_room(event, user_id, display_name, avatar_url)
             
             elif method == 'DELETE' and '/leave' in path:
                 return _leave_room(event, user_id)
@@ -53,14 +58,14 @@ def handler(event, context):
             print(f"Unexpected error: {str(e)}")
             return _response(500, {'error': 'Internal server error'})
 
-def _create_room(event, user_id, display_name):
+def _create_room(event, user_id, display_name, avatar_url=''):
         body = json.loads(event.get('body') or '{}')
         match_id = body.get('matchId')
-        
+
         if not match_id:
             return _response(400, {'error': 'matchId is required'})
-        
-        room = service.create_room(match_id, user_id, display_name)
+
+        room = service.create_room(match_id, user_id, display_name, avatar_url)
         return _response(201, room)
 
 def _get_room(event):
@@ -68,9 +73,9 @@ def _get_room(event):
         room = service.get_room(room_code)
         return _response(200, room)
 
-def _join_room(event, user_id, display_name):
+def _join_room(event, user_id, display_name, avatar_url=''):
         room_code = event['pathParameters']['code']
-        room = service.join_room(room_code, user_id, display_name)
+        room = service.join_room(room_code, user_id, display_name, avatar_url)
         return _response(200, room)
 
 def _leave_room(event, user_id):

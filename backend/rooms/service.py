@@ -27,7 +27,7 @@ def _get_user_current_room(user_id: str):
     return rooms[0] if rooms else None
 
 
-def create_room(match_id: str, user_id: str, display_name: str) -> dict:
+def create_room(match_id: str, user_id: str, display_name: str, avatar_url: str = '') -> dict:
     existing_room = _get_user_current_room(user_id)
     if existing_room:
         raise ValueError('You are already in a room. Leave it first.')
@@ -50,6 +50,7 @@ def create_room(match_id: str, user_id: str, display_name: str) -> dict:
         'members': [{
             'userId': user_id,
             'displayName': display_name,
+            'avatarUrl': avatar_url or '',
             'score': 0
         }],
         'status': 'waiting',
@@ -61,7 +62,7 @@ def create_room(match_id: str, user_id: str, display_name: str) -> dict:
     return room
 
 
-def join_room(room_code: str, user_id: str, display_name: str) -> dict:
+def join_room(room_code: str, user_id: str, display_name: str, avatar_url: str = '') -> dict:
     existing_room = _get_user_current_room(user_id)
     if existing_room and existing_room['roomCode'] != room_code:
         raise ValueError('You are already in another room. Leave it first.')
@@ -74,12 +75,28 @@ def join_room(room_code: str, user_id: str, display_name: str) -> dict:
         raise ValueError('Room is no longer accepting players')
 
     members = room.get('members', [])
-    if any(m['userId'] == user_id for m in members):
+    existing_idx = next((i for i, m in enumerate(members) if m['userId'] == user_id), -1)
+    if existing_idx >= 0:
+        # Idempotent rejoin — refresh avatarUrl + displayName in case the
+        # user updated their profile between sessions. Preserves score
+        # and team selection. Skip the DDB write if nothing changed.
+        existing = members[existing_idx]
+        if (existing.get('avatarUrl') or '') != (avatar_url or '') or existing.get('displayName') != display_name:
+            existing['avatarUrl']  = avatar_url or ''
+            existing['displayName'] = display_name
+            rooms_table.update_item(
+                Key={'roomCode': room_code},
+                UpdateExpression='SET members = :members',
+                ExpressionAttributeValues={':members': members}
+            )
+            room['members'] = members
+            _push_room_update(room)
         return room
 
     members.append({
         'userId': user_id,
         'displayName': display_name,
+        'avatarUrl': avatar_url or '',
         'score': 0
     })
 
