@@ -12,8 +12,8 @@ Resources:
                                 - email
                         EmailConfiguration:
                                 EmailSendingAccount: DEVELOPER
-                                From: noreply@bundesligafantasy.com
-                                SourceArn: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/bundesligafantasy.com
+                                From: mihaiciorascu11@gmail.com
+                                SourceArn: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/mihaiciorascu11@gmail.com
                         VerificationMessageTemplate:
                                 DefaultEmailOption: CONFIRM_WITH_CODE
                                 EmailSubject: "Your Bundesliga Fantasy verification code"

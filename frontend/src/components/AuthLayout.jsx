@@ -27,7 +27,7 @@ import { useBgAmbientAudio } from '../hooks/useBgAmbientAudio'
 // reads as the "stadium hype" portion the user actually wants.
 // Adjust if the silver-trophy moment is at a different timestamp
 // in your particular intro cut.
-const TRIM_START = 6.0  // seconds — past the Ribéry silver-trophy "wooow" beat so it doesn't replay every loop
+const TRIM_START = 6.5  // seconds — past the Ribéry silver-trophy "wooow" beat so it doesn't replay every loop
 
 export default function AuthLayout() {
   const bgVideoRef = useBgAmbientAudio()
