@@ -261,3 +261,5 @@ frontend/
 infra/compute/       # CloudFormation: api-gateway.yml, lambdas-*.yml
 data/                # match dataset loader + reset scripts
 ```
+
+<img width="1308" height="220" alt="Screenshot 2026-05-14 at 15 38 54" src="https://github.com/user-attachments/assets/e768bf47-d9cc-42e4-9c1b-7192165eacc8" />
