@@ -1,5 +1,5 @@
 """
-Friends Lambda — mutual friend requests.
+Friends Lambda — mutual friend requests + room invites.
 
 DDB schema (claudiu-friends):
     PK userId, SK friendId, attrs: status, email, displayName, avatarUrl
@@ -10,6 +10,12 @@ their own view with a single query:
     add A -> B   writes (A, B, "outgoing") and (B, A, "incoming")
     B accepts   updates both to "accepted"
     either removes/declines  deletes both
+
+Room invites (POST /friends/{friendId}/invite):
+    Verifies A and B are accepted friends and the inviter is in the room,
+    then pushes a `room_invite` WS message to channel `user#{friendId}`.
+    No DDB writes — invites are pure pub/sub. The invitee's frontend joins
+    the room via the existing `POST /rooms/{code}/join` flow.
 """
 
 import json
@@ -18,10 +24,13 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
+import ws
+
 dynamodb = boto3.resource("dynamodb")
 cognito = boto3.client("cognito-idp")
 
 TABLE = dynamodb.Table(os.environ["FRIENDS_TABLE"])
+ROOMS_TABLE = dynamodb.Table(os.environ["ROOMS_TABLE"])
 USER_POOL_ID = os.environ["USER_POOL_ID"]
 
 CORS = {
@@ -185,6 +194,49 @@ def remove_friend(user_id, friend_id):
     return resp(200, {"ok": True})
 
 
+def invite_to_room(user_id, friend_id, room_code):
+    """Invite an accepted friend to a room.
+
+    Pure pub/sub — no DDB writes for the invite itself. The invitee receives
+    a WS `room_invite` on channel `user#{friend_id}` and accepts via the
+    existing `POST /rooms/{code}/join` flow.
+    """
+    if not room_code:
+        return resp(400, {"error": "roomCode required"})
+
+    # Must be accepted friends
+    friendship = TABLE.get_item(Key={"userId": user_id, "friendId": friend_id}).get("Item")
+    if not friendship or friendship.get("status") != STATUS_ACCEPTED:
+        return resp(403, {"error": "You are not friends with this user"})
+
+    # Inviter must be in the room
+    room = ROOMS_TABLE.get_item(Key={"roomCode": room_code}).get("Item")
+    if not room:
+        return resp(404, {"error": "Room not found"})
+    if not any(m.get("userId") == user_id for m in room.get("members", [])):
+        return resp(403, {"error": "You are not in this room"})
+
+    # Don't re-invite someone already in the room
+    if any(m.get("userId") == friend_id for m in room.get("members", [])):
+        return resp(409, {"error": "They are already in this party"})
+
+    inviter = cognito_user_by_sub(user_id)
+    if not inviter:
+        return resp(500, {"error": "Could not load your profile"})
+
+    ws.push_to_channel(f"user#{friend_id}", {
+        "type":     "room_invite",
+        "roomCode": room_code,
+        "matchId":  room.get("matchId"),
+        "inviter": {
+            "userId":      inviter["userId"],
+            "displayName": inviter["displayName"],
+            "avatarUrl":   inviter.get("avatarUrl"),
+        },
+    })
+    return resp(200, {"ok": True})
+
+
 # ---------- entrypoint ----------
 
 def handler(event, context):
@@ -203,6 +255,12 @@ def handler(event, context):
         # /friends/{friendId}/accept
         friend_id = path.split("/friends/")[-1].split("/")[0]
         return accept_friend(user_id, friend_id)
+
+    if method == "POST" and path.endswith("/invite"):
+        # /friends/{friendId}/invite
+        friend_id = path.split("/friends/")[-1].split("/")[0]
+        body = json.loads(event.get("body") or "{}")
+        return invite_to_room(user_id, friend_id, body.get("roomCode"))
 
     if method == "DELETE" and "/friends/" in path:
         friend_id = path.split("/friends/")[-1]

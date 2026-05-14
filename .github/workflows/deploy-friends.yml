@@ -5,6 +5,7 @@ on:
                 branches: [main]
                 paths:
                         - "backend/friends/**"
+                        - "backend/shared/**"
 
 permissions:
         id-token: write
@@ -25,7 +26,8 @@ jobs:
                         - name: Build and deploy
                           run: |
                                   cd backend/friends
-                                  zip function.zip handler.py
+                                  cp ../shared/ws.py .
+                                  zip function.zip handler.py ws.py
                                   aws lambda update-function-code \
                                     --function-name claudiu-friends \
                                     --zip-file fileb://function.zip

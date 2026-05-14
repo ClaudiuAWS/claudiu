@@ -11,7 +11,7 @@ export default function CreateRoom({ onCreate, onSwitch, loading }) {
             <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
             Creating…
           </span>
-        ) : 'Create Squad'}
+        ) : 'Create Party'}
       </button>
 
       <div className="flex items-center gap-3 py-1">

@@ -13,6 +13,7 @@ import LobbyPage from './pages/LobbyPage'
 import MatchPage from './pages/MatchPage'
 import FriendsPage from './pages/FriendsPage'
 import ProfilePage from './pages/ProfilePage'
+import InviteListener from './components/InviteListener'
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null } }
@@ -57,6 +58,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-950">
       <ToastProvider />
+      <InviteListener />
       <ErrorBoundary>
         <Routes>
           <Route path="/login"   element={user ? <Navigate to="/" replace /> : <LoginPage />} />

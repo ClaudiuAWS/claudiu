@@ -62,8 +62,9 @@ export const profileApi = {
 }
 
 export const friendsApi = {
-  list:   ()         => request('/friends'),
-  add:    (email)    => request('/friends', 'POST', { email }),
-  accept: (friendId) => request(`/friends/${friendId}/accept`, 'POST'),
-  remove: (friendId) => request(`/friends/${friendId}`, 'DELETE'),
+  list:   ()                   => request('/friends'),
+  add:    (email)              => request('/friends', 'POST', { email }),
+  accept: (friendId)           => request(`/friends/${friendId}/accept`, 'POST'),
+  invite: (friendId, roomCode) => request(`/friends/${friendId}/invite`, 'POST', { roomCode }),
+  remove: (friendId)           => request(`/friends/${friendId}`, 'DELETE'),
 }

@@ -11,6 +11,7 @@ import MembersList from '../components/lobby/MembersList'
 import CreateRoom from '../components/lobby/CreateRoom'
 import JoinRoom from '../components/lobby/JoinRoom'
 import TeamSelectionModal from '../components/lobby/TeamSelectionModal'
+import InviteFriendsModal from '../components/lobby/InviteFriendsModal'
 
 export default function LobbyPage() {
   const { matchId } = useParams()
@@ -19,14 +20,11 @@ export default function LobbyPage() {
   const [mode, setMode] = useState('create')
   const [error, setError] = useState('')
   const [teamModalOpen, setTeamModalOpen] = useState(false)
+  const [inviteModalOpen, setInviteModalOpen] = useState(false)
   const [starting, setStarting] = useState(false)
   const [speedMultiplier, setSpeedMultiplier] = useState(5)
   const navigate = useNavigate()
 
-  // Host pushes a `match_started` WS broadcast on Start; every member
-  // (including the host's other tabs) lands on /match within the WS
-  // round-trip. Guarded by the same sessionStorage flag the isLive
-  // effect below uses so a manual back-nav to the lobby isn't bounced.
   const handleMatchStarted = (mid) => {
     if (!mid) return
     const flagKey = `lobby_auto_redirected_${mid}`
@@ -50,27 +48,18 @@ export default function LobbyPage() {
 
   const isHost   = room?.hostUserId === user?.userId
   const isLive   = match?.status === 'live'
-  const canStart = isHost && (room?.members?.length ?? 0) >= 1 && !starting && !isLive // DEV: solo allowed
+  const canStart = isHost && (room?.members?.length ?? 0) >= 1 && !starting && !isLive
 
-  // Coordinated draft (2 humans). Drives the "Ready Up" CTA + auto-opens
-  // the modal once the backend has started the draft. Solo (1-user) rooms
-  // bypass this and use the existing simulation in TeamSelectionModal.
   const draft = useDraft(room, user?.userId)
   const memberCount = room?.members?.length ?? 0
   const useCoordinatedDraft = memberCount >= 2
   const draftReadying = (draft.status === 'waiting' || draft.status === 'idle') && draft.isReady
   const draftActive   = draft.status === 'active' || draft.status === 'complete'
 
-  // Auto-open the modal once both users are ready (status flips to 'active').
   useEffect(() => {
     if (draftActive && !teamModalOpen && !hasTeam) setTeamModalOpen(true)
   }, [draftActive, teamModalOpen, hasTeam])
 
-  // Auto-navigate to the match page when the host starts the match. The host
-  // already navigates from handleStart; this covers GUEST clients who would
-  // otherwise sit on the lobby waiting for them to click "Watch Live →".
-  // Gated on a per-match sessionStorage flag so it fires exactly once: a user
-  // who later navigates back to the lobby on purpose isn't bounced back.
   useEffect(() => {
     if (!isLive || !room?.roomCode) return
     const flagKey = `lobby_auto_redirected_${matchId}`
@@ -99,8 +88,6 @@ export default function LobbyPage() {
     setStarting(true)
     try {
       await roomsApi.startMatch(room.roomCode, speedMultiplier)
-      // Mark as auto-redirected for this session so the isLive effect
-      // doesn't re-navigate if the host later comes back to the lobby.
       sessionStorage.setItem(`lobby_auto_redirected_${matchId}`, '1')
       navigate(`/match/${matchId}`, { state: { initialRoom: room } })
     } catch (e) {
@@ -130,17 +117,16 @@ export default function LobbyPage() {
       )}
 
       {room ? (
-        // ── In-room view ──────────────────────────────────────────
         <div className="flex flex-col flex-1 gap-5">
           <div>
-            <h1 className="text-white text-2xl font-bold tracking-tight">Your Squad</h1>
+            <h1 className="text-white text-2xl font-bold tracking-tight">Your Party</h1>
             <p className="text-gray-500 text-sm mt-1">
               {isLive
                 ? 'Match is live!'
                 : isHost
-                  ? (room?.members?.length ?? 0) >= 2
+                  ? memberCount >= 2
                     ? 'Ready to start — press the button when everyone is set'
-                    : 'Waiting for more players to join…'
+                    : 'Invite friends or share the code below'
                   : 'Waiting for the host to start the match…'}
             </p>
           </div>
@@ -148,10 +134,18 @@ export default function LobbyPage() {
           <RoomCodeDisplay code={room.roomCode} />
           <MembersList members={room.members} hostUserId={room.hostUserId} teamReadyIds={teamReadyIds} />
 
-          {/* Team selection CTA — branches on member count.
-              - Solo (1 user): existing client-only draft simulation
-              - 2 users: coordinated draft via "Ready Up" → auto-opens modal
-                         when both are ready and backend has started the draft */}
+          {/* Invite friends button */}
+          {!isLive && (
+            <button
+              onClick={() => setInviteModalOpen(true)}
+              className="w-full py-3.5 rounded-2xl text-sm font-semibold tracking-wide transition-all active:scale-[0.98]"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#d1d5db' }}
+            >
+              + Invite Friends
+            </button>
+          )}
+
+          {/* Team selection CTA */}
           {useCoordinatedDraft && !draftActive && !hasTeam ? (
             <button
               onClick={handleReadyUp}
@@ -187,7 +181,6 @@ export default function LobbyPage() {
             </button>
           ) : isHost ? (
             <>
-              {/* Replay speed (dev/testing). 1× = real time; higher = compressed playback. */}
               <div className="flex items-center justify-between px-1">
                 <label htmlFor="speed-select" className="text-gray-500 text-xs uppercase tracking-widest font-semibold">
                   Replay speed
@@ -231,19 +224,18 @@ export default function LobbyPage() {
               onClick={leaveRoom}
               className="w-full py-3 text-gray-600 text-sm hover:text-gray-400 transition-colors"
             >
-              Leave squad
+              Leave party
             </button>
           </div>
         </div>
       ) : (
-        // ── Pre-room view ─────────────────────────────────────────
         <div className="flex flex-col flex-1 gap-6">
           <div>
             <h1 className="text-white text-2xl font-bold tracking-tight">
-              {mode === 'create' ? 'Create a Squad' : 'Join a Squad'}
+              {mode === 'create' ? 'Create a Party' : 'Join a Party'}
             </h1>
             <p className="text-gray-500 text-sm mt-1">
-              {mode === 'create' ? 'Start a room and invite your friends' : 'Enter the code your friend shared'}
+              {mode === 'create' ? 'Start a party and invite your friends' : 'Enter the code your friend shared'}
             </p>
           </div>
 
@@ -261,7 +253,6 @@ export default function LobbyPage() {
         </div>
       )}
 
-      {/* Team selection modal — rendered outside the flow so it covers full screen */}
       {teamModalOpen && room && (
         <TeamSelectionModal
           matchId={matchId}
@@ -270,6 +261,13 @@ export default function LobbyPage() {
           currentUserId={user?.userId}
           existingSelection={myMember?.teamSelection ?? []}
           onDone={() => setTeamModalOpen(false)}
+        />
+      )}
+
+      {inviteModalOpen && room && (
+        <InviteFriendsModal
+          roomCode={room.roomCode}
+          onClose={() => setInviteModalOpen(false)}
         />
       )}
     </div>

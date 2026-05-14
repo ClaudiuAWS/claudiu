@@ -68,7 +68,7 @@ function MatchCard({ match, onSelect }) {
         <div className="px-5 pb-4">
           <div className="flex items-center justify-center gap-1.5 py-2 rounded-xl bg-white/[0.03] group-active:bg-white/[0.06] transition-colors">
             <span className="text-xs text-gray-500">
-              {match.status === 'upcoming' ? 'Create or join a squad' : 'Join the action'}
+              {match.status === 'upcoming' ? 'Create or join a party' : 'Join the action'}
             </span>
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M2.5 6h7M6.5 3.5L9 6l-2.5 2.5" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
