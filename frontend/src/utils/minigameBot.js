@@ -114,15 +114,23 @@ function _bracketScore(deltaMs, ownsOffsidePlayer) {
 
 // ─── PENALTY_SHOOTOUT ───────────────────────────────────────────────────────
 
-// Solo bot for penalty shootout: picks a random corner, weighted slightly
-// against the user's likely pick so it doesn't always save / always concede.
+// Solo bot for penalty shootout: picks a zone on the realistic 3×3 grid,
+// weighted to mimic real-world goalkeeper diving distributions (corners +
+// chest-height sides are more common than the dead-centre).
 function _penaltyShootoutBot(state, onSubmit) {
-  const zones = ['TL', 'TM', 'TR', 'BL', 'BR']
-  // Keepers irl pick corners more than middle — weight 30% middle, 70% corners.
-  const weights = [0.225, 0.15, 0.225, 0.2, 0.2]
+  const zones = ['TL', 'TM', 'TR', 'ML', 'MM', 'MR', 'BL', 'BM', 'BR']
+  // Roughly mirrors real penalty dive heatmaps: top corners ~12% each,
+  // top-middle (Panenka area, rare keeper guess) 5%, sides chest-height
+  // ~10% each, dead-centre 6%, bottom corners ~14% each (most common
+  // dive), bottom-middle 10%. Sums to 1.0.
+  const weights = [
+    0.12, 0.05, 0.12,
+    0.10, 0.06, 0.10,
+    0.14, 0.10, 0.14,
+  ]
   const r = Math.random()
   let acc = 0
-  let pick = 'TL'
+  let pick = zones[0]
   for (let i = 0; i < zones.length; i++) {
     acc += weights[i]
     if (r <= acc) { pick = zones[i]; break }
@@ -134,8 +142,15 @@ function _penaltyShootoutBot(state, onSubmit) {
   return { cancel: () => clearTimeout(id) }
 }
 
-// Zone → shooter goal value if it goes in.
-const PEN_GOAL_POINTS = { TL: 8, TR: 8, BL: 6, BR: 6, TM: 4 }
+// Zone → shooter goal value if it goes in. 3×3 grid aligned with the
+// analytics standard (Opta / StatsBomb shot-zone convention). Corners
+// reward the riskiest, dead-centre rewards least (keeper's default).
+// Keep in sync with `PenaltyShootout.jsx::ZONES`.
+const PEN_GOAL_POINTS = {
+  TL: 8, TM: 7, TR: 8,
+  ML: 5, MM: 3, MR: 5,
+  BL: 6, BM: 4, BR: 6,
+}
 const PEN_SAVE_POINTS = 5
 
 function _penaltyShootoutDeltas({ ownership, userId, userPayload, botPayload, members }) {
