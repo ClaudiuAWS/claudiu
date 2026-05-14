@@ -75,6 +75,14 @@ export default function AuthLayout() {
         playsInline
         poster="/intro-poster.jpg"
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+        style={{
+          // Tighter cinematic crop on the bg footage. The parent has
+          // overflow-hidden so the edges that scale past the viewport
+          // get clipped — net effect is a zoomed-in framing of the
+          // stadium hype rather than the full wide shot.
+          transform: 'scale(1.4)',
+          transformOrigin: 'center center',
+        }}
       />
       <div className="relative w-full max-w-sm">
         <Outlet />
