@@ -43,14 +43,7 @@ export default function LoginPage() {
       <div className="relative w-full max-w-sm">
         {/* Logo / Brand */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/10 mb-4 shadow-2xl">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="1.5" />
-              <path d="M12 2C12 2 14.5 6 14.5 12S12 22 12 22" stroke="white" strokeWidth="1.5" />
-              <path d="M12 2C12 2 9.5 6 9.5 12S12 22 12 22" stroke="white" strokeWidth="1.5" />
-              <path d="M2.5 9h19M2.5 15h19" stroke="white" strokeWidth="1.5" />
-            </svg>
-          </div>
+          <img src="/logo-dark-bg.png" alt="Claudiu" className="w-20 h-20 mx-auto mb-4 rounded-2xl" />
           <h1 className="text-white text-2xl font-bold tracking-tight">Welcome back</h1>
           <p className="text-white/50 text-sm mt-1">Sign in to continue</p>
         </div>
