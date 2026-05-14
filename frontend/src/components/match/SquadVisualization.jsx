@@ -8,6 +8,52 @@ import { scoreIcon, styleForReason, formatDelta } from '../../utils/scoreFormatt
 const HOME_COLOR = '#DC2626'
 const AWAY_COLOR = '#2563EB'
 
+/**
+ * Compact avatar used by the substitutions list.
+ *
+ * Differs from `MiniAvatar` (which is for bench rosters) in that it
+ *   - prefers a name-initial fallback over a shirt-number badge, which
+ *     reads better at small sizes when no `imageUrl` is available,
+ *   - takes a semantic `accent` colour so the border matches the row tint
+ *     (emerald for IN, rose for OUT) without forcing the caller to ship
+ *     a literal hex,
+ *   - supports a `dim` flag so the OUT player visually steps back.
+ */
+function SubAvatar({ player = {}, fallbackName = '', accent = '#94a3b8', dim = false }) {
+  const initial = (fallbackName || player.displayName || '?').trim()[0]?.toUpperCase() || '?'
+  const ringOpacity = dim ? '88' : 'CC' // hex alpha suffix on the accent
+  const fillBg     = dim ? `${accent}1f` : `${accent}33`
+  return (
+    <div style={{ position: 'relative', width: 28, height: 28, flexShrink: 0 }}>
+      {player.imageUrl ? (
+        <img
+          src={player.imageUrl}
+          alt=""
+          referrerPolicy="no-referrer"
+          style={{
+            width: 28, height: 28, borderRadius: '50%',
+            objectFit: 'cover', objectPosition: 'center top',
+            border: `1.5px solid ${accent}${ringOpacity}`, display: 'block',
+            opacity: dim ? 0.85 : 1,
+          }}
+          onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex' }}
+        />
+      ) : null}
+      <div style={{
+        width: 28, height: 28, borderRadius: '50%',
+        background: fillBg,
+        border: `1.5px solid ${accent}${ringOpacity}`,
+        display: player.imageUrl ? 'none' : 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        color: 'white', fontWeight: 900, fontSize: 11, fontFamily: 'system-ui',
+        opacity: dim ? 0.9 : 1,
+      }}>
+        {initial}
+      </div>
+    </div>
+  )
+}
+
 function MiniAvatar({ player, color }) {
   return (
     <div style={{ position: 'relative', width: 28, height: 28, flexShrink: 0 }}>
@@ -49,6 +95,7 @@ export function SquadVisualization({
   members          = [],
   currentUserId    = null,
   scoreEvents      = [],
+  playerMap        = {},
   onPlayerClick,
 }) {
   const [selectedPlayer,   setSelectedPlayer]   = useState(null)
@@ -272,23 +319,68 @@ export function SquadVisualization({
             <p className="text-[8px] text-gray-600 uppercase tracking-widest mb-2">
               Substitutions ({subs.length})
             </p>
-            <div className="space-y-1.5">
-              {subs.map(ev => (
-                <div key={ev.eventId} className="flex items-center gap-2">
-                  <span className="text-[9px] tabular-nums text-gray-500 w-8 text-right flex-shrink-0">
-                    {formatFootballTime(gameTimeToSeconds(ev.gameTime), htStoredSec)}
-                  </span>
-                  <span className="text-green-400 font-black text-sm leading-none">↑</span>
-                  <span className="text-gray-300 text-[11px] flex-1 min-w-0 truncate">
-                    {ev.playerInDisplay || ev.playerInId || '—'}
-                  </span>
-                  <span className="text-gray-600 font-black text-sm leading-none">↓</span>
-                  <span className="text-gray-500 text-[11px] flex-1 min-w-0 truncate text-right">
-                    {ev.playerOutDisplay || ev.playerOutId || '—'}
-                  </span>
-                </div>
-              ))}
+            <div className="space-y-2">
+              {subs.map((ev, idx) => {
+                const inPlayer  = playerMap[ev.playerInId]  || {}
+                const outPlayer = playerMap[ev.playerOutId] || {}
+                const inName    = ev.playerInDisplay  || inPlayer.displayName  || '—'
+                const outName   = ev.playerOutDisplay || outPlayer.displayName || '—'
+                const minute    = formatFootballTime(gameTimeToSeconds(ev.gameTime), htStoredSec)
+                return (
+                  <div
+                    key={ev.eventId}
+                    className="flex items-stretch gap-1.5 text-[11px]"
+                    style={{ animation: `subRowIn 320ms cubic-bezier(.22,1.4,.36,1) ${idx * 50}ms both` }}
+                  >
+                    {/* IN — left half */}
+                    <div
+                      className="flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-emerald-400/25 px-2 py-1.5"
+                      style={{ background: 'linear-gradient(90deg, rgba(16,185,129,0.16) 0%, rgba(16,185,129,0.04) 100%)' }}
+                    >
+                      <SubAvatar player={inPlayer} fallbackName={inName} accent="#10b981" />
+                      <div className="flex-1 min-w-0">
+                        <span className="block text-[8px] font-black uppercase tracking-widest text-emerald-300/85 leading-none mb-0.5">
+                          IN ↑
+                        </span>
+                        <span className="block text-white text-[11.5px] font-semibold truncate leading-tight">
+                          {inName}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Time pill — centre */}
+                    <div className="flex-shrink-0 flex items-center">
+                      <span className="rounded-full bg-white/10 text-gray-200 text-[9.5px] font-bold tabular-nums px-2 py-0.5 border border-white/10">
+                        {minute}
+                      </span>
+                    </div>
+
+                    {/* OUT — right half */}
+                    <div
+                      className="flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-rose-400/25 px-2 py-1.5"
+                      style={{ background: 'linear-gradient(270deg, rgba(244,63,94,0.16) 0%, rgba(244,63,94,0.04) 100%)' }}
+                    >
+                      <div className="flex-1 min-w-0 text-right">
+                        <span className="block text-[8px] font-black uppercase tracking-widest text-rose-300/85 leading-none mb-0.5">
+                          OUT ↓
+                        </span>
+                        <span className="block text-gray-200 text-[11.5px] font-semibold truncate leading-tight">
+                          {outName}
+                        </span>
+                      </div>
+                      <SubAvatar player={outPlayer} fallbackName={outName} accent="#f43f5e" dim />
+                    </div>
+                  </div>
+                )
+              })}
             </div>
+
+            <style>{`
+              @keyframes subRowIn {
+                0%   { opacity: 0; transform: translateY(6px); }
+                100% { opacity: 1; transform: translateY(0);   }
+              }
+            `}</style>
           </div>
         </div>
       )}

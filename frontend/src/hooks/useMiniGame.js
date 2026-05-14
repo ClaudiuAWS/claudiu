@@ -117,6 +117,11 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
   // the optimistic resolution never runs, leaving both clients on
   // "No points awarded this round" for multi-user penalties.
   const resolveBothRef = useRef(null)
+  // Mirrors the latest state. Used by the WS handler (which is cached
+  // with [matchId, matchStartedAt] deps and can't safely read `state`
+  // from closure) to compute the dismiss deadline based on the live
+  // startedAtMs + durationMs.
+  const stateRef = useRef(null)
 
   // Reset per-game refs when a new game starts.
   useEffect(() => {
@@ -282,15 +287,21 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
     const lockedGameId = state.gameId
     setState(s => s && s.gameId === lockedGameId ? { ...s, status: 'resolved', deltas } : s)
     if (resultDismissTimerRef.current) clearTimeout(resultDismissTimerRef.current)
+    // Hold the dismiss until after the game window closes so a slow
+    // opponent's broadcast can still merge into the result panel before
+    // it disappears. floor is 4.5s (same as before for fast resolutions).
+    const deadline = (state.startedAtMs || Date.now()) + (state.durationMs || 0) + 4500
+    const delay    = Math.max(4500, deadline - Date.now())
     resultDismissTimerRef.current = setTimeout(
       () => setState(s => s && s.gameId === lockedGameId ? null : s),
-      4500,
+      delay,
     )
   }, [state, currentUserId, room?.roomCode, room?.members])
 
   // Keep the ref pointing at the latest state-bound callback. See note on
   // resolveBothRef declaration for why this matters for multi-user penalty.
   resolveBothRef.current = _resolveBoth
+  stateRef.current      = state
 
   const _resolve = useCallback((userPayload) => {
     // Two cases: bot already submitted (we have _botPayload) → resolve now.
@@ -446,9 +457,17 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
         && msg.result?.pick != null
       if (submittedRef.current && !isPenaltyAnnounceOnly) {
         if (resultDismissTimerRef.current) clearTimeout(resultDismissTimerRef.current)
+        // Don't dismiss before the game window closes — late tappers'
+        // per-user broadcasts still need to land in the panel. Read the
+        // latest startedAtMs/durationMs via stateRef because this callback
+        // is cached with [matchId, matchStartedAt] deps and state is stale
+        // in its closure.
+        const s = stateRef.current
+        const deadline = (s?.startedAtMs || Date.now()) + (s?.durationMs || 8000) + 4500
+        const delay    = Math.max(4500, deadline - Date.now())
         resultDismissTimerRef.current = setTimeout(
-          () => setState(s => s && s.gameId === msg.gameId ? null : s),
-          4500,
+          () => setState(s2 => s2 && s2.gameId === msg.gameId ? null : s2),
+          delay,
         )
       }
     } else if (msg.type === 'minigame_expired') {
