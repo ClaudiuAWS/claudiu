@@ -7,7 +7,7 @@ export default function TopNav() {
           className="font-stadium text-white/85 leading-none"
           style={{ fontSize: '1.35rem', letterSpacing: '0.1em' }}
         >
-          MANAGER
+          FANTASY
         </span>
       </div>
     </nav>

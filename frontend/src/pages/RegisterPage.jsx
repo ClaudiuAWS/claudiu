@@ -70,7 +70,7 @@ export default function RegisterPage() {
             className="font-stadium text-white leading-[0.95] [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]"
             style={{ fontSize: '1.5rem', letterSpacing: '0.14em' }}
           >
-            MANAGER
+            FANTASY
           </p>
           <p className="text-white/80 text-sm mt-3 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
             Join the game
