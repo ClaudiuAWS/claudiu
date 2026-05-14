@@ -38,52 +38,87 @@ export default function LoginPage() {
         <source src="/background-login.mp4" type="video/mp4" />
       </video>
 
-      <div className="absolute inset-0 bg-black/70" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/70 to-black/90" />
 
       <div className="relative w-full max-w-sm">
-        <h1 className="text-white text-3xl font-bold text-center mb-2">
-          Claudiu
-        </h1>
-        <p className="text-gray-400 text-center mb-8">
-          Sign in to play
-        </p>
+        {/* Logo / Brand */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/10 mb-4 shadow-2xl">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="1.5" />
+              <path d="M12 2C12 2 14.5 6 14.5 12S12 22 12 22" stroke="white" strokeWidth="1.5" />
+              <path d="M12 2C12 2 9.5 6 9.5 12S12 22 12 22" stroke="white" strokeWidth="1.5" />
+              <path d="M2.5 9h19M2.5 15h19" stroke="white" strokeWidth="1.5" />
+            </svg>
+          </div>
+          <h1 className="text-white text-2xl font-bold tracking-tight">Welcome back</h1>
+          <p className="text-white/50 text-sm mt-1">Sign in to continue</p>
+        </div>
 
-        <div className="space-y-4">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            className="w-full bg-gray-900/80 backdrop-blur text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            className="w-full bg-gray-900/80 backdrop-blur text-white border border-gray-700 rounded-xl px-4 py-3 outline-none focus:border-green-500"
-          />
+        {/* Form card */}
+        <div
+          className="rounded-3xl p-6 space-y-4"
+          style={{
+            background: 'rgba(15, 15, 20, 0.6)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div>
+            <label className="text-[11px] font-semibold tracking-widest uppercase text-white/40 mb-1.5 block">Email</label>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-emerald-500/50 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
+            />
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold tracking-widest uppercase text-white/40 mb-1.5 block">Password</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              className="w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:border-emerald-500/50 focus:bg-white/[0.07] transition-all placeholder:text-white/20"
+            />
+          </div>
 
           {error && (
-            <p className="text-red-400 text-sm text-center">{error}</p>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5">
+              <p className="text-red-400 text-xs text-center">{error}</p>
+            </div>
           )}
 
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="w-full bg-green-500 text-black font-bold py-3 rounded-xl disabled:opacity-50"
+            className="w-full py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all disabled:opacity-50 active:scale-[0.98]"
+            style={{
+              background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+              boxShadow: '0 8px 24px -4px rgba(34,197,94,0.3)',
+            }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Signing in…
+              </span>
+            ) : 'Sign In'}
           </button>
-
-          <p className="text-gray-400 text-center text-sm">
-            No account?{' '}
-            <Link to="/register" className="text-green-400">
-              Create one
-            </Link>
-          </p>
         </div>
+
+        <p className="text-white/40 text-center text-sm mt-6">
+          Don't have an account?{' '}
+          <Link to="/register" className="text-emerald-400 font-medium hover:text-emerald-300 transition-colors">
+            Create one
+          </Link>
+        </p>
       </div>
     </div>
   )
