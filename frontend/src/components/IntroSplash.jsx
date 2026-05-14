@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { getIntroAudioPrefs } from '../hooks/useAppAudio'
 
 const STORAGE_KEY = 'claudiu_intro_seen'
-const BUMPER_AT = 29.5            // seconds — brand bumper fades in, video pauses, waits for tap
-const FADE_DURATION_MS = 1000     // splash opacity + scale + audio ramp on tap
+const TRIM_START = 5.0             // loop-back point, skipping the silver-trophy opening
+const BUMPER_AT = 29.5             // when the geometric brand panel fades in over the still-playing video
+const FADE_DURATION_MS = 1000
 
 function pickSrc() {
   if (typeof window === 'undefined') return '/intro-mobile.mp4'
@@ -11,33 +12,26 @@ function pickSrc() {
   return isHighDpr ? '/intro-mobile-4k.mp4' : '/intro-mobile.mp4'
 }
 
-function pickFit() {
-  if (typeof window === 'undefined') return 'contain'
-  return window.matchMedia('(min-width: 769px)').matches ? 'cover' : 'contain'
-}
-
 /**
  * Intro splash.
  *
- * - Plays the intro video full-bleed with its bundled audio
- *   (subject to introEnabled — user can mute future runs from
- *   Profile post-auth).
- * - At t≈BUMPER_AT, the brand bumper (cropped Bundesliga emblem +
- *   white BUNDESLIGA / FANTASY wordmark, lightly 3D-tilted) fades
- *   in AND the video pauses. A pulsing "TAP ANYWHERE" hint sits
- *   below it.
- * - The splash stays frozen on that frame until the user taps
- *   anywhere; there's no auto-finish anymore. On tap, fade out
- *   and signal the bg-video cross-fade for the auth pages.
- * - No more "Tap for sound" or "Skip" buttons. The entire splash
- *   is one tap target. Autoplay-block falls back to muted.
+ * - Plays the intro video full-bleed (`object-cover`) with its bundled
+ *   audio. At t≈BUMPER_AT a geometric brand panel fades in *over* the
+ *   still-playing video; the video never pauses. On `ended` it seeks
+ *   back to TRIM_START and keeps looping — same trick AuthLayout uses
+ *   so the trimmed silver-trophy frames never reappear.
+ * - The entire splash is one tap target. Tap → fade out and dispatch
+ *   `claudiu:intro-ending` so AuthLayout's bg audio cross-fades in.
+ * - Autoplay-with-sound is best-effort: if the browser blocks it, we
+ *   start muted and retry the unmute on the first user pointerdown/
+ *   keydown — which is also the tap that advances the splash, so the
+ *   audio is audible for the fade-out and any subsequent loops.
  */
 export default function IntroSplash({ onFinish }) {
   const videoRef = useRef(null)
   const finishedRef = useRef(false)
   const bumperShownRef = useRef(false)
   const [src] = useState(pickSrc)
-  const [fit] = useState(pickFit)
   const [showBumper, setShowBumper] = useState(false)
   const [fadingOut, setFadingOut] = useState(false)
 
@@ -47,11 +41,8 @@ export default function IntroSplash({ onFinish }) {
     setFadingOut(true)
     try { sessionStorage.setItem(STORAGE_KEY, '1') } catch {}
 
-    // Signal AuthLayout's bg video to cross-fade its audio in.
     try { window.dispatchEvent(new CustomEvent('claudiu:intro-ending', { detail: { durationMs: FADE_DURATION_MS } })) } catch {}
 
-    // Volume ramp on whatever is still playing (the video could be
-    // paused at BUMPER_AT already, in which case the ramp is a no-op).
     const v = videoRef.current
     if (v) {
       const startVol = v.volume || 1
@@ -83,9 +74,21 @@ export default function IntroSplash({ onFinish }) {
     const playPromise = v.play()
     if (playPromise && typeof playPromise.then === 'function') {
       playPromise.catch(() => {
-        // Autoplay block → fall back to muted (no recovery button).
+        // Autoplay-with-sound blocked → start muted so the video at
+        // least animates, then attempt the unmute on the first user
+        // gesture (which is also the tap that advances).
         v.muted = true
         v.play().catch(() => {})
+
+        if (!prefs.enabled) return
+        const unmuteOnGesture = () => {
+          window.removeEventListener('pointerdown', unmuteOnGesture)
+          window.removeEventListener('keydown', unmuteOnGesture)
+          if (finishedRef.current) return
+          try { v.muted = false; v.volume = 1 } catch {}
+        }
+        window.addEventListener('pointerdown', unmuteOnGesture, { once: true })
+        window.addEventListener('keydown', unmuteOnGesture, { once: true })
       })
     }
 
@@ -93,16 +96,23 @@ export default function IntroSplash({ onFinish }) {
       if (v.currentTime >= BUMPER_AT && !bumperShownRef.current) {
         bumperShownRef.current = true
         setShowBumper(true)
-        // Hold the splash on this frame. The user has to tap to
-        // advance — no auto-fade. If autoplay let audio through,
-        // pausing here mutes naturally because the element is paused.
-        try { v.pause() } catch {}
+        // Do NOT pause — the video keeps playing under the panel.
       }
     }
     v.addEventListener('timeupdate', onTimeUpdate)
 
+    const onEnded = () => {
+      try {
+        v.currentTime = TRIM_START
+        const p = v.play()
+        if (p && typeof p.catch === 'function') p.catch(() => {})
+      } catch {}
+    }
+    v.addEventListener('ended', onEnded)
+
     return () => {
       v.removeEventListener('timeupdate', onTimeUpdate)
+      v.removeEventListener('ended', onEnded)
     }
   }, [])
 
@@ -125,18 +135,13 @@ export default function IntroSplash({ onFinish }) {
         autoPlay
         playsInline
         poster="/intro-poster.jpg"
-        className={fit === 'cover' ? 'object-cover' : 'object-contain'}
-        style={{
-          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-          pointerEvents: 'none',
-        }}
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
       />
 
-      {/* Brand bumper: cropped Bundesliga emblem + white BUNDESLIGA /
-          FANTASY wordmark, lightly 3D-tilted, with a "TAP ANYWHERE"
-          hint below. Visible from BUMPER_AT until tap. */}
+      {/* Geometric brand panel — clipped-corner stadium card sitting
+          over the looping video. Fades in at BUMPER_AT and stays. */}
       <div
-        className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-6"
+        className="absolute inset-0 flex items-center justify-center pointer-events-none px-6"
         style={{
           opacity: showBumper ? 1 : 0,
           transform: showBumper ? 'translateY(0)' : 'translateY(8px)',
@@ -144,20 +149,32 @@ export default function IntroSplash({ onFinish }) {
         }}
       >
         <div
-          className="text-center"
+          className="relative text-center"
           style={{
-            transform: 'perspective(1100px) rotateX(7deg)',
-            transformStyle: 'preserve-3d',
-            animation: showBumper ? 'introBrandFloat 4s ease-in-out 0.6s infinite' : 'none',
+            // Diagonal cuts on top-left + bottom-right — gives the
+            // panel a "stadium tournament card" silhouette.
+            clipPath: 'polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px)',
+            background: 'linear-gradient(180deg, rgba(15,15,20,0.78) 0%, rgba(8,8,12,0.82) 100%)',
+            backdropFilter: 'blur(10px) saturate(140%)',
+            WebkitBackdropFilter: 'blur(10px) saturate(140%)',
+            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.10)',
+            padding: '2.25rem 2.75rem',
           }}
         >
+          {/* Red top accent stripe — tucked inside the clipped corner. */}
           <div
-            className="mx-auto overflow-hidden mb-2"
+            className="absolute top-0"
             style={{
-              width: 132,
-              height: 106,
-              filter: 'drop-shadow(0 14px 28px rgba(0,0,0,0.65)) drop-shadow(0 0 40px rgba(220,38,38,0.45))',
+              left: 22,
+              right: 0,
+              height: 3,
+              background: 'linear-gradient(90deg, #dc2626 0%, transparent 100%)',
             }}
+          />
+
+          <div
+            className="mx-auto overflow-hidden mb-3"
+            style={{ width: 132, height: 106 }}
           >
             <img
               src="/logo.png"
@@ -167,44 +184,40 @@ export default function IntroSplash({ onFinish }) {
           </div>
           <p
             className="font-stadium text-white leading-[0.92]"
-            style={{
-              fontSize: '2.2rem',
-              letterSpacing: '0.14em',
-              textShadow: '0 4px 16px rgba(0,0,0,0.8), 0 0 32px rgba(220,38,38,0.35)',
-            }}
+            style={{ fontSize: '2.2rem', letterSpacing: '0.14em' }}
           >
             BUNDESLIGA
           </p>
           <p
             className="font-stadium text-white leading-[0.92]"
-            style={{
-              fontSize: '2.2rem',
-              letterSpacing: '0.14em',
-              textShadow: '0 4px 16px rgba(0,0,0,0.8), 0 0 32px rgba(220,38,38,0.35)',
-            }}
+            style={{ fontSize: '2.2rem', letterSpacing: '0.14em' }}
           >
             FANTASY
           </p>
-        </div>
 
-        <p
-          className="font-stadium text-white/80 mt-10"
-          style={{
-            fontSize: '0.92rem',
-            letterSpacing: '0.32em',
-            textShadow: '0 2px 10px rgba(0,0,0,0.7)',
-            animation: showBumper ? 'introTapPulse 1.6s ease-in-out 0.6s infinite' : 'none',
-          }}
-        >
-          TAP ANYWHERE
-        </p>
+          <div
+            className="mx-auto mt-5 mb-4"
+            style={{
+              width: '70%',
+              height: 1,
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)',
+            }}
+          />
+
+          <p
+            className="font-stadium text-white/80"
+            style={{
+              fontSize: '0.92rem',
+              letterSpacing: '0.32em',
+              animation: showBumper ? 'introTapPulse 1.6s ease-in-out 0.6s infinite' : 'none',
+            }}
+          >
+            TAP ANYWHERE
+          </p>
+        </div>
       </div>
 
       <style>{`
-        @keyframes introBrandFloat {
-          0%, 100% { transform: perspective(1100px) rotateX(7deg) translateY(0); }
-          50%      { transform: perspective(1100px) rotateX(7deg) translateY(-6px); }
-        }
         @keyframes introTapPulse {
           0%, 100% { opacity: 0.55; }
           50%      { opacity: 1; }
