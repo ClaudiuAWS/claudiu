@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu Lambda - Cognito PreSignUp trigger (UNCONFIRMED cleanup)
+
+Resources:
+        PreSignUpLambdaRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-auth-pre-signup-lambda-role
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Service: lambda.amazonaws.com
+                                          Action: sts:AssumeRole
+                        ManagedPolicyArns:
+                                - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+                        Policies:
+                                - PolicyName: claudiu-auth-pre-signup-lambda-policy
+                                  PolicyDocument:
+                                          Version: "2012-10-17"
+                                          Statement:
+                                                  - Sid: CognitoCleanupUnconfirmed
+                                                    Effect: Allow
+                                                    Action:
+                                                            - cognito-idp:AdminGetUser
+                                                            - cognito-idp:AdminDeleteUser
+                                                    Resource: !Sub arn:aws:cognito-idp:eu-central-1:${AWS::AccountId}:userpool/eu-central-1_xMo5k0VLO
+
+        PreSignUpLambda:
+                Type: AWS::Lambda::Function
+                Properties:
+                        FunctionName: claudiu-auth-pre-signup
+                        Runtime: python3.14
+                        Handler: handler.handler
+                        Role: !GetAtt PreSignUpLambdaRole.Arn
+                        Timeout: 10
+                        MemorySize: 128
+                        Environment:
+                                Variables:
+                                        USER_POOL_ID: eu-central-1_xMo5k0VLO
+                        Code:
+                                ZipFile: |
+                                        import os
+                                        import boto3
+                                        from botocore.exceptions import ClientError
+
+                                        USER_POOL_ID = os.environ["USER_POOL_ID"]
+                                        client = boto3.client("cognito-idp")
+
+
+                                        def handler(event, context):
+                                            email = (event.get("userName") or "").strip()
+                                            if not email:
+                                                return event
+                                            try:
+                                                existing = client.admin_get_user(UserPoolId=USER_POOL_ID, Username=email)
+                                                if existing.get("UserStatus") == "UNCONFIRMED":
+                                                    client.admin_delete_user(UserPoolId=USER_POOL_ID, Username=email)
+                                            except client.exceptions.UserNotFoundException:
+                                                pass
+                                            except ClientError:
+                                                pass
+                                            return event
+
+        PreSignUpInvokePermission:
+                Type: AWS::Lambda::Permission
+                Properties:
+                        FunctionName: !GetAtt PreSignUpLambda.Arn
+                        Action: lambda:InvokeFunction
+                        Principal: cognito-idp.amazonaws.com
+                        SourceArn: !Sub arn:aws:cognito-idp:eu-central-1:${AWS::AccountId}:userpool/eu-central-1_xMo5k0VLO
+
+Outputs:
+        PreSignUpLambdaArn:
+                Value: !GetAtt PreSignUpLambda.Arn
+                Export:
+                        Name: claudiu-auth-pre-signup-arn

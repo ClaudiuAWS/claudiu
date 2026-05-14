@@ -10,6 +10,8 @@ Resources:
                                 - email
                         UsernameAttributes:
                                 - email
+                        LambdaConfig:
+                                PreSignUp: !ImportValue claudiu-auth-pre-signup-arn
                         EmailConfiguration:
                                 EmailSendingAccount: DEVELOPER
                                 From: mihaiciorascu11@gmail.com
