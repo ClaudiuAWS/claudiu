@@ -35,6 +35,9 @@ export default function IntroSplash({ onFinish }) {
     setFadingOut(true)
     try { sessionStorage.setItem(STORAGE_KEY, '1') } catch {}
 
+    // Signal LoginPage / RegisterPage to start ramping their bg audio in (cross-fade).
+    try { window.dispatchEvent(new CustomEvent('claudiu:intro-ending', { detail: { durationMs: FADE_DURATION_MS } })) } catch {}
+
     // Audio volume ramp 1.0 → 0.0 over FADE_DURATION_MS via rAF (smooth, no audible click).
     const v = videoRef.current
     if (v) {
@@ -95,12 +98,8 @@ export default function IntroSplash({ onFinish }) {
 
   return (
     <div
-      className="fixed top-0 left-0 z-[100] bg-black"
+      className="fixed inset-0 z-[100] bg-black"
       style={{
-        width: '100dvw',
-        height: '100dvh',
-        minWidth: '100vw',
-        minHeight: '100vh',
         opacity: fadingOut ? 0 : 1,
         transform: fadingOut ? 'scale(1.06)' : 'scale(1)',
         transition: `opacity ${FADE_DURATION_MS}ms ease-out, transform ${FADE_DURATION_MS}ms ease-out`,

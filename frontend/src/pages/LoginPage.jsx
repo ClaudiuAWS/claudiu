@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { login } from '../services/auth'
 import { useAuth } from '../hooks/useAuth'
+import { useBgAmbientAudio } from '../hooks/useBgAmbientAudio'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const bgVideoRef = useBgAmbientAudio()
   const navigate = useNavigate()
   const { refreshUser } = useAuth()
 
@@ -29,6 +31,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen relative flex flex-col items-center justify-center px-6 overflow-hidden">
       <video
+        ref={bgVideoRef}
         src="/bg-login-mobile.mp4"
         autoPlay
         loop
