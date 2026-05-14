@@ -112,10 +112,12 @@ Ok ("intro-mobile.mp4: {0:N2} MB" -f ((Get-Item $introMobile).Length / 1MB))
 # Single portrait video used everywhere; CSS object-fit:cover handles responsive zoom/crop on landscape viewports.
 Section "Step 4b: Build looping bg-login-mobile.mp4 (12s, 1080p, no audio)"
 $bgMobile = Join-Path $PUBLIC_DIR "bg-login-mobile.mp4"
-ffmpeg -y -hide_banner -loglevel error -stats -i $introMobile -ss 8 -t 12 -an `
+ffmpeg -y -hide_banner -loglevel error -stats -ss 8 -i $introMobile -t 12 `
   -vf "crop=1080:810:0:555,fade=in:0:9,fade=out:351:9" `
+  -af "afade=in:st=0:d=0.3,afade=out:st=11.7:d=0.3" `
   -c:v libx264 -profile:v high -crf 25 -preset medium -pix_fmt yuv420p `
   -movflags +faststart `
+  -c:a aac -b:a 96k `
   $bgMobile
 Ok ("bg-login-mobile.mp4: {0:N2} MB" -f ((Get-Item $bgMobile).Length / 1MB))
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { register } from '../services/auth'
+import { useBgAmbientAudio } from '../hooks/useBgAmbientAudio'
 
 export default function RegisterPage() {
   const [displayName, setDisplayName] = useState('')
@@ -8,6 +9,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const bgVideoRef = useBgAmbientAudio()
   const navigate = useNavigate()
 
   const handleRegister = async () => {
@@ -31,6 +33,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen relative flex flex-col items-center justify-center px-6 overflow-hidden">
       <video
+        ref={bgVideoRef}
         src="/bg-login-mobile.mp4"
         autoPlay
         loop
