@@ -2,37 +2,43 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { TRACKS, DEFAULT_TRACK_ID, getTrackById } from '../utils/tracks'
 
 /**
- * App-wide background music.
+ * App-wide background music + intro audio preferences.
  *
- * Mounts a single `<audio>` element via the provider and exposes the
- * playback controls through a React context so any component (the
- * Profile toggle, future badge-unlocked song picker, etc.) can read
- * the current state and flip enabled / track without each tab needing
- * its own audio element.
+ * Two independent audio "slots" the user can assign tracks to,
+ * wallpaper-style:
+ *   - **app**: post-auth ambient background. Played by the
+ *     `<audio>` element this provider mounts; loops; volume 0.2.
+ *   - **intro**: the splash video's audio source. The IntroSplash
+ *     component reads `introEnabled` + `introTrackId` from here
+ *     and decides whether to play the video's bundled audio, swap
+ *     in the chosen track, or stay muted.
  *
- * Design choices:
- * - Volume locked to 0.2 — the exact ambient level `useBgAmbientAudio`
- *   sets on the login screen, so the audio handover when the user
- *   signs in feels continuous (login video unmounts, this picks up at
- *   the same loudness).
- * - localStorage key `appAudioEnabled` persists the on/off pref across
- *   sessions; `appAudioTrackId` remembers which song the user chose.
- * - Autoplay-safe: if `audio.play()` rejects (Safari first-load /
- *   no-prior-gesture blocks), a one-shot `pointerdown` listener
- *   retries on the next user interaction.
- * - Provider should be mounted *inside* the post-auth `Layout` only —
- *   the login/register screens have their own ambient audio
- *   (`useBgAmbientAudio`); we don't want both playing at once.
+ * State persistence (localStorage):
+ *   appAudioEnabled   (default: true)
+ *   appAudioTrackId   (default: 'intro')
+ *   introAudioEnabled (default: true)
+ *   introAudioTrackId (default: 'intro')
  *
- * The actual mp3 files live under `frontend/public/songs/` (registry
- * in `utils/tracks.js`). If a file is missing, the audio element
- * silently 404s — UI stays usable, no errors thrown.
+ * Defaults align with the user's spec: intro is always loud the
+ * first time you visit. Only after logging in can you flip it off
+ * from Profile.
+ *
+ * Autoplay-safe: if `audio.play()` rejects (Safari first-load),
+ * a one-shot pointerdown/keydown listener retries on first user
+ * gesture.
+ *
+ * Mount inside the post-auth `Layout` only — Login/Register own
+ * their own ambient (`useBgAmbientAudio`).
  */
 
 const TARGET_VOLUME = 0.2
 
-const STORAGE_ENABLED = 'appAudioEnabled'
-const STORAGE_TRACK   = 'appAudioTrackId'
+const KEYS = {
+  appEnabled:   'appAudioEnabled',
+  appTrack:     'appAudioTrackId',
+  introEnabled: 'introAudioEnabled',
+  introTrack:   'introAudioTrackId',
+}
 
 function _readBool(key, defaultValue) {
   try {
@@ -51,17 +57,35 @@ function _writeString(key, value) {
   try { localStorage.setItem(key, value) } catch {}
 }
 
+// Module-level helpers so IntroSplash can read prefs synchronously
+// at mount, before this provider has rendered. The provider still
+// owns the React-state version for in-app reactivity.
+export function getIntroAudioPrefs() {
+  return {
+    enabled: _readBool(KEYS.introEnabled, true),
+    trackId: _readString(KEYS.introTrack,  DEFAULT_TRACK_ID),
+  }
+}
+export function getAppAudioPrefs() {
+  return {
+    enabled: _readBool(KEYS.appEnabled, true),
+    trackId: _readString(KEYS.appTrack,  DEFAULT_TRACK_ID),
+  }
+}
+
 const AppAudioContext = createContext(null)
 
 export function AppAudioProvider({ children }) {
   const audioRef = useRef(null)
-  const [enabled,   setEnabledState]   = useState(() => _readBool(STORAGE_ENABLED, true))
-  const [trackId,   setTrackIdState]   = useState(() => _readString(STORAGE_TRACK,  DEFAULT_TRACK_ID))
+  const [appEnabled,   setAppEnabledState]   = useState(() => _readBool(KEYS.appEnabled,   true))
+  const [appTrackId,   setAppTrackIdState]   = useState(() => _readString(KEYS.appTrack,   DEFAULT_TRACK_ID))
+  const [introEnabled, setIntroEnabledState] = useState(() => _readBool(KEYS.introEnabled, true))
+  const [introTrackId, setIntroTrackIdState] = useState(() => _readString(KEYS.introTrack, DEFAULT_TRACK_ID))
 
-  const track = getTrackById(trackId)
+  const appTrack   = getTrackById(appTrackId)
+  const introTrack = getTrackById(introTrackId)
 
-  // Wire the audio element once on mount. Volume + loop are fixed;
-  // src is reactive to the trackId state.
+  // App-music audio element setup (volume + loop). Run once.
   useEffect(() => {
     const a = audioRef.current
     if (!a) return
@@ -69,22 +93,18 @@ export function AppAudioProvider({ children }) {
     a.loop   = true
   }, [])
 
-  // (Re)load + play whenever enabled flips on or the chosen track
-  // changes. Handles autoplay-policy rejection by deferring to the
-  // next user gesture.
+  // (Re)load + play whenever appEnabled flips on or the chosen app
+  // track changes.
   useEffect(() => {
     const a = audioRef.current
-    if (!a || !track) return
+    if (!a || !appTrack) return
 
-    if (!enabled) {
+    if (!appEnabled) {
       try { a.pause() } catch {}
       return
     }
 
-    // Only swap the src if it actually changed — avoids re-triggering
-    // playback on every render and clears `currentTime` only when
-    // moving to a different file.
-    const targetSrc = track.file
+    const targetSrc = appTrack.file
     if (!a.src.endsWith(targetSrc)) {
       a.src = targetSrc
     }
@@ -93,7 +113,6 @@ export function AppAudioProvider({ children }) {
       const p = a.play()
       if (p && typeof p.catch === 'function') {
         p.catch(() => {
-          // Autoplay blocked — retry on first user gesture.
           const retry = () => {
             window.removeEventListener('pointerdown', retry)
             window.removeEventListener('keydown',     retry)
@@ -105,31 +124,40 @@ export function AppAudioProvider({ children }) {
       }
     }
     attemptPlay()
-  }, [enabled, trackId, track])
+  }, [appEnabled, appTrackId, appTrack])
 
-  const setEnabled = (next) => {
-    setEnabledState(next)
-    _writeBool(STORAGE_ENABLED, next)
-  }
-  const toggle = () => setEnabled(!enabled)
-  const setTrack = (id) => {
+  // App setters
+  const setAppEnabled = (next) => { setAppEnabledState(next); _writeBool(KEYS.appEnabled, next) }
+  const toggleApp     = () => setAppEnabled(!appEnabled)
+  const setAppTrack   = (id) => {
     if (!TRACKS.find(t => t.id === id)) return
-    setTrackIdState(id)
-    _writeString(STORAGE_TRACK, id)
+    setAppTrackIdState(id)
+    _writeString(KEYS.appTrack, id)
+  }
+
+  // Intro setters (no audio side-effects here — IntroSplash reads
+  // these synchronously when it mounts).
+  const setIntroEnabled = (next) => { setIntroEnabledState(next); _writeBool(KEYS.introEnabled, next) }
+  const toggleIntro     = () => setIntroEnabled(!introEnabled)
+  const setIntroTrack   = (id) => {
+    if (!TRACKS.find(t => t.id === id)) return
+    setIntroTrackIdState(id)
+    _writeString(KEYS.introTrack, id)
   }
 
   return (
     <AppAudioContext.Provider value={{
-      enabled,
-      setEnabled,
-      toggle,
-      currentTrack: track,
-      trackId,
-      setTrack,
+      // App music
+      appEnabled, toggleApp, setAppEnabled,
+      appTrackId, setAppTrack, appTrack,
+      // Intro audio
+      introEnabled, toggleIntro, setIntroEnabled,
+      introTrackId, setIntroTrack, introTrack,
+      // Convenience: list of currently-unlocked tracks for the
+      // Profile picker. v1 = TRACKS as-is (only 'intro' exists);
+      // future = filtered by user's earned badges.
+      tracks: TRACKS,
     }}>
-      {/* The single <audio> element. Hidden — no controls in the UI.
-          src is set in the effect above so we can swap tracks
-          without re-mounting the element. */}
       <audio ref={audioRef} preload="auto" playsInline />
       {children}
     </AppAudioContext.Provider>
@@ -139,16 +167,14 @@ export function AppAudioProvider({ children }) {
 export function useAppAudio() {
   const ctx = useContext(AppAudioContext)
   if (!ctx) {
-    // Allow consumers (e.g. ProfilePage) to render even when the
-    // provider isn't mounted (e.g. on pre-auth screens) — they just
-    // get a no-op stub.
+    // Pre-auth screens consume the hook via Profile only via
+    // post-auth route, so this stub is just defensive.
     return {
-      enabled:      false,
-      setEnabled:   () => {},
-      toggle:       () => {},
-      currentTrack: null,
-      trackId:      DEFAULT_TRACK_ID,
-      setTrack:     () => {},
+      appEnabled: false, toggleApp: () => {}, setAppEnabled: () => {},
+      appTrackId: DEFAULT_TRACK_ID, setAppTrack: () => {}, appTrack: null,
+      introEnabled: true, toggleIntro: () => {}, setIntroEnabled: () => {},
+      introTrackId: DEFAULT_TRACK_ID, setIntroTrack: () => {}, introTrack: null,
+      tracks: TRACKS,
     }
   }
   return ctx
