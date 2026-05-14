@@ -10,6 +10,17 @@ Resources:
                                 - email
                         UsernameAttributes:
                                 - email
+                        EmailConfiguration:
+                                EmailSendingAccount: DEVELOPER
+                                From: noreply@bundesligafantasy.com
+                                SourceArn: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/bundesligafantasy.com
+                        VerificationMessageTemplate:
+                                DefaultEmailOption: CONFIRM_WITH_CODE
+                                EmailSubject: "Your Bundesliga Fantasy verification code"
+                                EmailMessage: |
+                                        Welcome to Bundesliga Fantasy! Your verification code is {####}.
+
+                                        If you didn't sign up, you can safely ignore this email.
                         Policies:
                                 PasswordPolicy:
                                         MinimumLength: 8
