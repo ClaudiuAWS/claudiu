@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 
 /**
  * PENALTY_SHOOTOUT game UI.
@@ -28,34 +28,56 @@ import { useEffect, useRef, useState } from 'react'
  *   Save (keeper correct)         → keeper +5
  *   Both timed out                → 0 to both
  *
- * Visual borrows: Angry Birds (trajectory arc on ball release, post shake
- * if it hits the woodwork), Cut the Rope (tactile button squish),
- * Doodle Jump (zero-friction tap with chunky icons), PvZ (lane-card layout).
+ * Visual language: tasteful mobile-game polish — gradient-tinted tiles
+ * by reward, glossy crossbar + posts, diamond-stitch net mesh, a swaying
+ * keeper silhouette for the shooter (decorative), ball that "kicks" to
+ * the picked zone on commit.
  */
 
-// 3×3 goalmouth grid (Opta / StatsBomb analytics convention). Coordinates
-// are percentages within the goal-panel container. The goalmouth frame
-// occupies left:8% → right:92%, top:8% → bottom:68%, so zone centres
-// sit at x ∈ {18, 50, 82} and y ∈ {18, 38, 58}. Tile size below shrinks
-// proportionally to fit 9 buttons cleanly without overlap.
+// 3×3 goalmouth grid (Opta / StatsBomb analytics convention).
+//
+// Coordinates are percentages of the goal-panel container.
+// Goal frame occupies x ∈ [8, 92], y ∈ [8, 68].
+// Tiles are 24% wide × 16% tall (half-width 12, half-height 8). Centres
+// chosen so the 3 columns sit flush with the posts and 3 rows fit
+// between crossbar and goal-line with even 6% gaps.
+//   x centres: {20, 50, 80} → spans 8–32, 38–62, 68–92.
+//   y centres: {16, 38, 60} → spans 8–24, 30–46, 52–68.
 const ZONES = [
-  { key: 'TL', label: '↖', x: 18, y: 18, points: 8 },
-  { key: 'TM', label: '⬆', x: 50, y: 18, points: 7 },
-  { key: 'TR', label: '↗', x: 82, y: 18, points: 8 },
-  { key: 'ML', label: '←', x: 18, y: 38, points: 5 },
+  { key: 'TL', label: '↖', x: 20, y: 16, points: 8 },
+  { key: 'TM', label: '⬆', x: 50, y: 16, points: 7 },
+  { key: 'TR', label: '↗', x: 80, y: 16, points: 8 },
+  { key: 'ML', label: '←', x: 20, y: 38, points: 5 },
   { key: 'MM', label: '•', x: 50, y: 38, points: 3 },
-  { key: 'MR', label: '→', x: 82, y: 38, points: 5 },
-  { key: 'BL', label: '↙', x: 18, y: 58, points: 6 },
-  { key: 'BM', label: '⬇', x: 50, y: 58, points: 4 },
-  { key: 'BR', label: '↘', x: 82, y: 58, points: 6 },
+  { key: 'MR', label: '→', x: 80, y: 38, points: 5 },
+  { key: 'BL', label: '↙', x: 20, y: 60, points: 6 },
+  { key: 'BM', label: '⬇', x: 50, y: 60, points: 4 },
+  { key: 'BR', label: '↘', x: 80, y: 60, points: 6 },
 ]
 
-const BALL_START = { x: 50, y: 90 } // bottom of the goal panel
+// Per-zone gradient + border tint, chosen so the higher-reward zones
+// "glow" warmer (gold/orange) and the lower-reward zones cool down
+// (sky/slate). Tailwind JIT needs literal class names — list them out.
+const TILE_GRADIENT = {
+  TL: 'from-amber-400/30 to-amber-600/10 border-amber-300/40',
+  TM: 'from-orange-400/30 to-orange-600/10 border-orange-300/40',
+  TR: 'from-amber-400/30 to-amber-600/10 border-amber-300/40',
+  ML: 'from-emerald-400/30 to-emerald-600/10 border-emerald-300/40',
+  MM: 'from-slate-400/25 to-slate-600/10 border-slate-300/40',
+  MR: 'from-emerald-400/30 to-emerald-600/10 border-emerald-300/40',
+  BL: 'from-teal-400/30 to-teal-600/10 border-teal-300/40',
+  BM: 'from-sky-400/25 to-sky-600/10 border-sky-300/40',
+  BR: 'from-teal-400/30 to-teal-600/10 border-teal-300/40',
+}
+
+const BALL_START = { x: 50, y: 90 } // bottom of the goal panel, on the spot
 
 export default function PenaltyShootout({ config, startedAtMs, durationMs, onSubmit, role, takerDisplay, keeperDisplay }) {
   const [pick, setPick] = useState(null) // zone key
-  const [phase, setPhase] = useState('aim') // aim → animating → done
   const submitMs = useRef(null)
+
+  const pickedZone = pick ? ZONES.find(z => z.key === pick) : null
+  const isShooter = role === 'shooter'
 
   function _commit(zoneKey) {
     if (pick !== null) return
@@ -64,14 +86,9 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       try { navigator.vibrate(15) } catch {}
     }
-    // We don't animate here — the modal closes & result panel renders the
-    // outcome via minigame_result merge. Submit immediately so the backend
-    // can resolve both roles.
     onSubmit({ zone: zoneKey, role, submittedAtMs: submitMs.current })
-    setPhase('done')
   }
 
-  const isShooter = role === 'shooter'
   const youHint = isShooter
     ? `You're shooting — pick a corner`
     : `You're in goal — guess the dive`
@@ -84,7 +101,7 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
       {/* Role banner */}
       <div className="flex items-center justify-between mb-3 px-1">
         <div>
-          <p className={`text-[9px] font-black tracking-widest uppercase ${isShooter ? 'text-emerald-400' : 'text-blue-400'}`}>
+          <p className={`text-[9px] font-black tracking-widest uppercase ${isShooter ? 'text-emerald-400' : 'text-sky-400'}`}>
             {isShooter ? '⚽ Shooter' : '🧤 Keeper'}
           </p>
           <p className="text-white text-sm font-bold mt-0.5">{youHint}</p>
@@ -99,41 +116,152 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
       <div
         className="relative w-full rounded-xl overflow-hidden border-2 border-white/15"
         style={{
-          background: 'linear-gradient(180deg, #0a3a14 0%, #0e5320 40%, #0a3a14 100%)',
+          background: 'radial-gradient(ellipse at 50% 30%, #15703a 0%, #0e5320 45%, #0a3a14 100%)',
           aspectRatio: '5 / 3',
+          boxShadow: 'inset 0 -20px 40px rgba(0,0,0,0.35)',
         }}
       >
+        {/* Pitch lines: faint penalty arc + 6-yard box hint */}
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: '20%', right: '20%', top: '70%', bottom: '6%',
+            borderTop: '2px solid rgba(255,255,255,0.18)',
+            borderLeft: '2px solid rgba(255,255,255,0.18)',
+            borderRight: '2px solid rgba(255,255,255,0.18)',
+            borderTopLeftRadius: '40%',
+            borderTopRightRadius: '40%',
+          }}
+        />
+
         {/* Goal frame: top crossbar + posts */}
         <div className="absolute" style={{ left: '8%', top: '8%', width: '84%', height: '60%' }}>
-          {/* posts */}
-          <div className="absolute top-0 left-0 bottom-0 w-[3px] bg-white shadow-lg" />
-          <div className="absolute top-0 right-0 bottom-0 w-[3px] bg-white shadow-lg" />
-          {/* crossbar */}
-          <div className="absolute top-0 left-0 right-0 h-[3px] bg-white shadow-lg" />
-          {/* net (repeating gradient) */}
+          {/* posts — thin gradient gloss + soft drop-shadow */}
           <div
-            className="absolute inset-[3px]"
+            className="absolute top-0 left-0 bottom-0"
+            style={{
+              width: '4px',
+              background: 'linear-gradient(90deg, #f4f4f5 0%, #ffffff 50%, #d4d4d8 100%)',
+              boxShadow: '0 0 8px rgba(255,255,255,0.45)',
+              borderRadius: '2px',
+            }}
+          />
+          <div
+            className="absolute top-0 right-0 bottom-0"
+            style={{
+              width: '4px',
+              background: 'linear-gradient(90deg, #d4d4d8 0%, #ffffff 50%, #f4f4f5 100%)',
+              boxShadow: '0 0 8px rgba(255,255,255,0.45)',
+              borderRadius: '2px',
+            }}
+          />
+          {/* crossbar */}
+          <div
+            className="absolute top-0 left-0 right-0"
+            style={{
+              height: '4px',
+              background: 'linear-gradient(180deg, #ffffff 0%, #f4f4f5 50%, #d4d4d8 100%)',
+              boxShadow: '0 2px 8px rgba(255,255,255,0.35)',
+              borderRadius: '2px',
+            }}
+          />
+          {/* net — crossing diamond stitch */}
+          <div
+            className="absolute inset-[4px]"
             style={{
               backgroundImage:
-                'repeating-linear-gradient(0deg, rgba(255,255,255,0.10) 0, rgba(255,255,255,0.10) 1px, transparent 1px, transparent 14px),' +
-                'repeating-linear-gradient(90deg, rgba(255,255,255,0.10) 0, rgba(255,255,255,0.10) 1px, transparent 1px, transparent 14px)',
+                'repeating-linear-gradient(45deg, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 1px, transparent 1px, transparent 13px),' +
+                'repeating-linear-gradient(-45deg, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 1px, transparent 1px, transparent 13px)',
             }}
           />
         </div>
 
-        {/* Penalty spot */}
+        {/* Keeper silhouette — shooter mode only (decorative opponent).
+            Lives behind the zone tiles via DOM order. Sways gently. */}
+        {isShooter && (
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              left: '50%',
+              top: '46%',
+              width: '11%',
+              transform: 'translate(-50%, -50%)',
+              animation: pick ? 'none' : 'penKeeperSway 2.4s ease-in-out infinite',
+              opacity: 0.85,
+              transition: 'left 0.35s ease-out',
+              ...(pick && pickedZone ? { left: `${pickedZone.x}%`, top: `${pickedZone.y}%` } : null),
+            }}
+          >
+            <svg viewBox="0 0 30 50" className="w-full h-auto" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>
+              {/* head */}
+              <circle cx="15" cy="7" r="5.2" fill="#1f2937" />
+              {/* body */}
+              <rect x="7" y="12" width="16" height="20" rx="4" fill="#1f2937" />
+              {/* shirt yellow stripe (keeper jersey) */}
+              <rect x="7" y="18" width="16" height="3" fill="#fbbf24" opacity="0.7" />
+              {/* arms / gloves */}
+              <rect x="1.5" y="14" width="6.5" height="16" rx="3" fill="#1f2937" />
+              <rect x="22" y="14" width="6.5" height="16" rx="3" fill="#1f2937" />
+              <circle cx="4.7" cy="29.5" r="3.5" fill="#fbbf24" />
+              <circle cx="25.3" cy="29.5" r="3.5" fill="#fbbf24" />
+              {/* legs */}
+              <rect x="9.5" y="31" width="5" height="16" rx="2" fill="#0f172a" />
+              <rect x="15.5" y="31" width="5" height="16" rx="2" fill="#0f172a" />
+            </svg>
+          </div>
+        )}
+
+        {/* Penalty spot + ring */}
         <div
-          className="absolute rounded-full bg-white/80"
+          className="absolute"
+          style={{
+            left: '50%', top: '85%',
+            width: 16, height: 16,
+            transform: 'translate(-50%, -50%)',
+            borderRadius: '50%',
+            border: '1.5px solid rgba(255,255,255,0.35)',
+          }}
+        />
+        <div
+          className="absolute rounded-full bg-white/85"
           style={{ left: '50%', top: '85%', width: 6, height: 6, transform: 'translate(-50%, -50%)' }}
         />
 
-        {/* The ball at the spot (shooter only — keeper sees a glove icon instead) */}
+        {/* Grass shadow under the ball */}
+        {!pick && (
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              left: `${BALL_START.x}%`,
+              top: `${BALL_START.y + 3}%`,
+              width: '8%',
+              height: '2%',
+              transform: 'translate(-50%, -50%)',
+              borderRadius: '50%',
+              background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.45) 0%, transparent 70%)',
+              animation: 'penBallShadow 1.2s ease-in-out infinite',
+            }}
+          />
+        )}
+
+        {/* The ball (shooter) or keeper-glove icon (keeper) */}
         <div
           className="absolute"
-          style={{ left: `${BALL_START.x}%`, top: `${BALL_START.y}%`, transform: 'translate(-50%, -50%)' }}
+          style={{
+            left: pick && pickedZone ? `${pickedZone.x}%` : `${BALL_START.x}%`,
+            top:  pick && pickedZone ? `${pickedZone.y}%` : `${BALL_START.y}%`,
+            transform: 'translate(-50%, -50%)',
+            transition: 'left 0.35s cubic-bezier(.4,1.4,.6,1), top 0.35s cubic-bezier(.4,1.4,.6,1)',
+          }}
         >
           {isShooter ? (
-            <div className="text-3xl drop-shadow-lg" style={{ animation: 'penBallBounce 1.2s ease-in-out infinite' }}>⚽</div>
+            <div
+              className="text-3xl drop-shadow-lg"
+              style={{
+                animation: pick ? 'penBallSpin 0.35s linear' : 'penBallBounce 1.2s ease-in-out infinite',
+                filter: pick ? 'drop-shadow(0 0 12px rgba(251,191,36,0.6))' : undefined,
+              }}
+            >⚽</div>
           ) : (
             <div className="text-2xl drop-shadow-lg">🧤</div>
           )}
@@ -142,7 +270,12 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
         {/* Zone overlay buttons */}
         {ZONES.map(z => {
           const picked = pick === z.key
-          // Both roles see the same tap zones — visual differs by role.
+          const pickedClass = picked
+            ? (isShooter
+                ? 'border-emerald-200 ring-2 ring-emerald-300/70 bg-gradient-to-br from-emerald-300/50 to-emerald-500/20'
+                : 'border-sky-200 ring-2 ring-sky-300/70 bg-gradient-to-br from-sky-300/50 to-sky-500/20')
+            : `bg-gradient-to-br ${TILE_GRADIENT[z.key]}`
+          const dim = pick !== null && !picked ? 'opacity-35' : ''
           return (
             <button
               key={z.key}
@@ -150,25 +283,28 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
               onClick={() => _commit(z.key)}
               disabled={pick !== null}
               className={`absolute rounded-xl border-2 transition-all
-                ${picked
-                  ? (isShooter ? 'border-emerald-300 bg-emerald-400/40' : 'border-blue-300 bg-blue-400/40')
-                  : 'border-white/30 bg-white/5 hover:bg-white/15 hover:border-white/60 active:scale-90'}
-                ${pick !== null && !picked ? 'opacity-40' : ''}
+                ${pickedClass}
+                ${pick === null ? 'hover:brightness-125 hover:scale-[1.03] active:scale-95' : ''}
+                ${dim}
                 flex flex-col items-center justify-center
+                backdrop-blur-[1px]
               `}
               style={{
-                // 3×3 grid: each tile ~26% wide × 16% tall, centred on the
-                // zone's (x, y). Half-width 13, half-height 8 → leaves
-                // small gaps between tiles for visual separation.
-                left: `${z.x - 13}%`,
+                // 3×3 grid: each tile 24% wide × 16% tall, half-width 12,
+                // half-height 8. Centres in ZONES are positioned so tiles
+                // sit flush with goal posts/bar with 6% gaps between rows
+                // and columns. See ZONES comment for the math.
+                left: `${z.x - 12}%`,
                 top: `${z.y - 8}%`,
-                width: '26%',
+                width: '24%',
                 height: '16%',
+                animation: picked ? 'penTilePop 0.32s ease-out' : undefined,
+                boxShadow: picked ? '0 0 18px rgba(16,185,129,0.45)' : undefined,
               }}
             >
-              <span className="text-xl font-black text-white drop-shadow leading-none">{z.label}</span>
+              <span className="text-xl font-black text-white drop-shadow-md leading-none">{z.label}</span>
               {isShooter && (
-                <span className="text-[8px] text-white/70 font-bold uppercase tracking-wider mt-0.5">
+                <span className="text-[9px] text-white/85 font-extrabold uppercase tracking-wider mt-0.5">
                   +{z.points}
                 </span>
               )}
@@ -186,12 +322,23 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
               : 'Pick a zone to dive — match the shooter for +5'}
           </p>
         ) : (
-          <div className="space-y-1">
-            <p className="text-emerald-300 text-xs font-bold">
-              {isShooter ? `🎯 Aiming ${pick}` : `🤲 Diving ${pick}`}
-            </p>
-            <p className="text-gray-500 text-[10px]">Waiting for opponent…</p>
+          <div className="flex items-center justify-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full border ${
+                isShooter
+                  ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/50'
+                  : 'bg-sky-500/20 text-sky-200 border-sky-400/50'
+              }`}
+              style={{ animation: 'penLockedPulse 1.4s ease-in-out infinite' }}
+            >
+              <span>{isShooter ? '🎯' : '🤲'}</span>
+              <span>{isShooter ? `Aiming ${pick}` : `Diving ${pick}`}</span>
+              <span className="opacity-70">· Locked</span>
+            </span>
           </div>
+        )}
+        {pick !== null && (
+          <p className="text-gray-500 text-[10px] mt-1.5">Waiting for opponent…</p>
         )}
       </div>
 
@@ -199,6 +346,27 @@ export default function PenaltyShootout({ config, startedAtMs, durationMs, onSub
         @keyframes penBallBounce {
           0%, 100% { transform: translate(-50%, -50%) scale(1); }
           50%      { transform: translate(-50%, -54%) scale(1.06); }
+        }
+        @keyframes penBallShadow {
+          0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.55; }
+          50%      { transform: translate(-50%, -50%) scale(0.78); opacity: 0.85; }
+        }
+        @keyframes penBallSpin {
+          0%   { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+          100% { transform: translate(-50%, -50%) rotate(220deg) scale(0.85); }
+        }
+        @keyframes penKeeperSway {
+          0%, 100% { transform: translate(-50%, -50%) translateX(-7px) rotate(-3deg); }
+          50%      { transform: translate(-50%, -50%) translateX( 7px) rotate( 3deg); }
+        }
+        @keyframes penTilePop {
+          0%   { transform: scale(1); }
+          45%  { transform: scale(1.08); }
+          100% { transform: scale(1); }
+        }
+        @keyframes penLockedPulse {
+          0%, 100% { opacity: 1;   transform: scale(1);     }
+          50%      { opacity: 0.82; transform: scale(0.97); }
         }
       `}</style>
     </div>

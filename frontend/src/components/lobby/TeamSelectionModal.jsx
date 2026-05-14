@@ -693,10 +693,11 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
 
       {/* ── Header ── */}
       <div className="flex-shrink-0 flex items-center justify-between px-4 pt-5 pb-3">
-        <button
-          onClick={onDone}
-          className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-400 hover:text-white text-sm"
-        >✕</button>
+        {/* Spacer to keep the centred title visually centred without giving
+            users an exit hatch — closing mid-draft would orphan the room's
+            half-finished selection. The legitimate exit is "leave room" on
+            the lobby. */}
+        <div className="w-8 h-8" aria-hidden="true" />
 
         <div className="text-center">
           <p className="text-white font-bold text-sm tracking-wider uppercase">
