@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { friendsApi } from '../services/api'
 import { useFriendCredits } from '../hooks/useCredits'
+import { useAuth } from '../hooks/useAuth'
+import InviteShareSheet from '../components/InviteShareSheet'
 
 const AVATAR_COLORS = [
   'from-violet-500 to-fuchsia-600',
@@ -153,6 +155,8 @@ function AddFriendForm({ onAdd }) {
 export default function FriendsPage() {
   const [data, setData] = useState({ accepted: [], incoming: [], outgoing: [] })
   const [loading, setLoading] = useState(true)
+  const [shareOpen, setShareOpen] = useState(false)
+  const { user } = useAuth()
   const { friends: friendCredits, refresh: refreshCredits } = useFriendCredits()
 
   // Map friendId -> credit balance for the accepted-friends list. The
@@ -200,9 +204,36 @@ export default function FriendsPage() {
 
   return (
     <div className="px-6 pt-8 pb-12 max-w-md mx-auto">
-      <h1 className="text-white text-2xl font-bold tracking-tight mb-6">Friends</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-white text-2xl font-bold tracking-tight">Friends</h1>
+        <button
+          type="button"
+          onClick={() => setShareOpen(true)}
+          className="text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full transition-all active:scale-95 flex items-center gap-1.5"
+          style={{
+            background: 'linear-gradient(135deg, rgba(220,38,38,0.30) 0%, rgba(153,27,27,0.20) 100%)',
+            border: '1px solid rgba(248,113,113,0.45)',
+            color: '#fca5a5',
+            boxShadow: '0 0 14px -4px rgba(220,38,38,0.45)',
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+            <polyline points="16 6 12 2 8 6" />
+            <line x1="12" y1="2" x2="12" y2="15" />
+          </svg>
+          Share invite
+        </button>
+      </div>
 
       <AddFriendForm onAdd={handleAdd} />
+
+      <InviteShareSheet
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        inviterUserId={user?.userId}
+        inviterName={user?.displayName}
+      />
 
       {loading && (
         <p className="text-gray-500 text-sm text-center py-8">Loading…</p>

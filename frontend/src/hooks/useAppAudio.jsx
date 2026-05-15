@@ -35,6 +35,15 @@ const KEYS = {
   appVolume:    'appAudioVolume',     // user-adjustable 0..1
   appPosition:  'appAudioPosition',   // {trackId, position} — resume across refresh
   introEnabled: 'introAudioEnabled',
+  // Albums + playback modes (Spotify-style):
+  // - albums: user-curated playlists, [{id, name, trackIds[], createdAt}]
+  // - activeAlbumId: null = "all unlocked tracks"; otherwise album id
+  // - shuffle: random next-track pick when auto-advancing
+  // - repeatMode: 'off' (default) | 'one' (replay current on ended)
+  albums:         'appAudioAlbums',
+  activeAlbumId:  'appAudioActiveAlbumId',
+  shuffle:        'appAudioShuffle',
+  repeatMode:     'appAudioRepeatMode',
 }
 
 function _readPosition() {
@@ -83,6 +92,42 @@ function _writeString(key, value) {
   try { localStorage.setItem(key, value) } catch {}
 }
 
+function _readJSON(key, defaultValue) {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return defaultValue
+    const parsed = JSON.parse(raw)
+    return parsed ?? defaultValue
+  } catch { return defaultValue }
+}
+function _writeJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+}
+
+function _uuid() {
+  try { return crypto.randomUUID() } catch {
+    return `a-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  }
+}
+
+// Pure helper: given the user's albums + activeAlbumId, derive the
+// ordered list of tracks the playback engine should rotate through.
+// Always intersects with `!requiredBadge` so badge-locked discs never
+// auto-play even if a user dragged them into an album. The default
+// (activeAlbumId === null) is the full unlocked rotation, matching
+// pre-album behaviour.
+function _resolvePlaylist(albums, activeAlbumId) {
+  const baseUnlocked = TRACKS.filter(t => !t.requiredBadge)
+  if (!activeAlbumId) return baseUnlocked
+  const album = (albums || []).find(a => a.id === activeAlbumId)
+  if (!album || !Array.isArray(album.trackIds) || album.trackIds.length === 0) {
+    return baseUnlocked
+  }
+  const ids = new Set(album.trackIds)
+  const ordered = baseUnlocked.filter(t => ids.has(t.id))
+  return ordered.length > 0 ? ordered : baseUnlocked
+}
+
 // Module-level helper so IntroSplash can read the prefs synchronously
 // at mount, before this provider has rendered (the provider only
 // lives in the post-auth Layout).
@@ -104,6 +149,26 @@ export function AppAudioProvider({ children }) {
   const [appTrackId,   setAppTrackIdState]   = useState(() => _readString(KEYS.appTrack,   DEFAULT_TRACK_ID))
   const [appVolume,    setAppVolumeState]    = useState(() => _readFloat(KEYS.appVolume,   TARGET_VOLUME))
   const [introEnabled, setIntroEnabledState] = useState(() => _readBool(KEYS.introEnabled, true))
+
+  // Spotify-style state
+  const [albums,         setAlbumsState]         = useState(() => _readJSON(KEYS.albums, []))
+  const [activeAlbumId,  setActiveAlbumIdState]  = useState(() => _readString(KEYS.activeAlbumId, '') || null)
+  const [shuffle,        setShuffleState]        = useState(() => _readBool(KEYS.shuffle, false))
+  const [repeatMode,     setRepeatModeState]     = useState(() => _readString(KEYS.repeatMode, 'off'))
+
+  // Refs mirror the playback-mode state so the `ended` listener (set up
+  // once per appTrackId/appEnabled change) can read the LATEST values
+  // when a track finishes — without re-creating the listener (and
+  // restarting playback) every time the user toggles shuffle/repeat or
+  // edits an album mid-track.
+  const albumsRef        = useRef(albums)
+  const activeAlbumIdRef = useRef(activeAlbumId)
+  const shuffleRef       = useRef(shuffle)
+  const repeatModeRef    = useRef(repeatMode)
+  useEffect(() => { albumsRef.current        = albums        }, [albums])
+  useEffect(() => { activeAlbumIdRef.current = activeAlbumId }, [activeAlbumId])
+  useEffect(() => { shuffleRef.current       = shuffle       }, [shuffle])
+  useEffect(() => { repeatModeRef.current    = repeatMode    }, [repeatMode])
 
   const appTrack = getTrackById(appTrackId)
 
@@ -178,16 +243,34 @@ export function AppAudioProvider({ children }) {
     }
     tryPlay()
 
-    // FIFA-style auto-advance: when the current track ends, jump to
-    // the next unlocked track in the catalog. Wraps at the end.
+    // FIFA-style auto-advance: when the current track ends, decide what
+    // plays next based on:
+    //   - repeatMode === 'one' → replay the same track (fastest path)
+    //   - shuffle === true     → random pick from active playlist
+    //   - default              → sequential within active playlist, wrap
+    //
+    // Active playlist comes from `_resolvePlaylist` which folds in the
+    // user's selected album (or null = all-unlocked). Albums that filter
+    // down to nothing safely fall back to the full unlocked rotation.
     const onEnded = () => {
-      const unlocked = TRACKS.filter(t => !t.requiredBadge)
-      if (unlocked.length <= 1) return
-      const idx = unlocked.findIndex(t => t.id === appTrackId)
-      const next = unlocked[(idx + 1) % unlocked.length]
+      if (repeatModeRef.current === 'one') {
+        try { a.currentTime = 0; a.play() } catch {}
+        return
+      }
+      const playlist = _resolvePlaylist(albumsRef.current, activeAlbumIdRef.current)
+      if (playlist.length <= 1) return
+
+      let next
+      if (shuffleRef.current) {
+        // Pick a random track other than the current one. With only 2
+        // tracks this is deterministic (the "other one"), which is fine.
+        const candidates = playlist.filter(t => t.id !== appTrackId)
+        next = candidates[Math.floor(Math.random() * candidates.length)]
+      } else {
+        const idx = playlist.findIndex(t => t.id === appTrackId)
+        next = playlist[(idx + 1) % playlist.length]
+      }
       if (next && next.id !== appTrackId) {
-        // Reset saved position for the new track — it should start
-        // fresh, not resume from wherever the user last left off.
         _writePosition(next.id, 0)
         setAppTrackIdState(next.id)
         _writeString(KEYS.appTrack, next.id)
@@ -247,6 +330,82 @@ export function AppAudioProvider({ children }) {
   const setIntroEnabled = (next) => { setIntroEnabledState(next); _writeBool(KEYS.introEnabled, next) }
   const toggleIntro     = () => setIntroEnabled(!introEnabled)
 
+  // -----------------------------------------------------------------
+  // Albums + playback modes (Spotify-style)
+  // -----------------------------------------------------------------
+
+  const _persistAlbums = (next) => { setAlbumsState(next); _writeJSON(KEYS.albums, next) }
+
+  const createAlbum = (name) => {
+    const cleanName = (name || '').trim() || `Album ${albums.length + 1}`
+    const album = {
+      id:        _uuid(),
+      name:      cleanName,
+      trackIds:  [],
+      createdAt: new Date().toISOString(),
+    }
+    _persistAlbums([...albums, album])
+    return album.id
+  }
+
+  const deleteAlbum = (id) => {
+    const next = albums.filter(a => a.id !== id)
+    _persistAlbums(next)
+    if (activeAlbumId === id) setActiveAlbum(null)
+  }
+
+  const renameAlbum = (id, newName) => {
+    const cleanName = (newName || '').trim()
+    if (!cleanName) return
+    _persistAlbums(albums.map(a => a.id === id ? { ...a, name: cleanName } : a))
+  }
+
+  // Toggle a track in/out of an album. Idempotent — calling twice with
+  // the same trackId leaves the album in its original state.
+  const toggleAlbumTrack = (albumId, trackId) => {
+    _persistAlbums(albums.map(a => {
+      if (a.id !== albumId) return a
+      const has = a.trackIds.includes(trackId)
+      return {
+        ...a,
+        trackIds: has ? a.trackIds.filter(t => t !== trackId) : [...a.trackIds, trackId],
+      }
+    }))
+  }
+
+  // Setting the active album to `null` reverts to the all-unlocked
+  // rotation. Setting to a specific id also jumps playback to the first
+  // track of that album so the user gets immediate feedback.
+  const setActiveAlbum = (id) => {
+    setActiveAlbumIdState(id || null)
+    _writeString(KEYS.activeAlbumId, id || '')
+    if (id) {
+      const album = albums.find(a => a.id === id)
+      if (album && album.trackIds.length > 0) {
+        const first = TRACKS.find(t => t.id === album.trackIds[0] && !t.requiredBadge)
+        if (first && first.id !== appTrackId) {
+          _writePosition(first.id, 0)
+          setAppTrackIdState(first.id)
+          _writeString(KEYS.appTrack, first.id)
+        }
+      }
+    }
+  }
+
+  const toggleShuffle = () => {
+    const next = !shuffle
+    setShuffleState(next)
+    _writeBool(KEYS.shuffle, next)
+  }
+
+  // Three-way cycle: off → one → off. (Spotify also offers "all" but our
+  // sequential mode already wraps, so "all" is implicit.)
+  const cycleRepeatMode = () => {
+    const next = repeatMode === 'one' ? 'off' : 'one'
+    setRepeatModeState(next)
+    _writeString(KEYS.repeatMode, next)
+  }
+
   return (
     <AppAudioContext.Provider value={{
       // App music
@@ -257,6 +416,12 @@ export function AppAudioProvider({ children }) {
       introEnabled, toggleIntro, setIntroEnabled,
       // List of currently-unlocked tracks for the Profile picker.
       tracks: TRACKS,
+      // Albums + playback modes
+      albums, activeAlbumId,
+      createAlbum, deleteAlbum, renameAlbum,
+      toggleAlbumTrack, setActiveAlbum,
+      shuffle, toggleShuffle,
+      repeatMode, cycleRepeatMode,
     }}>
       <audio ref={audioRef} preload="auto" playsInline />
       {children}
@@ -273,6 +438,11 @@ export function useAppAudio() {
       appVolume: TARGET_VOLUME, setAppVolume: () => {},
       introEnabled: true, toggleIntro: () => {}, setIntroEnabled: () => {},
       tracks: TRACKS,
+      albums: [], activeAlbumId: null,
+      createAlbum: () => {}, deleteAlbum: () => {}, renameAlbum: () => {},
+      toggleAlbumTrack: () => {}, setActiveAlbum: () => {},
+      shuffle: false, toggleShuffle: () => {},
+      repeatMode: 'off', cycleRepeatMode: () => {},
     }
   }
   return ctx
