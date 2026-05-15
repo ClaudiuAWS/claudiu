@@ -178,7 +178,7 @@ export default function IntroSplash({ onFinish }) {
           // viewport the moment the brand panel begins fading in. Same
           // 2.0× scale AuthLayout uses, so the cut to /login lands on
           // continuous framing.
-          transform: showBumper ? 'scale(2.0)' : 'scale(1.0)',
+          transform: showBumper ? 'scale(3.0)' : 'scale(1.0)',
           transformOrigin: 'center center',
           transition: 'transform 2.5s cubic-bezier(0.45, 0, 0.55, 1)',
         }}

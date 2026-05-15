@@ -212,13 +212,12 @@ export default function AuthLayout() {
   // quirk. The fix that finally killed the mobile black bars.
   const videoStyle = {
     position: 'fixed',
-    top: 0,
-    left: 0,
+    inset: 0,
     width: '100vw',
     height: '100vh',
     objectFit: 'cover',
     pointerEvents: 'none',
-    transform: 'scale(2.0)',
+    transform: 'scale(3.0)',
     transformOrigin: 'center center',
     transition: `opacity ${CROSSFADE_DURATION}s ease-in-out`,
     zIndex: 0,
