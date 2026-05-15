@@ -274,3 +274,19 @@ export const TIER_COLORS = {
   silver: '#c0c0c0',
   gold:   '#ffd700',
 }
+
+// In-game currency price to purchase a badge of the given tier. Tied
+// to the credit earn-rate in `backend/event-processor/service.py`
+// (positive fantasy delta × 2). A bronze badge ≈ 10 goals of scoring;
+// gold ≈ 75 goals. Earning the badge in-match is always free; this is
+// the alternative path for users who want to grind credits instead.
+export const TIER_PRICES = {
+  bronze: 200,
+  silver: 500,
+  gold:   1500,
+}
+
+export function getBadgePrice(badge) {
+  if (!badge) return 0
+  return TIER_PRICES[badge.tier] ?? 0
+}

@@ -31,29 +31,86 @@ Resources:
                                           Effect: Allow
                                           Action:
                                                   - lambda:UpdateFunctionCode
+                                                  - lambda:UpdateFunctionConfiguration
                                                   - lambda:GetFunction
+                                                  - lambda:GetFunctionConfiguration
+                                                  - lambda:CreateFunction
+                                                  - lambda:DeleteFunction
+                                                  - lambda:TagResource
+                                                  - lambda:UntagResource
+                                                  - lambda:ListTags
                                           Resource:
                                                   - !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-*
 
-                                        # CloudFormation deploys for infra/compute/** stacks.
-                                        # Scoped to the api-gateway-claudiu stack — extend the
-                                        # resource list if other stacks should auto-deploy.
+                                        # CloudFormation deploys. The api-gateway-claudiu stack
+                                        # is the original; everything else lives under the
+                                        # `claudiu-*` / `*-claudiu` naming convention so the
+                                        # wildcards stay tight.
                                         - Sid: CloudFormationDeploy
                                           Effect: Allow
                                           Action:
+                                                  - cloudformation:CreateStack
+                                                  - cloudformation:UpdateStack
+                                                  - cloudformation:DeleteStack
                                                   - cloudformation:CreateChangeSet
                                                   - cloudformation:DescribeChangeSet
                                                   - cloudformation:ExecuteChangeSet
                                                   - cloudformation:DeleteChangeSet
                                                   - cloudformation:DescribeStacks
                                                   - cloudformation:DescribeStackEvents
+                                                  - cloudformation:DescribeStackResource
+                                                  - cloudformation:DescribeStackResources
                                                   - cloudformation:GetTemplate
                                                   - cloudformation:GetTemplateSummary
                                                   - cloudformation:ListStackResources
-                                                  - cloudformation:UpdateStack
+                                                  - cloudformation:ListStacks
                                                   - cloudformation:ValidateTemplate
                                           Resource:
                                                   - !Sub arn:aws:cloudformation:eu-central-1:${AWS::AccountId}:stack/api-gateway-claudiu/*
+                                                  - !Sub arn:aws:cloudformation:eu-central-1:${AWS::AccountId}:stack/claudiu-*/*
+
+                                        # DynamoDB table management for new service stacks
+                                        # (claudiu-credits, future claudiu-inventory, etc.).
+                                        # Scoped to claudiu-* tables only.
+                                        - Sid: DynamoDBManage
+                                          Effect: Allow
+                                          Action:
+                                                  - dynamodb:CreateTable
+                                                  - dynamodb:UpdateTable
+                                                  - dynamodb:DeleteTable
+                                                  - dynamodb:DescribeTable
+                                                  - dynamodb:DescribeTimeToLive
+                                                  - dynamodb:UpdateTimeToLive
+                                                  - dynamodb:DescribeContinuousBackups
+                                                  - dynamodb:TagResource
+                                                  - dynamodb:UntagResource
+                                                  - dynamodb:ListTagsOfResource
+                                          Resource:
+                                                  - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-*
+
+                                        # IAM management for the per-Lambda execution roles
+                                        # defined inside the *-lambda.yml CFN templates. Scope
+                                        # is narrow — only claudiu-* role names.
+                                        - Sid: IAMRoleManage
+                                          Effect: Allow
+                                          Action:
+                                                  - iam:CreateRole
+                                                  - iam:DeleteRole
+                                                  - iam:GetRole
+                                                  - iam:UpdateRole
+                                                  - iam:UpdateAssumeRolePolicy
+                                                  - iam:AttachRolePolicy
+                                                  - iam:DetachRolePolicy
+                                                  - iam:PutRolePolicy
+                                                  - iam:DeleteRolePolicy
+                                                  - iam:GetRolePolicy
+                                                  - iam:ListRolePolicies
+                                                  - iam:ListAttachedRolePolicies
+                                                  - iam:PassRole
+                                                  - iam:TagRole
+                                                  - iam:UntagRole
+                                          Resource:
+                                                  - !Sub arn:aws:iam::${AWS::AccountId}:role/claudiu-*
 
                                         # API Gateway resources are managed by the
                                         # api-gateway-claudiu stack. Wildcard scope is

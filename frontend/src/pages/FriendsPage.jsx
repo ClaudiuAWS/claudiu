@@ -3,6 +3,7 @@ import { friendsApi } from '../services/api'
 import { useFriendCredits } from '../hooks/useCredits'
 import { useAuth } from '../hooks/useAuth'
 import InviteShareSheet from '../components/InviteShareSheet'
+import PretzelCoin from '../components/ui/PretzelCoin'
 
 const AVATAR_COLORS = [
   'from-violet-500 to-fuchsia-600',
@@ -57,9 +58,9 @@ function FriendRow({ friend, actions, credits }) {
             background: 'rgba(250,204,21,0.10)',
             border: '1px solid rgba(250,204,21,0.25)',
           }}
-          title="In-game credits"
+          title="Brezn — in-game currency"
         >
-          <span className="text-amber-300 text-[11px] leading-none">¢</span>
+          <PretzelCoin size={11} color="#fcd34d" />
           <span className="text-amber-200 text-[10px] font-bold tracking-wider tabular-nums">
             {credits.toLocaleString()}
           </span>

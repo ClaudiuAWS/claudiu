@@ -316,9 +316,31 @@ BADGE_CATALOG = {
 }
 
 
+# Purchase price (credits) per badge tier. Mirror of frontend
+# `TIER_PRICES` in utils/badges.js — kept in sync by convention.
+# Earning in-match is always free; this is the credit-grind path.
+TIER_PRICES = {
+    'bronze': 200,
+    'silver': 500,
+    'gold':   1500,
+}
+
+
+def get_price(badge_id: str) -> int:
+    entry = BADGE_CATALOG.get(badge_id) or {}
+    return TIER_PRICES.get(entry.get('tier'), 0)
+
+
 def get_catalog():
-    """Public catalog — list form, ordered by insertion."""
-    return list(BADGE_CATALOG.values())
+    """Public catalog — list form, ordered by insertion. Each row gets
+    the tier price stamped on it so the frontend doesn't have to keep
+    a parallel copy of the price table."""
+    out = []
+    for entry in BADGE_CATALOG.values():
+        row = dict(entry)
+        row['creditPrice'] = TIER_PRICES.get(entry.get('tier'), 0)
+        out.append(row)
+    return out
 
 
 # --------------------------------------------------------------------------
