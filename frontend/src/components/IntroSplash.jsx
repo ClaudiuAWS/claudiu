@@ -104,9 +104,11 @@ export default function IntroSplash({ onFinish }) {
 
     const prefs = getIntroAudioPrefs()
 
-    // Seek BOTH to TRIM_START so the first play AND the first
-    // cross-fade target both land at the loop-back point.
-    try { a.currentTime = TRIM_START } catch {}
+    // First play: A plays from 0 so the user sees the full intro
+    // (silver-trophy / Ribéry beat) on first load.
+    // Standby: B is the cross-fade target — seek to TRIM_START so the
+    // loop re-enters past the trimmed-out intro on every subsequent
+    // wrap. Subsequent cross-fades go A↔B with both at TRIM_START.
     try { b.currentTime = TRIM_START } catch {}
 
     // Play A unmuted (the tap is the user gesture granting audio).
