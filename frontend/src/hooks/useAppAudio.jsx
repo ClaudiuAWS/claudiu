@@ -105,6 +105,14 @@ export function AppAudioProvider({ children }) {
 
   // (Re)load + play whenever appEnabled flips on or the chosen
   // app track changes.
+  //
+  // Resilience: after a hard refresh, the browser blocks autoplay
+  // until a user gesture lands. We register a CAPTURE-phase
+  // pointerdown/keydown listener that stays armed until `a.play()`
+  // actually resolves — so the first gesture (any tap, anywhere)
+  // wakes the audio, and subsequent gestures keep retrying if the
+  // first play() rejects for any reason. Capture phase ensures the
+  // retry fires before any in-tree handler can stopPropagation.
   useEffect(() => {
     const a = audioRef.current
     if (!a || !appTrack) return
@@ -119,21 +127,27 @@ export function AppAudioProvider({ children }) {
       a.src = targetSrc
     }
 
-    const attemptPlay = () => {
+    let cleanupRetry = null
+
+    const tryPlay = () => {
       const p = a.play()
-      if (p && typeof p.catch === 'function') {
-        p.catch(() => {
-          const retry = () => {
-            window.removeEventListener('pointerdown', retry)
-            window.removeEventListener('keydown',     retry)
-            try { a.play() } catch {}
-          }
-          window.addEventListener('pointerdown', retry, { once: true })
-          window.addEventListener('keydown',     retry, { once: true })
-        })
-      }
+      if (!p || typeof p.then !== 'function') return
+      p.then(() => {
+        if (cleanupRetry) { cleanupRetry(); cleanupRetry = null }
+      }).catch(() => {
+        if (cleanupRetry) return // already armed
+        const retry = () => tryPlay()
+        window.addEventListener('pointerdown', retry, { capture: true })
+        window.addEventListener('keydown',     retry, { capture: true })
+        cleanupRetry = () => {
+          window.removeEventListener('pointerdown', retry, { capture: true })
+          window.removeEventListener('keydown',     retry, { capture: true })
+        }
+      })
     }
-    attemptPlay()
+    tryPlay()
+
+    return () => { if (cleanupRetry) cleanupRetry() }
   }, [appEnabled, appTrackId, appTrack])
 
   // App setters
