@@ -12,6 +12,7 @@ import CreateRoom from '../components/lobby/CreateRoom'
 import JoinRoom from '../components/lobby/JoinRoom'
 import TeamSelectionModal from '../components/lobby/TeamSelectionModal'
 import InviteFriendsModal from '../components/lobby/InviteFriendsModal'
+import DraftRevealShow from '../components/lobby/DraftRevealShow'
 
 export default function LobbyPage() {
   const { matchId } = useParams()
@@ -23,6 +24,7 @@ export default function LobbyPage() {
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
   const [starting, setStarting] = useState(false)
   const [speedMultiplier, setSpeedMultiplier] = useState(5)
+  const [revealOpen, setRevealOpen] = useState(false)
   const navigate = useNavigate()
 
   const handleMatchStarted = (mid) => {
@@ -59,6 +61,21 @@ export default function LobbyPage() {
   useEffect(() => {
     if (draftActive && !teamModalOpen && !hasTeam) setTeamModalOpen(true)
   }, [draftActive, teamModalOpen, hasTeam])
+
+  // Fire the pre-match Draft Reveal Show once all members have locked
+  // their 11. Uses sessionStorage to guarantee it only plays once per
+  // room session — re-opening the lobby on a refresh doesn't re-trigger.
+  useEffect(() => {
+    if (!room?.roomCode) return
+    const members = room.members ?? []
+    if (members.length === 0) return
+    const allLocked = members.every(m => (m.teamSelection?.length ?? 0) === 11)
+    if (!allLocked) return
+    const flagKey = `lobby_reveal_shown_${room.roomCode}`
+    if (sessionStorage.getItem(flagKey)) return
+    sessionStorage.setItem(flagKey, '1')
+    setRevealOpen(true)
+  }, [room?.roomCode, room?.members])
 
   useEffect(() => {
     if (!isLive || !room?.roomCode) return
@@ -270,6 +287,12 @@ export default function LobbyPage() {
           onClose={() => setInviteModalOpen(false)}
         />
       )}
+
+      <DraftRevealShow
+        open={revealOpen}
+        room={room}
+        onClose={() => setRevealOpen(false)}
+      />
     </div>
   )
 }
