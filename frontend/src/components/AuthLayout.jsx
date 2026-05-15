@@ -96,10 +96,23 @@ export default function AuthLayout() {
     }
     engage()
 
-    const rampActiveIn = (durationMs = 1000) => {
+    // Equal-power fade-in: sin(π/2·t) rises 0 → 1 with a curve
+    // that pairs cleanly against the splash's cos(π/2·t) fade-out,
+    // so the perceived loudness stays roughly constant through the
+    // handoff (cos² + sin² = 1) instead of dipping mid-crossfade.
+    const rampActiveInSine = (durationMs = 1500) => {
       const active = activeRef.current === 'a' ? a : b
       try { active.muted = false; active.volume = 0 } catch {}
-      return rampVolume(active, 0, TARGET_VOLUME, durationMs)
+      const start = performance.now()
+      return new Promise((resolve) => {
+        const tick = (now) => {
+          const t = Math.min(1, (now - start) / durationMs)
+          try { active.volume = TARGET_VOLUME * Math.sin((Math.PI / 2) * t) } catch {}
+          if (t < 1 && !disposed) requestAnimationFrame(tick)
+          else resolve()
+        }
+        requestAnimationFrame(tick)
+      })
     }
 
     const introSeen = (() => {
@@ -109,11 +122,20 @@ export default function AuthLayout() {
     let onIntroEnding
     let initialRampTimer
     if (introSeen) {
-      initialRampTimer = setTimeout(() => rampActiveIn(800), 100)
+      initialRampTimer = setTimeout(() => rampActiveInSine(800), 100)
     } else {
       onIntroEnding = (e) => {
-        const duration = e?.detail?.durationMs || 1000
-        rampActiveIn(duration)
+        const duration = e?.detail?.durationMs || 1500
+        const handoffTime = e?.detail?.currentTime
+        // Sync the active video to the splash's exact currentTime so
+        // the crossfade is between two identical musical positions —
+        // only the volume changes, not the audio content. Kills the
+        // "broken record" wash at the intro→login handoff.
+        const active = activeRef.current === 'a' ? a : b
+        if (typeof handoffTime === 'number' && isFinite(handoffTime) && handoffTime > 0) {
+          try { active.currentTime = handoffTime } catch {}
+        }
+        rampActiveInSine(duration)
       }
       window.addEventListener('claudiu:intro-ending', onIntroEnding)
     }

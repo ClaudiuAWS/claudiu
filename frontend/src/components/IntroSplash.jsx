@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { getIntroAudioPrefs } from '../hooks/useAppAudio'
 
 const STORAGE_KEY = 'claudiu_intro_seen'
-const TRIM_START = 6.5             // loop-back point, past the Ribéry silver-trophy "wooow" beat
-const END_PAD    = 0.5             // seek back this many seconds before duration so the dark tail never paints
-const BUMPER_AT = 29.5             // when the geometric brand panel fades in over the still-playing video
-const FADE_DURATION_MS = 1000
+const TRIM_START = 6.5
+const END_PAD    = 0.5
+const BUMPER_AT  = 29.5
+const FADE_DURATION_MS = 1500   // longer + equal-power curve = smoother intro→login handoff
 
 function pickSrc() {
   if (typeof window === 'undefined') return '/intro-mobile.mp4'
@@ -14,21 +14,25 @@ function pickSrc() {
 }
 
 /**
- * Intro splash with TAP TO BEGIN pre-roll.
+ * Intro splash.
  *
- * On mount the video is paused on its poster frame and a TAP TO BEGIN
- * hint pulses on screen. The first tap is the user gesture that the
- * browser requires to allow audio playback — handleStart() plays the
- * video unmuted in response. From there the existing flow runs: the
- * cinematic zoom + brand panel fade in at BUMPER_AT, the video loops
- * pre-emptively at duration - END_PAD, and a second tap (anywhere)
- * fades the splash out and signals AuthLayout's bg-audio crossfade.
+ * Pre-roll: black background + the geometric brand panel idling
+ * with float + logo-tilt animations + a TAP TO BEGIN prompt. Video
+ * stays paused (opacity 0). First tap triggers a brief press
+ * animation, starts the video unmuted (using that gesture for
+ * browser audio permission), and fades the panel out.
  *
- * Why pre-roll: browsers hard-block autoplay-with-sound without a
- * gesture or sufficient Media Engagement Index. On a fresh mobile
- * visit (no MEI), there's no way to start audio without a tap. The
- * pre-roll makes that tap deliberate so the user hears the intro
- * from frame 0.
+ * Playback: video plays at scale 1.0 until BUMPER_AT, then the
+ * cinematic zoom (1.0 → 3.0) runs while the brand panel fades back
+ * in with the same design but a TAP ANYWHERE prompt. Loop is
+ * pre-emptive at duration - END_PAD.
+ *
+ * Fade-out: on the bumper tap, the splash fades over FADE_DURATION_MS
+ * with an equal-power cosine curve on the audio. `claudiu:intro-ending`
+ * event carries the splash's currentTime so AuthLayout can seek its
+ * own video to the same position before its sine-curve fade-in —
+ * making the crossfade between two identical musical positions
+ * inaudible.
  */
 export default function IntroSplash({ onFinish }) {
   const videoRef = useRef(null)
@@ -36,6 +40,7 @@ export default function IntroSplash({ onFinish }) {
   const bumperShownRef = useRef(false)
   const [src] = useState(pickSrc)
   const [started, setStarted] = useState(false)
+  const [pressing, setPressing] = useState(false)
   const [showBumper, setShowBumper] = useState(false)
   const [fadingOut, setFadingOut] = useState(false)
 
@@ -45,15 +50,23 @@ export default function IntroSplash({ onFinish }) {
     setFadingOut(true)
     try { sessionStorage.setItem(STORAGE_KEY, '1') } catch {}
 
-    try { window.dispatchEvent(new CustomEvent('claudiu:intro-ending', { detail: { durationMs: FADE_DURATION_MS } })) } catch {}
-
     const v = videoRef.current
+    const handoffTime = v ? v.currentTime : null
+
+    try {
+      window.dispatchEvent(new CustomEvent('claudiu:intro-ending', {
+        detail: { durationMs: FADE_DURATION_MS, currentTime: handoffTime },
+      }))
+    } catch {}
+
     if (v) {
       const startVol = v.volume || 1
       const startTime = performance.now()
       const tick = (now) => {
         const t = Math.min(1, (now - startTime) / FADE_DURATION_MS)
-        try { v.volume = startVol * (1 - t) } catch {}
+        // Equal-power fade-out: cos(π/2·t) goes 1 → 0 with a curve
+        // that pairs cleanly against AuthLayout's sin(π/2·t) fade-in.
+        try { v.volume = startVol * Math.cos((Math.PI / 2) * t) } catch {}
         if (t < 1) requestAnimationFrame(tick)
         else { try { v.pause() } catch {} }
       }
@@ -65,7 +78,11 @@ export default function IntroSplash({ onFinish }) {
 
   const handleStart = () => {
     if (started || finishedRef.current) return
+    setPressing(true)
     setStarted(true)
+    // Press animation runs ~200ms; reset the flag after CSS completes.
+    setTimeout(() => setPressing(false), 250)
+
     const v = videoRef.current
     if (!v) return
     const prefs = getIntroAudioPrefs()
@@ -76,8 +93,6 @@ export default function IntroSplash({ onFinish }) {
     const p = v.play()
     if (p && typeof p.catch === 'function') {
       p.catch(() => {
-        // Even a gesture sometimes isn't enough (very rare). Fall
-        // back to muted so at least the video animates.
         try { v.muted = true } catch {}
         v.play().catch(() => {})
       })
@@ -102,9 +117,6 @@ export default function IntroSplash({ onFinish }) {
     if (v.readyState >= 1) seek()
     else v.addEventListener('loadedmetadata', seek, { once: true })
 
-    // Pre-emptive loop on top of the bumper trigger — both run inside
-    // the same `timeupdate` handler. The refractory flag stops multiple
-    // `timeupdate` events from re-triggering the seek mid-flight.
     let isLooping = false
     const onTimeUpdate = () => {
       if (v.currentTime >= BUMPER_AT && !bumperShownRef.current) {
@@ -142,6 +154,25 @@ export default function IntroSplash({ onFinish }) {
     }
   }, [])
 
+  // Panel visible in two phases: pre-roll (before started) and bumper.
+  const showPanel = !started || showBumper
+  const inPreRoll = !started
+
+  // Animation string for the panel container.
+  // - Pre-roll idle: gentle vertical float
+  // - On tap: one-shot press
+  // - During playback: no animation (panel is hidden anyway via opacity)
+  const panelAnim = pressing
+    ? 'preRollPress 0.22s ease-out'
+    : inPreRoll
+      ? 'preRollFloat 2.4s ease-in-out infinite'
+      : 'none'
+
+  // Logo tilt — only during pre-roll idle.
+  const logoAnim = inPreRoll && !pressing
+    ? 'preRollLogoTilt 3.6s ease-in-out infinite'
+    : 'none'
+
   return (
     <div
       className="fixed inset-0 z-[100] bg-black cursor-pointer select-none"
@@ -163,40 +194,30 @@ export default function IntroSplash({ onFinish }) {
         poster="/intro-poster.jpg"
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         style={{
-          // Cinematic push-in: the video plays at its natural framing
-          // through the run-up, then smoothly zooms to fill the mobile
-          // viewport the moment the brand panel begins fading in.
+          // Hidden during pre-roll so only the panel + black bg are
+          // visible. Fades in over 500ms once the user taps.
+          opacity: started ? 1 : 0,
+          transition: 'opacity 500ms ease-out',
+          // Cinematic push-in at the bumper.
           transform: showBumper ? 'scale(3.0)' : 'scale(1.0)',
           transformOrigin: 'center center',
-          transition: 'transform 2.5s cubic-bezier(0.45, 0, 0.55, 1)',
+          // The transform transition only applies after `started`
+          // so we don't get a phantom zoom from the initial render.
+          // (We use `style` so React commits this every render; the
+          // long duration is only for the scale transform.)
+          transitionProperty: 'opacity, transform',
+          transitionDuration: '500ms, 2500ms',
+          transitionTimingFunction: 'ease-out, cubic-bezier(0.45, 0, 0.55, 1)',
         }}
       />
 
-      {/* TAP TO BEGIN — pre-roll prompt, hides once the user taps. */}
-      {!started && !fadingOut && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-6">
-          <p
-            className="font-stadium text-white"
-            style={{
-              fontSize: '1.2rem',
-              letterSpacing: '0.4em',
-              textShadow: '0 2px 12px rgba(0,0,0,0.85)',
-              animation: 'introTapPulse 1.6s ease-in-out infinite',
-            }}
-          >
-            TAP TO BEGIN
-          </p>
-        </div>
-      )}
-
-      {/* Geometric brand panel — clipped-corner stadium card sitting
-          over the looping video. Fades in at BUMPER_AT and stays. */}
+      {/* Shared brand panel — pre-roll AND bumper.
+          Only prompt text + idle animations differ between phases. */}
       <div
         className="absolute inset-0 flex items-center justify-center pointer-events-none px-6"
         style={{
-          opacity: showBumper ? 1 : 0,
-          transform: showBumper ? 'translateY(0)' : 'translateY(8px)',
-          transition: 'opacity 700ms ease-out, transform 700ms ease-out',
+          opacity: showPanel ? 1 : 0,
+          transition: 'opacity 700ms ease-out',
         }}
       >
         <div
@@ -208,6 +229,9 @@ export default function IntroSplash({ onFinish }) {
             WebkitBackdropFilter: 'blur(10px) saturate(140%)',
             boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.10)',
             padding: '2.25rem 2.75rem',
+            animation: panelAnim,
+            transformOrigin: 'center center',
+            perspective: '800px',  // gives the logo's rotateY some depth
           }}
         >
           <div
@@ -227,7 +251,13 @@ export default function IntroSplash({ onFinish }) {
             <img
               src="/logo-bf.png"
               alt=""
-              style={{ width: 132, height: 132, display: 'block' }}
+              style={{
+                width: 132,
+                height: 132,
+                display: 'block',
+                animation: logoAnim,
+                transformStyle: 'preserve-3d',
+              }}
             />
           </div>
           <p
@@ -257,10 +287,10 @@ export default function IntroSplash({ onFinish }) {
             style={{
               fontSize: '0.92rem',
               letterSpacing: '0.32em',
-              animation: showBumper ? 'introTapPulse 1.6s ease-in-out 0.6s infinite' : 'none',
+              animation: showPanel ? 'introTapPulse 1.6s ease-in-out 0.6s infinite' : 'none',
             }}
           >
-            TAP ANYWHERE
+            {inPreRoll ? 'TAP TO BEGIN' : 'TAP ANYWHERE'}
           </p>
         </div>
       </div>
@@ -269,6 +299,19 @@ export default function IntroSplash({ onFinish }) {
         @keyframes introTapPulse {
           0%, 100% { opacity: 0.55; }
           50%      { opacity: 1; }
+        }
+        @keyframes preRollFloat {
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-6px); }
+        }
+        @keyframes preRollLogoTilt {
+          0%, 100% { transform: rotateY(-6deg); }
+          50%      { transform: rotateY(6deg); }
+        }
+        @keyframes preRollPress {
+          0%   { transform: scale(1); }
+          40%  { transform: scale(0.96); }
+          100% { transform: scale(1); }
         }
       `}</style>
     </div>
