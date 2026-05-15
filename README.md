@@ -263,3 +263,41 @@ data/                # match dataset loader + reset scripts
 ```
 
 <img width="1308" height="220" alt="Screenshot 2026-05-14 at 15 38 54" src="https://github.com/user-attachments/assets/e768bf47-d9cc-42e4-9c1b-7192165eacc8" />
+
+---
+
+## Music & copyright
+
+The intro splash and in-app background tracks use copyrighted music
+selected purely for **atmosphere** — songs the developer feels evoke
+the nostalgic, anthemic feel of classic football broadcasts and
+games (FIFA, PES, World Cup montages). Tracks are downloaded via
+[`spotdl`](https://github.com/spotDL/spotify-downloader) from public
+YouTube sources for development purposes only. None of the audio is
+authored by the developer or licensed for redistribution.
+
+Iconic picks intentionally include **Shakira — "Waka Waka (This Time
+for Africa)"** (FIFA World Cup 2010 anthem) and **Pitbull — "We Are
+One (Ole Ola)"** (FIFA World Cup 2014 anthem) for the football
+tie-in.
+
+The argument for music as a feature: people are wired to anchor
+strong memories to the songs playing in the background of an
+experience. Football fans who grew up flipping through FIFA menus
+with these tracks recognise them instantly; the nostalgia carries
+the app the same way it carries the games. A demo or hackathon
+project benefits disproportionately — the user is more engaged in
+60 seconds with music than 5 minutes without.
+
+**For a production deployment:** Bundesliga (or whoever the
+production rights-holder is) would need to either license each
+track or replace them with rights-cleared alternatives. The track
+registry at `frontend/src/utils/tracks.js` is a single point of
+swap — drop different `.mp3` files into `frontend/public/songs/`,
+update the catalog entries, and the FIFA-style auto-advance
+playlist will play whatever's listed there.
+
+If the project is shelved or handed off, removing every file from
+`frontend/public/songs/` and emptying `TRACKS` in `tracks.js` (keep
+just the `intro` placeholder) is enough to ship a music-free
+build.

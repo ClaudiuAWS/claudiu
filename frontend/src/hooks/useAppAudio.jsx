@@ -33,7 +33,25 @@ const KEYS = {
   appEnabled:   'appAudioEnabled',
   appTrack:     'appAudioTrackId',
   appVolume:    'appAudioVolume',     // user-adjustable 0..1
+  appPosition:  'appAudioPosition',   // {trackId, position} — resume across refresh
   introEnabled: 'introAudioEnabled',
+}
+
+function _readPosition() {
+  try {
+    const raw = localStorage.getItem(KEYS.appPosition)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed.trackId === 'string' && typeof parsed.position === 'number') {
+      return parsed
+    }
+  } catch {}
+  return null
+}
+function _writePosition(trackId, position) {
+  try {
+    localStorage.setItem(KEYS.appPosition, JSON.stringify({ trackId, position }))
+  } catch {}
 }
 
 function _readFloat(key, defaultValue) {
@@ -90,10 +108,13 @@ export function AppAudioProvider({ children }) {
   const appTrack = getTrackById(appTrackId)
 
   // App-music element setup. Run once.
+  // NOTE: no `a.loop = true` — the FIFA-style auto-advance below
+  // chains tracks via the `ended` event. If loop were on, ended
+  // would never fire and the playlist couldn't progress.
   useEffect(() => {
     const a = audioRef.current
     if (!a) return
-    a.loop = true
+    a.loop = false
   }, [])
 
   // Live-update the audio element's volume when the slider moves.
@@ -125,6 +146,16 @@ export function AppAudioProvider({ children }) {
     const targetSrc = appTrack.file
     if (!a.src.endsWith(targetSrc)) {
       a.src = targetSrc
+      // Restore previous playback position if the user is returning
+      // to the same track (e.g. hard refresh). Setting currentTime
+      // before metadata is loaded would silently no-op, so wait for
+      // `loadedmetadata` when the element isn't ready yet.
+      const saved = _readPosition()
+      if (saved && saved.trackId === appTrackId && saved.position > 1) {
+        const restore = () => { try { a.currentTime = saved.position } catch {} }
+        if (a.readyState >= 1) restore()
+        else a.addEventListener('loadedmetadata', restore, { once: true })
+      }
     }
 
     let cleanupRetry = null
@@ -147,7 +178,55 @@ export function AppAudioProvider({ children }) {
     }
     tryPlay()
 
-    return () => { if (cleanupRetry) cleanupRetry() }
+    // FIFA-style auto-advance: when the current track ends, jump to
+    // the next unlocked track in the catalog. Wraps at the end.
+    const onEnded = () => {
+      const unlocked = TRACKS.filter(t => !t.requiredBadge)
+      if (unlocked.length <= 1) return
+      const idx = unlocked.findIndex(t => t.id === appTrackId)
+      const next = unlocked[(idx + 1) % unlocked.length]
+      if (next && next.id !== appTrackId) {
+        // Reset saved position for the new track — it should start
+        // fresh, not resume from wherever the user last left off.
+        _writePosition(next.id, 0)
+        setAppTrackIdState(next.id)
+        _writeString(KEYS.appTrack, next.id)
+      }
+    }
+    a.addEventListener('ended', onEnded)
+
+    // Throttled position save (~every 3s) so a hard refresh resumes
+    // from approximately where the user was. Capped so we never
+    // save a position that's basically at the end (would auto-end
+    // immediately on resume).
+    let lastSave = 0
+    const onTimeUpdate = () => {
+      const now = performance.now()
+      if (now - lastSave < 3000) return
+      lastSave = now
+      const d = a.duration
+      if (isFinite(d) && d > 0 && a.currentTime < d - 2) {
+        _writePosition(appTrackId, a.currentTime)
+      }
+    }
+    a.addEventListener('timeupdate', onTimeUpdate)
+
+    // Also save on pause — catches the page-unload / tab-hide case
+    // where timeupdate's 3s throttle might miss the last sample.
+    const onPause = () => {
+      const d = a.duration
+      if (isFinite(d) && d > 0 && a.currentTime > 1 && a.currentTime < d - 2) {
+        _writePosition(appTrackId, a.currentTime)
+      }
+    }
+    a.addEventListener('pause', onPause)
+
+    return () => {
+      a.removeEventListener('ended', onEnded)
+      a.removeEventListener('timeupdate', onTimeUpdate)
+      a.removeEventListener('pause', onPause)
+      if (cleanupRetry) cleanupRetry()
+    }
   }, [appEnabled, appTrackId, appTrack])
 
   // App setters
