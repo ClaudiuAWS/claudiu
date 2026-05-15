@@ -68,3 +68,8 @@ export const friendsApi = {
   invite: (friendId, roomCode) => request(`/friends/${friendId}/invite`, 'POST', { roomCode }),
   remove: (friendId)           => request(`/friends/${friendId}`, 'DELETE'),
 }
+
+export const badgesApi = {
+  list:    () => request('/badges'),
+  catalog: () => request('/badges/catalog'),
+}

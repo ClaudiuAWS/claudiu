@@ -5,6 +5,16 @@ from boto3.dynamodb.conditions import Key
 
 import ws
 
+# Badges integration — bundled into this Lambda's zip from
+# `backend/shared/badges.py` by the deploy workflow. The import is
+# wrapped in try/except so a missing module (e.g. an old deploy where
+# the workflow change hasn't shipped yet) cannot break event processing.
+try:
+    import badges as _badges  # type: ignore
+except Exception as _e:  # pragma: no cover
+    _badges = None
+    print(f"[badges] module import skipped: {_e}")
+
 dynamodb = boto3.resource('dynamodb')
 
 matches_table       = dynamodb.Table(os.environ['MATCHES_TABLE'])
@@ -289,6 +299,36 @@ def _score_rooms_for_event(match_id: str, event_type: str, data: dict) -> None:
                 fresh, member_changes, event_type,
                 source_event_id=data.get('eventId') or '',
             )
+
+            # Badges layer (additive — wrapped so a failure here can never
+            # break scoring or the room broadcast above). Reconstructs the
+            # same score_changes shape that _apply_member_changes already
+            # broadcast, then passes it to the badges evaluator. We do
+            # this OUTSIDE _apply_member_changes intentionally to keep its
+            # signature and behaviour 100% unchanged.
+            if _badges is not None:
+                try:
+                    badge_changes = []
+                    for c in member_changes:
+                        if c.get('delta'):
+                            badge_changes.append({
+                                'userId':        c['userId'],
+                                'delta':         c['delta'],
+                                'eventType':     event_type,
+                                'reason':        c.get('reason') or '',
+                                'playerName':    c.get('playerName') or '',
+                                'sourceEventId': data.get('eventId') or '',
+                            })
+                    if badge_changes:
+                        _badges.evaluate_score_changes(
+                            room=fresh,
+                            score_changes=badge_changes,
+                            event_type=event_type,
+                            match_id=match_id,
+                            event_data=data,
+                        )
+                except Exception as _e:  # pragma: no cover
+                    print(f"[badges] evaluate_score_changes failed: {_e}")
 
 
 def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:

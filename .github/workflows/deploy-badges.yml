@@ -1,0 +1,39 @@
+name: Deploy Badges Lambda
+
+on:
+        push:
+                branches: [main]
+                paths:
+                        - "backend/badges/**"
+                        - "backend/shared/badges.py"
+                        - "backend/shared/ws.py"
+
+permissions:
+        id-token: write
+        contents: read
+
+jobs:
+        deploy:
+                runs-on: ubuntu-latest
+                steps:
+                        - uses: actions/checkout@v4
+
+                        - name: Configure AWS credentials
+                          uses: aws-actions/configure-aws-credentials@v4
+                          with:
+                                  role-to-assume: ${{ secrets.AWS_BACKEND_GITHUB_ACTIONS_ROLE_ARN }}
+                                  aws-region: eu-central-1
+
+                        - name: Build and deploy
+                          run: |
+                                  cd backend/badges
+                                  # The badges read Lambda imports the SAME catalog the
+                                  # writer module uses, so we ship `shared/badges.py`
+                                  # bundled as `badges_shared.py` to avoid the import
+                                  # name colliding with the local handler module.
+                                  cp ../shared/badges.py ./badges_shared.py
+                                  cp ../shared/ws.py .
+                                  zip function.zip handler.py service.py badges_shared.py ws.py
+                                  aws lambda update-function-code \
+                                    --function-name claudiu-badges \
+                                    --zip-file fileb://function.zip

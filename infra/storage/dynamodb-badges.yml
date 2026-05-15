@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu DynamoDB Table - Badges (per-user earned badges)
+
+# One row per (userId, badgeId). Rows are immutable once written — earning
+# a badge is permanent. Idempotency is enforced at write time via a
+# ConditionExpression(attribute_not_exists(badgeId)) in the writer module
+# (`backend/shared/badges.py`), so a duplicate goal/event never re-awards.
+#
+# Schema:
+#   PK userId   (S)         Cognito sub of the earner
+#   SK badgeId  (S)         e.g. "striker_1"
+#   earnedAt    (S)         ISO timestamp
+#   matchId     (S)         match in which it was earned
+#   context     (M)         small free-form map for display (player name, etc.)
+#
+# Listing a user's badges is a single Query by PK = userId. PAY_PER_REQUEST
+# keeps the cost at zero when nothing's happening; no TTL because badges
+# are permanent achievements.
+
+Resources:
+        BadgesTable:
+                Type: AWS::DynamoDB::Table
+                Properties:
+                        TableName: claudiu-badges
+                        BillingMode: PAY_PER_REQUEST
+                        AttributeDefinitions:
+                                - AttributeName: userId
+                                  AttributeType: S
+                                - AttributeName: badgeId
+                                  AttributeType: S
+                        KeySchema:
+                                - AttributeName: userId
+                                  KeyType: HASH
+                                - AttributeName: badgeId
+                                  KeyType: RANGE
+
+Outputs:
+        BadgesTableName:
+                Value: !Ref BadgesTable
+                Export:
+                        Name: claudiu-badges-table
+
+        BadgesTableArn:
+                Value: !GetAtt BadgesTable.Arn
+                Export:
+                        Name: claudiu-badges-table-arn

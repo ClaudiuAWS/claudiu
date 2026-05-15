@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu Lambda Functions - Badges Feature (read API)
+
+# This stack creates the read-only badges Lambda and its IAM role.
+# Awarding (writes to claudiu-badges + WS push) is done by the existing
+# event-processor Lambda via `backend/shared/badges.py`. The badges
+# Lambda only ever Queries the table.
+
+Resources:
+        BadgesLambdaRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-badges-lambda-role
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Service: lambda.amazonaws.com
+                                          Action: sts:AssumeRole
+                        ManagedPolicyArns:
+                                - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+                        Policies:
+                                - PolicyName: claudiu-badges-lambda-policy
+                                  PolicyDocument:
+                                          Version: "2012-10-17"
+                                          Statement:
+                                                  - Sid: BadgesTableRead
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:Query
+                                                            - dynamodb:GetItem
+                                                    Resource: !ImportValue claudiu-badges-table-arn
+
+        BadgesLambda:
+                Type: AWS::Lambda::Function
+                Properties:
+                        FunctionName: claudiu-badges
+                        Runtime: python3.14
+                        Handler: handler.handler
+                        Role: !GetAtt BadgesLambdaRole.Arn
+                        Timeout: 10
+                        MemorySize: 128
+                        Environment:
+                                Variables:
+                                        BADGES_TABLE: !ImportValue claudiu-badges-table
+                        Code:
+                                ZipFile: |
+                                        def handler(event, context):
+                                            return {'statusCode': 200, 'body': 'ok'}
+
+Outputs:
+        BadgesLambdaArn:
+                Value: !GetAtt BadgesLambda.Arn
+                Export:
+                        Name: claudiu-badges-lambda-arn

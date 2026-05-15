@@ -159,6 +159,16 @@ Resources:
                                                     Resource:
                                                             - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-player-lookup
                                                             - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-player-lookup/index/*
+                                                  # Badges feature: event-processor uses backend/shared/badges.py
+                                                  # to award `striker_1` (and future striker_N) when a goal scored
+                                                  # by a drafted player is detected. Conditional PutItem only;
+                                                  # no reads, no deletes.
+                                                  - Sid: BadgesWrite
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:PutItem
+                                                    Resource:
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-badges
         MatchesLambdaRole:
                 Type: AWS::IAM::Role
                 Properties:
@@ -281,6 +291,7 @@ Resources:
                                         WEBSOCKET_ENDPOINT: !ImportValue claudiu-ws-endpoint
                                         ROOMS_TABLE: claudiu-rooms
                                         PLAYER_LOOKUP_TABLE: claudiu-player-lookup
+                                        BADGES_TABLE: claudiu-badges
                         Code:
                                 ZipFile: |
                                         def handler(event, context):

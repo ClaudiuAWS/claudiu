@@ -16,7 +16,9 @@ import LobbyPage from './pages/LobbyPage'
 import MatchPage from './pages/MatchPage'
 import FriendsPage from './pages/FriendsPage'
 import ProfilePage from './pages/ProfilePage'
+import BadgesPage from './pages/BadgesPage'
 import InviteListener from './components/InviteListener'
+import BadgeListener from './components/BadgeListener'
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null } }
@@ -69,6 +71,7 @@ export default function App() {
     <div className="min-h-screen bg-gray-950">
       <ToastProvider />
       <InviteListener />
+      <BadgeListener />
       {showIntro && <IntroSplash onFinish={() => setShowIntro(false)} />}
       <ErrorBoundary>
         <Routes>
@@ -94,7 +97,7 @@ export default function App() {
             <ProtectedRoute><Layout><FriendsPage /></Layout></ProtectedRoute>
           }/>
           <Route path="/badges" element={
-            <ProtectedRoute><Layout><Placeholder title="Badges" /></Layout></ProtectedRoute>
+            <ProtectedRoute><Layout><BadgesPage /></Layout></ProtectedRoute>
           }/>
           <Route path="/profile" element={
             <ProtectedRoute><Layout><ProfilePage /></Layout></ProtectedRoute>
