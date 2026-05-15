@@ -6,9 +6,13 @@
  * shooting-star accent, plinth highlight).
  * `discReward` is the track id this badge unlocks in `tracks.js`
  * (when set, BadgesPage adds a "disc" marker to the card).
+ *
+ * Badges without a generated PNG fall through to BadgePlaceholder
+ * (tier-coloured glossy circle with the title's first letter).
  */
 
 export const BADGE_CATALOG = [
+  // ---- Scoring badges -----------------------------------------------------
   {
     id: 'striker_1',
     title: 'First Strike',
@@ -26,6 +30,64 @@ export const BADGE_CATALOG = [
     discReward: 'pitbull-we-are-one',
   },
   {
+    id: 'golden_boot',
+    title: 'Golden Boot',
+    description: 'Top scorer across five consecutive matches.',
+    image: '/badge-golden-boot.png',
+    tier: 'gold',
+    discReward: null,
+  },
+  {
+    id: 'goal_machine',
+    title: 'Goal Machine',
+    description: 'Your squad has scored twenty total goals.',
+    image: '/badge-goal-machine.png',
+    tier: 'gold',
+    discReward: null,
+  },
+  {
+    id: 'playmaker',
+    title: 'Playmaker',
+    description: 'Goals from five different squad players.',
+    image: '/badge-playmaker.png',
+    tier: 'silver',
+    discReward: null,
+  },
+  {
+    id: 'comeback_goal',
+    title: 'Comeback Strike',
+    description: 'Squad scored after trailing by two goals.',
+    image: '/badge-comeback-goal.png',
+    tier: 'silver',
+    discReward: null,
+  },
+  {
+    id: 'late_winner',
+    title: 'Last-Gasp Hero',
+    description: 'Squad scored in the 89th minute or later.',
+    image: '/badge-late-winner.png',
+    tier: 'gold',
+    discReward: null,
+  },
+  {
+    id: 'penalty_king',
+    title: 'Spot-Kick King',
+    description: 'Score from five penalties total.',
+    image: '/badge-penalty-king.png',
+    tier: 'silver',
+    discReward: null,
+  },
+  {
+    id: 'defender_goal',
+    title: "Defender's Dream",
+    description: 'A defender from your squad found the net.',
+    image: '/badge-defender-goal.png',
+    tier: 'bronze',
+    discReward: null,
+  },
+
+  // ---- Defensive badges ---------------------------------------------------
+  {
     id: 'clean_sheet',
     title: 'Iron Defense',
     description: 'Match ended with zero goals conceded.',
@@ -34,13 +96,23 @@ export const BADGE_CATALOG = [
     discReward: null,
   },
   {
-    id: 'quiz_master',
-    title: 'Quiz Master',
-    description: 'Perfect score on a Halftime Quiz mini-game.',
-    image: '/badge-quiz-master.png',
-    tier: 'silver',
-    discReward: 'kwabs-walk',
+    id: 'clean_sheet_streak',
+    title: 'Fortress',
+    description: 'Three consecutive clean sheets.',
+    image: '/badge-clean-sheet-streak.png',
+    tier: 'gold',
+    discReward: null,
   },
+  {
+    id: 'keeper_hero',
+    title: 'Keeper Hero',
+    description: 'Multiple decisive saves in a single match.',
+    image: '/badge-keeper-hero.png',
+    tier: 'silver',
+    discReward: null,
+  },
+
+  // ---- Win badges ---------------------------------------------------------
   {
     id: 'first_win',
     title: 'Maiden Victory',
@@ -50,11 +122,145 @@ export const BADGE_CATALOG = [
     discReward: 'shakira-waka-waka',
   },
   {
+    id: 'comeback_win',
+    title: 'Phoenix',
+    description: 'Won after trailing at halftime.',
+    image: '/badge-comeback-win.png',
+    tier: 'silver',
+    discReward: null,
+  },
+  {
+    id: 'win_streak_3',
+    title: 'Triple Crown',
+    description: 'Three consecutive match wins.',
+    image: '/badge-win-streak-3.png',
+    tier: 'silver',
+    discReward: null,
+  },
+  {
+    id: 'win_streak_5',
+    title: 'Dynasty',
+    description: 'Five consecutive match wins.',
+    image: '/badge-win-streak-5.png',
+    tier: 'gold',
+    discReward: null,
+  },
+  {
+    id: 'derby_winner',
+    title: 'Derby Day',
+    description: 'Won a derby match.',
+    image: '/badge-derby-winner.png',
+    tier: 'silver',
+    discReward: null,
+  },
+  {
+    id: 'dominant_win',
+    title: 'Demolition',
+    description: 'Won by a three-goal margin or more.',
+    image: '/badge-dominant-win.png',
+    tier: 'gold',
+    discReward: null,
+  },
+  {
+    id: 'underdog_win',
+    title: 'Underdog',
+    description: 'Won against a stronger opponent rating.',
+    image: '/badge-underdog-win.png',
+    tier: 'gold',
+    discReward: null,
+  },
+  {
+    id: 'perfect_match',
+    title: 'Flawless',
+    description: 'Won a match without conceding a single goal.',
+    image: '/badge-perfect-match.png',
+    tier: 'gold',
+    discReward: null,
+  },
+
+  // ---- Mini-game badges ---------------------------------------------------
+  {
+    id: 'quiz_master',
+    title: 'Quiz Master',
+    description: 'Perfect score on a Halftime Quiz mini-game.',
+    image: '/badge-quiz-master.png',
+    tier: 'silver',
+    discReward: 'kwabs-walk',
+  },
+  {
+    id: 'quiz_perfect_5',
+    title: 'Mind Champion',
+    description: 'Perfect score on five quiz mini-games.',
+    image: '/badge-quiz-perfect-5.png',
+    tier: 'gold',
+    discReward: null,
+  },
+  {
+    id: 'reflex_master',
+    title: 'Lightning Reflex',
+    description: 'Top tier on a Reflex mini-game.',
+    image: '/badge-reflex-master.png',
+    tier: 'gold',
+    discReward: null,
+  },
+
+  // ---- Progression badges -------------------------------------------------
+  {
+    id: 'first_match',
+    title: 'First Kick-Off',
+    description: 'Played your very first match.',
+    image: '/badge-first-match.png',
+    tier: 'bronze',
+    discReward: null,
+  },
+  {
+    id: 'team_builder',
+    title: 'Team Builder',
+    description: 'Drafted your first full squad.',
+    image: '/badge-team-builder.png',
+    tier: 'bronze',
+    discReward: null,
+  },
+  {
+    id: 'weekend_warrior',
+    title: 'Weekend Warrior',
+    description: 'Played a Saturday or Sunday match.',
+    image: '/badge-weekend-warrior.png',
+    tier: 'silver',
+    discReward: null,
+  },
+  {
     id: 'veteran_10',
     title: 'Veteran X',
     description: 'Played ten matches.',
     image: '/badge-veteran-10.png',
     tier: 'gold',
+    discReward: null,
+  },
+  {
+    id: 'veteran_50',
+    title: 'Living Legend',
+    description: 'Played fifty matches.',
+    image: '/badge-veteran-50.png',
+    tier: 'gold',
+    discReward: null,
+  },
+  {
+    id: 'centurion',
+    title: 'Centurion',
+    description: 'Played one hundred matches.',
+    image: '/badge-centurion.png',
+    tier: 'gold',
+    discReward: null,
+  },
+
+  // ---- Social badges ------------------------------------------------------
+  {
+    id: 'social_butterfly',
+    title: 'Connected',
+    description: 'Added three friends to your network.',
+    image: '/badge-social-butterfly.png',
+    tier: 'bronze',
     discReward: null,
   },
 ]
