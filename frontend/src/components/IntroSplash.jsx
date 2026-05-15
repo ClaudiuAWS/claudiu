@@ -213,7 +213,7 @@ export default function IntroSplash({ onFinish }) {
             style={{ width: 132, height: 106 }}
           >
             <img
-              src="/logo.png"
+              src="/logo-bf.png"
               alt=""
               style={{ width: 132, height: 132, display: 'block' }}
             />

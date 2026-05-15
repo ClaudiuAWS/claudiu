@@ -40,7 +40,7 @@ export default function LoginPage() {
           style={{ width: 88, height: 70 }}
         >
           <img
-            src="/logo.png"
+            src="/logo-bf.png"
             alt=""
             className="block drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
             style={{ width: 88, height: 88 }}
