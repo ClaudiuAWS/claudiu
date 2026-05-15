@@ -32,11 +32,20 @@ export default function IntroSplash({ onFinish }) {
   const videoRef = useRef(null)
   const finishedRef = useRef(false)
   const bumperShownRef = useRef(false)
+  // True if the user's most recent gesture was consumed to unmute the
+  // video (autoplay-with-sound was blocked, then the same tap that
+  // would advance the splash also unmuted it). We swallow that one
+  // tap so the user actually gets to hear the intro.
+  const unmutedByThisTapRef = useRef(false)
   const [src] = useState(pickSrc)
   const [showBumper, setShowBumper] = useState(false)
   const [fadingOut, setFadingOut] = useState(false)
 
   const finish = () => {
+    if (unmutedByThisTapRef.current) {
+      unmutedByThisTapRef.current = false
+      return
+    }
     if (finishedRef.current) return
     finishedRef.current = true
     setFadingOut(true)
@@ -86,7 +95,16 @@ export default function IntroSplash({ onFinish }) {
           window.removeEventListener('pointerdown', unmuteOnGesture)
           window.removeEventListener('keydown', unmuteOnGesture)
           if (finishedRef.current) return
-          try { v.muted = false; v.volume = 1 } catch {}
+          try {
+            if (v.muted) {
+              v.muted = false
+              v.volume = 1
+              // Flag so the paired click on the splash root just
+              // unmutes — it doesn't advance the splash. Next tap
+              // advances normally.
+              unmutedByThisTapRef.current = true
+            }
+          } catch {}
         }
         window.addEventListener('pointerdown', unmuteOnGesture, { once: true })
         window.addEventListener('keydown', unmuteOnGesture, { once: true })
