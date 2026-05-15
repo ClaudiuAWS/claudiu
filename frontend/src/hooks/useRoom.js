@@ -247,11 +247,23 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       // AI Match Director commentary — push onto a stack. Newest first (top),
       // older entries flow down. Each entry self-purges after 7s. Cap at 5
       // visible to keep the feed clean if the AI gets chatty.
+      //
+      // Personal-commentary filter: when the broadcast carries a non-empty
+      // `forUserIds` array, only show it to the listed users. The flag
+      // `personal: true` on the local entry lets DirectorCommentary render
+      // it with a gold-tinged style so the owner notices the line is
+      // addressed to them. Empty/missing forUserIds = ambient commentary,
+      // shown to everyone.
+      const forUserIds = Array.isArray(msg.forUserIds) ? msg.forUserIds : []
+      if (forUserIds.length > 0 && currentUserId && !forUserIds.includes(currentUserId)) {
+        return
+      }
       const entry = {
         id:             `${msg.relatedEventId || 'cm'}-${Date.now()}`,
         text:           msg.text,
         relatedEventId: msg.relatedEventId,
         reasoning:      msg.reasoning || null,
+        personal:       forUserIds.length > 0,
         ts:             msg.createdAtMs ?? Date.now(),
       }
       setRoom(prev => prev ? {
