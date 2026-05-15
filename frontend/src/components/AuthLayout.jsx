@@ -4,37 +4,42 @@ import { Outlet } from 'react-router-dom'
 /**
  * Shared layout for the auth pages (Login + Register + Confirm).
  *
- * Owns a *double-buffered* background video so the loop seam is hidden
+ * Owns a double-buffered background video so the loop seam is hidden
  * behind a ~1s cross-fade of two stacked <video> elements. Each
  * element plays naturally from TRIM_START to its own duration; just
  * before the active one ends, the standby starts at TRIM_START and
  * both videos cross-fade (opacity + volume). After the fade, the
- * old-active pauses, rewinds to TRIM_START silently, and becomes the
- * new standby for the next cycle.
+ * old-active pauses, rewinds silently, and becomes the new standby.
  *
- * That hides the "broken record" audio jump that a single-element
- * seek-loop produces — the bundled intro music isn't a loop-friendly
- * track, so any restart lands mid-musical-phrase; cross-fading two
- * streams under each other turns the abrupt cut into a wash.
+ * Defensive positioning: each <video> is `position: fixed; inset: 0;
+ * width: 100vw; height: 100vh` via inline style — bypassing any
+ * Tailwind / parent layout quirk that was leaving top/bottom black
+ * bars on mobile viewport ratios.
  *
- * The `claudiu:intro-ending` event from `IntroSplash` is consumed
- * here to ramp the initial active video's volume in over the intro's
- * own fade-out. If the intro splash was already seen this session
- * (`sessionStorage.claudiu_intro_seen`), we just ramp on mount.
+ * On mount we explicitly play+pause BOTH videos to engage them with
+ * the browser's per-element playback state. Without this, the standby
+ * video B's first cross-fade `play()` was being silently rejected
+ * (Chrome's per-element gesture requirement), leaving B frozen on a
+ * static frame after the opacity fade.
+ *
+ * The `claudiu:intro-ending` event from `IntroSplash` ramps the active
+ * video's audio in. If `claudiu_intro_seen` is already in
+ * sessionStorage, we ramp on mount instead.
  */
 
-const TRIM_START         = 6.5  // seconds — past the Ribéry silver-trophy beat
-const CROSSFADE_DURATION = 1.0  // seconds — opacity + volume ramp at the seam
-const CROSSFADE_LEAD     = 1.1  // seconds before duration to start the fade (slightly > DURATION so the standby has time to begin playing before its opacity peaks)
-const TARGET_VOLUME      = 0.2  // ambient bg level
+const TRIM_START         = 6.5
+const CROSSFADE_DURATION = 1.0
+const CROSSFADE_LEAD     = 1.1
+const TARGET_VOLUME      = 0.2
 const STORAGE_KEY        = 'claudiu_intro_seen'
 
 export default function AuthLayout() {
   const videoARef = useRef(null)
   const videoBRef = useRef(null)
   const [activeKey, setActiveKey] = useState('a')
-  const activeRef = useRef('a')        // mirror of activeKey so event handlers see the current value
-  const crossfadingRef = useRef(false) // refractory guard
+  const activeRef = useRef('a')
+  const crossfadingRef = useRef(false)
+  const doubleBufferEnabledRef = useRef(true)
 
   useEffect(() => { activeRef.current = activeKey }, [activeKey])
 
@@ -42,6 +47,8 @@ export default function AuthLayout() {
     const a = videoARef.current
     const b = videoBRef.current
     if (!a || !b) return
+
+    let disposed = false
 
     const seek = (v) => {
       try { if (v.currentTime < TRIM_START) v.currentTime = TRIM_START } catch {}
@@ -57,12 +64,37 @@ export default function AuthLayout() {
         const tick = (now) => {
           const t = Math.min(1, (now - start) / durationMs)
           try { v.volume = from + (to - from) * t } catch {}
-          if (t < 1) requestAnimationFrame(tick)
+          if (t < 1 && !disposed) requestAnimationFrame(tick)
           else resolve()
         }
         requestAnimationFrame(tick)
       })
     }
+
+    // Engage both videos with the browser's playback state. The first
+    // play() on each element while muted is allowed; once it succeeds,
+    // future play() calls on that element resolve immediately even
+    // outside a user gesture.
+    const engage = async () => {
+      try { a.muted = true } catch {}
+      try { b.muted = true } catch {}
+      try { await a.play() } catch {}
+      let bEngaged = false
+      try {
+        await b.play()
+        bEngaged = true
+      } catch {}
+      if (bEngaged) {
+        try {
+          b.pause()
+          b.currentTime = TRIM_START
+        } catch {}
+      } else {
+        // Couldn't engage B — fall back to single-buffer seek-loop on A.
+        doubleBufferEnabledRef.current = false
+      }
+    }
+    engage()
 
     const rampActiveIn = (durationMs = 1000) => {
       const active = activeRef.current === 'a' ? a : b
@@ -98,9 +130,8 @@ export default function AuthLayout() {
         toV.volume = 0
       } catch {}
 
-      try { await toV.play() } catch { /* ignore — keep fading visually */ }
+      try { await toV.play() } catch { /* engagement should have prevented this */ }
 
-      // Visual fade via CSS transition driven by activeKey state.
       setActiveKey(toKey)
 
       const durationMs = CROSSFADE_DURATION * 1000
@@ -121,6 +152,15 @@ export default function AuthLayout() {
       crossfadingRef.current = false
     }
 
+    // Single-buffer fallback if B engagement failed.
+    const performSeekLoop = (v) => {
+      try {
+        v.currentTime = TRIM_START
+        v.play().catch(() => {})
+      } catch {}
+      crossfadingRef.current = false
+    }
+
     const onTimeUpdate = (e) => {
       const v = e.target
       const key = activeRef.current
@@ -130,14 +170,16 @@ export default function AuthLayout() {
       if (!isFinite(d) || d <= 0) return
       if (v.currentTime >= d - CROSSFADE_LEAD) {
         crossfadingRef.current = true
-        performCrossfade()
+        if (doubleBufferEnabledRef.current) {
+          performCrossfade()
+        } else {
+          performSeekLoop(v)
+        }
       }
     }
     a.addEventListener('timeupdate', onTimeUpdate)
     b.addEventListener('timeupdate', onTimeUpdate)
 
-    // Fallback if `timeupdate` resolution misses the CROSSFADE_LEAD window —
-    // just seek the active one back inline. Visual seam returns, but rare.
     const onEnded = (e) => {
       const v = e.target
       const key = activeRef.current
@@ -153,6 +195,7 @@ export default function AuthLayout() {
     b.addEventListener('ended', onEnded)
 
     return () => {
+      disposed = true
       if (initialRampTimer) clearTimeout(initialRampTimer)
       a.removeEventListener('loadedmetadata', onMetaA)
       b.removeEventListener('loadedmetadata', onMetaB)
@@ -164,14 +207,25 @@ export default function AuthLayout() {
     }
   }, [])
 
+  // Inline styles for the videos — bypass Tailwind to make sure the
+  // viewport pinning isn't lost to a class-generation or cascade
+  // quirk. The fix that finally killed the mobile black bars.
   const videoStyle = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100vw',
+    height: '100vh',
+    objectFit: 'cover',
+    pointerEvents: 'none',
     transform: 'scale(2.0)',
     transformOrigin: 'center center',
     transition: `opacity ${CROSSFADE_DURATION}s ease-in-out`,
+    zIndex: 0,
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center px-6 overflow-hidden">
+    <>
       <video
         ref={videoARef}
         src="/intro-mobile.mp4"
@@ -179,7 +233,6 @@ export default function AuthLayout() {
         muted
         playsInline
         poster="/intro-poster.jpg"
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         style={{ ...videoStyle, opacity: activeKey === 'a' ? 1 : 0 }}
       />
       <video
@@ -188,12 +241,24 @@ export default function AuthLayout() {
         muted
         playsInline
         poster="/intro-poster.jpg"
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         style={{ ...videoStyle, opacity: activeKey === 'b' ? 1 : 0 }}
       />
-      <div className="relative w-full max-w-sm">
-        <Outlet />
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          minHeight: '100dvh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '0 1.5rem',
+        }}
+      >
+        <div style={{ width: '100%', maxWidth: '24rem' }}>
+          <Outlet />
+        </div>
       </div>
-    </div>
+    </>
   )
 }
