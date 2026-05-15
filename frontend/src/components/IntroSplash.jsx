@@ -14,38 +14,32 @@ function pickSrc() {
 }
 
 /**
- * Intro splash.
+ * Intro splash with TAP TO BEGIN pre-roll.
  *
- * - Plays the intro video full-bleed (`object-cover`) with its bundled
- *   audio. At t≈BUMPER_AT a geometric brand panel fades in *over* the
- *   still-playing video; the video never pauses. On `ended` it seeks
- *   back to TRIM_START and keeps looping — same trick AuthLayout uses
- *   so the trimmed silver-trophy frames never reappear.
- * - The entire splash is one tap target. Tap → fade out and dispatch
- *   `claudiu:intro-ending` so AuthLayout's bg audio cross-fades in.
- * - Autoplay-with-sound is best-effort: if the browser blocks it, we
- *   start muted and retry the unmute on the first user pointerdown/
- *   keydown — which is also the tap that advances the splash, so the
- *   audio is audible for the fade-out and any subsequent loops.
+ * On mount the video is paused on its poster frame and a TAP TO BEGIN
+ * hint pulses on screen. The first tap is the user gesture that the
+ * browser requires to allow audio playback — handleStart() plays the
+ * video unmuted in response. From there the existing flow runs: the
+ * cinematic zoom + brand panel fade in at BUMPER_AT, the video loops
+ * pre-emptively at duration - END_PAD, and a second tap (anywhere)
+ * fades the splash out and signals AuthLayout's bg-audio crossfade.
+ *
+ * Why pre-roll: browsers hard-block autoplay-with-sound without a
+ * gesture or sufficient Media Engagement Index. On a fresh mobile
+ * visit (no MEI), there's no way to start audio without a tap. The
+ * pre-roll makes that tap deliberate so the user hears the intro
+ * from frame 0.
  */
 export default function IntroSplash({ onFinish }) {
   const videoRef = useRef(null)
   const finishedRef = useRef(false)
   const bumperShownRef = useRef(false)
-  // True if the user's most recent gesture was consumed to unmute the
-  // video (autoplay-with-sound was blocked, then the same tap that
-  // would advance the splash also unmuted it). We swallow that one
-  // tap so the user actually gets to hear the intro.
-  const unmutedByThisTapRef = useRef(false)
   const [src] = useState(pickSrc)
+  const [started, setStarted] = useState(false)
   const [showBumper, setShowBumper] = useState(false)
   const [fadingOut, setFadingOut] = useState(false)
 
   const finish = () => {
-    if (unmutedByThisTapRef.current) {
-      unmutedByThisTapRef.current = false
-      return
-    }
     if (finishedRef.current) return
     finishedRef.current = true
     setFadingOut(true)
@@ -69,47 +63,44 @@ export default function IntroSplash({ onFinish }) {
     setTimeout(() => onFinish?.(), FADE_DURATION_MS)
   }
 
+  const handleStart = () => {
+    if (started || finishedRef.current) return
+    setStarted(true)
+    const v = videoRef.current
+    if (!v) return
+    const prefs = getIntroAudioPrefs()
+    try {
+      v.muted = !prefs.enabled
+      v.volume = 1
+    } catch {}
+    const p = v.play()
+    if (p && typeof p.catch === 'function') {
+      p.catch(() => {
+        // Even a gesture sometimes isn't enough (very rare). Fall
+        // back to muted so at least the video animates.
+        try { v.muted = true } catch {}
+        v.play().catch(() => {})
+      })
+    }
+  }
+
+  const handleTap = () => {
+    if (!started) {
+      handleStart()
+      return
+    }
+    finish()
+  }
+
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
 
-    const prefs = getIntroAudioPrefs()
-    if (!prefs.enabled) {
-      v.muted = true
-    } else {
-      v.muted = false
-      v.volume = 1
+    const seek = () => {
+      try { if (v.currentTime < TRIM_START) v.currentTime = TRIM_START } catch {}
     }
-
-    const playPromise = v.play()
-    if (playPromise && typeof playPromise.then === 'function') {
-      playPromise.catch(() => {
-        // Autoplay-with-sound blocked → start muted so the video at
-        // least animates, then attempt the unmute on the first user
-        // gesture (which is also the tap that advances).
-        v.muted = true
-        v.play().catch(() => {})
-
-        if (!prefs.enabled) return
-        const unmuteOnGesture = () => {
-          window.removeEventListener('pointerdown', unmuteOnGesture)
-          window.removeEventListener('keydown', unmuteOnGesture)
-          if (finishedRef.current) return
-          try {
-            if (v.muted) {
-              v.muted = false
-              v.volume = 1
-              // Flag so the paired click on the splash root just
-              // unmutes — it doesn't advance the splash. Next tap
-              // advances normally.
-              unmutedByThisTapRef.current = true
-            }
-          } catch {}
-        }
-        window.addEventListener('pointerdown', unmuteOnGesture, { once: true })
-        window.addEventListener('keydown', unmuteOnGesture, { once: true })
-      })
-    }
+    if (v.readyState >= 1) seek()
+    else v.addEventListener('loadedmetadata', seek, { once: true })
 
     // Pre-emptive loop on top of the bumper trigger — both run inside
     // the same `timeupdate` handler. The refractory flag stops multiple
@@ -119,7 +110,6 @@ export default function IntroSplash({ onFinish }) {
       if (v.currentTime >= BUMPER_AT && !bumperShownRef.current) {
         bumperShownRef.current = true
         setShowBumper(true)
-        // Do NOT pause — the video keeps playing under the panel.
       }
       if (isLooping) return
       const d = v.duration
@@ -136,7 +126,6 @@ export default function IntroSplash({ onFinish }) {
     }
     v.addEventListener('timeupdate', onTimeUpdate)
 
-    // Fallback if `timeupdate` resolution misses the END_PAD window.
     const onEnded = () => {
       try {
         v.currentTime = TRIM_START
@@ -147,6 +136,7 @@ export default function IntroSplash({ onFinish }) {
     v.addEventListener('ended', onEnded)
 
     return () => {
+      v.removeEventListener('loadedmetadata', seek)
       v.removeEventListener('timeupdate', onTimeUpdate)
       v.removeEventListener('ended', onEnded)
     }
@@ -155,9 +145,9 @@ export default function IntroSplash({ onFinish }) {
   return (
     <div
       className="fixed inset-0 z-[100] bg-black cursor-pointer select-none"
-      onClick={finish}
+      onClick={handleTap}
       role="button"
-      aria-label="Skip intro"
+      aria-label={started ? 'Skip intro' : 'Start intro'}
       style={{
         opacity: fadingOut ? 0 : 1,
         transform: fadingOut ? 'scale(1.06)' : 'scale(1)',
@@ -168,21 +158,36 @@ export default function IntroSplash({ onFinish }) {
       <video
         ref={videoRef}
         src={src}
-        autoPlay
+        muted
         playsInline
         poster="/intro-poster.jpg"
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         style={{
           // Cinematic push-in: the video plays at its natural framing
           // through the run-up, then smoothly zooms to fill the mobile
-          // viewport the moment the brand panel begins fading in. Same
-          // 2.0× scale AuthLayout uses, so the cut to /login lands on
-          // continuous framing.
+          // viewport the moment the brand panel begins fading in.
           transform: showBumper ? 'scale(3.0)' : 'scale(1.0)',
           transformOrigin: 'center center',
           transition: 'transform 2.5s cubic-bezier(0.45, 0, 0.55, 1)',
         }}
       />
+
+      {/* TAP TO BEGIN — pre-roll prompt, hides once the user taps. */}
+      {!started && !fadingOut && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-6">
+          <p
+            className="font-stadium text-white"
+            style={{
+              fontSize: '1.2rem',
+              letterSpacing: '0.4em',
+              textShadow: '0 2px 12px rgba(0,0,0,0.85)',
+              animation: 'introTapPulse 1.6s ease-in-out infinite',
+            }}
+          >
+            TAP TO BEGIN
+          </p>
+        </div>
+      )}
 
       {/* Geometric brand panel — clipped-corner stadium card sitting
           over the looping video. Fades in at BUMPER_AT and stays. */}
@@ -197,8 +202,6 @@ export default function IntroSplash({ onFinish }) {
         <div
           className="relative text-center"
           style={{
-            // Diagonal cuts on top-left + bottom-right — gives the
-            // panel a "stadium tournament card" silhouette.
             clipPath: 'polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px)',
             background: 'linear-gradient(180deg, rgba(15,15,20,0.78) 0%, rgba(8,8,12,0.82) 100%)',
             backdropFilter: 'blur(10px) saturate(140%)',
@@ -207,7 +210,6 @@ export default function IntroSplash({ onFinish }) {
             padding: '2.25rem 2.75rem',
           }}
         >
-          {/* Red top accent stripe — tucked inside the clipped corner. */}
           <div
             className="absolute top-0"
             style={{
