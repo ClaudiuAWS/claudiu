@@ -51,6 +51,9 @@ def handler(event, context):
             elif method == 'POST' and '/cheer' in path:
                 return _post_cheer(event, user_id, display_name, avatar_url)
 
+            elif method == 'POST' and '/captain' in path:
+                return _post_captain(event, user_id)
+
             else:
                 return _response(404, {'error': 'Not found'})
         
@@ -173,6 +176,15 @@ def _post_draft_pick(event, user_id):
         if not player_id:
             return _response(400, {'error': 'playerId is required'})
         out = service.submit_draft_pick(room_code, user_id, pair_index, player_id)
+        return _response(200, out)
+
+
+def _post_captain(event, user_id):
+        # Set the user's captain pick for this room. Pass empty string to clear.
+        room_code = event['pathParameters']['code']
+        body = json.loads(event.get('body') or '{}')
+        player_id = (body.get('playerId') or '').strip()
+        out = service.set_captain(room_code, user_id, player_id)
         return _response(200, out)
 
 

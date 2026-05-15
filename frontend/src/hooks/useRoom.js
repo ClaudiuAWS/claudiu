@@ -130,6 +130,21 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       // to the consumer (MatchPage) which mounts the ReactionsOverlay.
       // Purely cosmetic — no leaderboard side-effect.
       onCheerRef.current?.(msg)
+    } else if (msg.type === 'captain_update') {
+      // A party member picked / changed their captain. Merge into the
+      // local room state so the squad-list captain star updates live for
+      // everyone. The server already persisted; this is pure UI sync.
+      setRoom(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          members: (prev.members || []).map(m =>
+            m.userId === msg.userId
+              ? { ...m, captainPlayerId: msg.playerId || '' }
+              : m
+          ),
+        }
+      })
     } else if (msg.type === 'score_update') {
       // Reconcile to the leaderboard absolute, with a regression guard.
       //
