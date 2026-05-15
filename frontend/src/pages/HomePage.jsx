@@ -96,9 +96,11 @@ export default function HomePage() {
   return (
     <div className="px-4 pt-10 pb-4 space-y-8">
 
-      {/* Matchday greeting — Serie-A "Mister" style with a stadium-glow chip
-          and a thin red accent rule. The displayName drops in as the Mister's
-          name; default is "Boss" so the slot never collapses. */}
+      {/* Matchday greeting — "Trainer" is the German football term for the
+          coach/manager (used across the Bundesliga) so it stays on-brand,
+          gender-neutral, and reads as a personal title rather than a generic
+          welcome. The displayName drops in after; default is "Boss" so the
+          slot never collapses. */}
       <div className="px-2">
         <div className="flex items-center gap-2 mb-3">
           <div
@@ -136,7 +138,7 @@ export default function HomePage() {
             textShadow: '0 2px 0 rgba(0,0,0,0.6), 0 -1px 0 rgba(255,255,255,0.05)',
           }}
         >
-          MISTER {(user?.displayName ?? 'Boss').toUpperCase()}
+          TRAINER {(user?.displayName ?? 'Boss').toUpperCase()}
         </h1>
         <div
           className="mt-2.5 h-px w-14"
