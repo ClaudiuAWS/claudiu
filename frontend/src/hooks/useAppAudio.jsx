@@ -27,12 +27,25 @@ import { TRACKS, DEFAULT_TRACK_ID, getTrackById } from '../utils/tracks'
  * their own ambient (`useBgAmbientAudio` via `AuthLayout`).
  */
 
-const TARGET_VOLUME = 0.2
+const TARGET_VOLUME = 0.2  // default app-music volume; user override persists in localStorage
 
 const KEYS = {
   appEnabled:   'appAudioEnabled',
   appTrack:     'appAudioTrackId',
+  appVolume:    'appAudioVolume',     // user-adjustable 0..1
   introEnabled: 'introAudioEnabled',
+}
+
+function _readFloat(key, defaultValue) {
+  try {
+    const v = localStorage.getItem(key)
+    if (v === null) return defaultValue
+    const n = Number(v)
+    return isFinite(n) ? Math.min(1, Math.max(0, n)) : defaultValue
+  } catch { return defaultValue }
+}
+function _writeFloat(key, value) {
+  try { localStorage.setItem(key, String(value)) } catch {}
 }
 
 function _readBool(key, defaultValue) {
@@ -71,17 +84,24 @@ export function AppAudioProvider({ children }) {
   const audioRef = useRef(null)
   const [appEnabled,   setAppEnabledState]   = useState(() => _readBool(KEYS.appEnabled,   true))
   const [appTrackId,   setAppTrackIdState]   = useState(() => _readString(KEYS.appTrack,   DEFAULT_TRACK_ID))
+  const [appVolume,    setAppVolumeState]    = useState(() => _readFloat(KEYS.appVolume,   TARGET_VOLUME))
   const [introEnabled, setIntroEnabledState] = useState(() => _readBool(KEYS.introEnabled, true))
 
   const appTrack = getTrackById(appTrackId)
 
-  // App-music element setup (volume + loop). Run once.
+  // App-music element setup. Run once.
   useEffect(() => {
     const a = audioRef.current
     if (!a) return
-    a.volume = TARGET_VOLUME
-    a.loop   = true
+    a.loop = true
   }, [])
+
+  // Live-update the audio element's volume when the slider moves.
+  useEffect(() => {
+    const a = audioRef.current
+    if (!a) return
+    try { a.volume = appVolume } catch {}
+  }, [appVolume])
 
   // (Re)load + play whenever appEnabled flips on or the chosen
   // app track changes.
@@ -124,6 +144,11 @@ export function AppAudioProvider({ children }) {
     setAppTrackIdState(id)
     _writeString(KEYS.appTrack, id)
   }
+  const setAppVolume = (next) => {
+    const clamped = Math.min(1, Math.max(0, Number(next) || 0))
+    setAppVolumeState(clamped)
+    _writeFloat(KEYS.appVolume, clamped)
+  }
 
   // Intro toggle (sound on/off only — no track override)
   const setIntroEnabled = (next) => { setIntroEnabledState(next); _writeBool(KEYS.introEnabled, next) }
@@ -134,6 +159,7 @@ export function AppAudioProvider({ children }) {
       // App music
       appEnabled, toggleApp, setAppEnabled,
       appTrackId, setAppTrack, appTrack,
+      appVolume, setAppVolume,
       // Intro audio (toggle only)
       introEnabled, toggleIntro, setIntroEnabled,
       // List of currently-unlocked tracks for the Profile picker.
@@ -151,6 +177,7 @@ export function useAppAudio() {
     return {
       appEnabled: false, toggleApp: () => {}, setAppEnabled: () => {},
       appTrackId: DEFAULT_TRACK_ID, setAppTrack: () => {}, appTrack: null,
+      appVolume: TARGET_VOLUME, setAppVolume: () => {},
       introEnabled: true, toggleIntro: () => {}, setIntroEnabled: () => {},
       tracks: TRACKS,
     }

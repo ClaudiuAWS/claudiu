@@ -17,6 +17,7 @@ import MatchPage from './pages/MatchPage'
 import FriendsPage from './pages/FriendsPage'
 import ProfilePage from './pages/ProfilePage'
 import BadgesPage from './pages/BadgesPage'
+import TracksPage from './pages/TracksPage'
 import InviteListener from './components/InviteListener'
 import BadgeListener from './components/BadgeListener'
 
@@ -101,6 +102,9 @@ export default function App() {
           }/>
           <Route path="/profile" element={
             <ProtectedRoute><Layout><ProfilePage /></Layout></ProtectedRoute>
+          }/>
+          <Route path="/tracks" element={
+            <ProtectedRoute><Layout><TracksPage /></Layout></ProtectedRoute>
           }/>
 
           <Route path="*" element={<Navigate to="/" replace />} />

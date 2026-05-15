@@ -68,8 +68,48 @@ BADGE_CATALOG = {
         'description': 'A player from your squad scored their first goal.',
         'image':       '/badge-striker-1.png',
         'tier':        'bronze',
+        'discReward':  None,
     },
-    # Future: striker_10, striker_100 — same trigger, different threshold.
+    'hattrick': {
+        'id':          'hattrick',
+        'title':       'Hat Trick Hero',
+        'description': 'Three goals from your squad in a single match.',
+        'image':       '/badge-hattrick.png',
+        'tier':        'gold',
+        'discReward':  'disc-hattrick',
+    },
+    'clean_sheet': {
+        'id':          'clean_sheet',
+        'title':       'Iron Defense',
+        'description': 'Match ended with zero goals conceded.',
+        'image':       '/badge-clean-sheet.png',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+    'quiz_master': {
+        'id':          'quiz_master',
+        'title':       'Quiz Master',
+        'description': 'Perfect score on a Halftime Quiz mini-game.',
+        'image':       '/badge-quiz-master.png',
+        'tier':        'silver',
+        'discReward':  'disc-mind-games',
+    },
+    'first_win': {
+        'id':          'first_win',
+        'title':       'Maiden Victory',
+        'description': 'Won your first match.',
+        'image':       '/badge-first-win.png',
+        'tier':        'bronze',
+        'discReward':  'disc-victory-lap',
+    },
+    'veteran_10': {
+        'id':          'veteran_10',
+        'title':       'Veteran X',
+        'description': 'Played ten matches.',
+        'image':       '/badge-veteran-10.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
 }
 
 

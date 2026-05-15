@@ -18,9 +18,31 @@ export const TRACKS = [
     file:          '/songs/intro.mp3',
     requiredBadge: null,   // null = default, always unlocked
   },
-  // Future entries unlock via badges:
-  // { id: 'disc-2', title: '…', artist: '…', file: '/songs/disc-2.mp3',
-  //   requiredBadge: 'hattrick-king' },
+  // Disc-rewards — locked until the corresponding badge fires. Audio
+  // files dropped into /songs/<id>.mp3 by the user; until then they
+  // 404 silently and the player no-ops via the existing autoplay
+  // fallback in AppAudioProvider.
+  {
+    id:            'disc-hattrick',
+    title:         'Hat Trick Anthem',
+    artist:        'TBD',
+    file:          '/songs/disc-hattrick.mp3',
+    requiredBadge: 'hattrick',
+  },
+  {
+    id:            'disc-mind-games',
+    title:         'Mind Games',
+    artist:        'TBD',
+    file:          '/songs/disc-mind-games.mp3',
+    requiredBadge: 'quiz_master',
+  },
+  {
+    id:            'disc-victory-lap',
+    title:         'Victory Lap',
+    artist:        'TBD',
+    file:          '/songs/disc-victory-lap.mp3',
+    requiredBadge: 'first_win',
+  },
 ]
 
 export const DEFAULT_TRACK_ID = 'intro'
