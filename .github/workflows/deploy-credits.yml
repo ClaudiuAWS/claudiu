@@ -6,6 +6,8 @@ on:
                 paths:
                         - "backend/credits/**"
                         - "backend/shared/credits.py"
+                        - "infra/storage/dynamodb-credits.yml"
+                        - "infra/compute/lambdas-credits.yml"
 
 permissions:
         id-token: write
@@ -23,7 +25,32 @@ jobs:
                                   role-to-assume: ${{ secrets.AWS_BACKEND_GITHUB_ACTIONS_ROLE_ARN }}
                                   aws-region: eu-central-1
 
-                        - name: Build and deploy
+                        # Self-bootstrap: the credits table + Lambda CFN stacks
+                        # are deployed by this same workflow so a fresh checkout
+                        # doesn't need a manual `aws cloudformation deploy` from
+                        # a prod-authed terminal. Stacks are idempotent — these
+                        # deploys are no-ops once the resources exist. Order
+                        # matters: lambdas-credits.yml imports the table ARN.
+                        - name: Deploy credits DDB table
+                          run: |
+                                  aws cloudformation deploy \
+                                    --template-file infra/storage/dynamodb-credits.yml \
+                                    --stack-name claudiu-credits-table \
+                                    --no-fail-on-empty-changeset \
+                                    --s3-bucket claudiu-profile-pictures-507609143109 \
+                                    --s3-prefix cfn-templates
+
+                        - name: Deploy credits Lambda CFN
+                          run: |
+                                  aws cloudformation deploy \
+                                    --template-file infra/compute/lambdas-credits.yml \
+                                    --stack-name claudiu-credits-lambda \
+                                    --capabilities CAPABILITY_NAMED_IAM \
+                                    --no-fail-on-empty-changeset \
+                                    --s3-bucket claudiu-profile-pictures-507609143109 \
+                                    --s3-prefix cfn-templates
+
+                        - name: Build and deploy code
                           run: |
                                   cd backend/credits
                                   # Bundle the shared writer module alongside the local handler.
