@@ -348,6 +348,52 @@ Resources:
                         ParentId: !Ref RoomsCodeResource
                         PathPart: react
 
+        RoomsCheerResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !Ref RoomsCodeResource
+                        PathPart: cheer
+
+        PostRoomsCheerMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref RoomsCheerResource
+                        HttpMethod: POST
+                        AuthorizationType: COGNITO_USER_POOLS
+                        AuthorizerId: !Ref CognitoAuthorizer
+                        Integration:
+                                Type: AWS_PROXY
+                                IntegrationHttpMethod: POST
+                                Uri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-rooms/invocations
+
+        RoomsCheerOptionsMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref RoomsCheerResource
+                        HttpMethod: OPTIONS
+                        AuthorizationType: NONE
+                        Integration:
+                                Type: MOCK
+                                IntegrationResponses:
+                                        - StatusCode: 200
+                                          ResponseParameters:
+                                                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+                                                  method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+                                                  method.response.header.Access-Control-Allow-Origin: "'*'"
+                                          ResponseTemplates:
+                                                  application/json: ""
+                                RequestTemplates:
+                                        application/json: '{"statusCode": 200}'
+                        MethodResponses:
+                                - StatusCode: 200
+                                  ResponseParameters:
+                                          method.response.header.Access-Control-Allow-Headers: true
+                                          method.response.header.Access-Control-Allow-Methods: true
+                                          method.response.header.Access-Control-Allow-Origin: true
+
 
         PostRoomsMessageMethod:
                 Type: AWS::ApiGateway::Method
@@ -1493,9 +1539,11 @@ Resources:
                         - CreditsFriendsOptionsMethod
                         - PostFriendsAcceptInviteMethod
                         - FriendsAcceptInviteOptionsMethod
+                        - PostRoomsCheerMethod
+                        - RoomsCheerOptionsMethod
                 Properties:
                         RestApiId: !Ref RestApi
-                        Description: "2026-05-15-invite-links"
+                        Description: "2026-05-15-brezn-cheer"
 
         RestApiStage:
                 Type: AWS::ApiGateway::Stage

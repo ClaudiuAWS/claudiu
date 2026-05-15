@@ -28,7 +28,7 @@ export default function InviteShareSheet({ open, onClose, inviterUserId, inviter
 
   const inviteUrl = `${window.location.origin}/invite/${inviterUserId}`
   const name = inviterName || 'A friend'
-  const shareText = `${name} invited you to play Bundesliga Fantasy. Tap the link to auto-connect and start scoring with their squad: ${inviteUrl}`
+  const shareText = `${name} invited you to play Brezn — the live Bundesliga matchday party. Tap the link to auto-connect and start scoring with their squad: ${inviteUrl}`
 
   const handleNativeShare = async () => {
     if (!navigator.share) {
@@ -37,7 +37,7 @@ export default function InviteShareSheet({ open, onClose, inviterUserId, inviter
     }
     try {
       await navigator.share({
-        title: 'Bundesliga Fantasy',
+        title: 'Brezn',
         text:  shareText,
         url:   inviteUrl,
       })

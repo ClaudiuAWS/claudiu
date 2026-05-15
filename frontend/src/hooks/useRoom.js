@@ -34,9 +34,11 @@ function _writeScoreEvents(roomCode, events) {
 // subscribe via useRoom's `onMinigameMessage` callback so the WS connection
 // stays single (one channel subscription per room).
 
-export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMinigameMessage = null, onMatchStarted = null) {
+export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMinigameMessage = null, onMatchStarted = null, onCheer = null) {
   const [room, setRoom] = useState(initialRoom)
   const [loading, setLoading] = useState(initialRoom ? false : true)
+  const onCheerRef = useRef(onCheer)
+  onCheerRef.current = onCheer
   const [scoreEvents, setScoreEvents] = useState([])
   // Held in a ref so handleMessage stays stable even when the callback
   // identity changes between renders — same pattern as _resolveBoth in
@@ -123,6 +125,11 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       logger.info('useRoom', 'WS match_started', msg.matchId)
     } else if (msg.type === 'chat_message') {
       onChatMessage?.(msg)
+    } else if (msg.type === 'cheer') {
+      // Free-form floating-emoji reaction from a party member. Forwarded
+      // to the consumer (MatchPage) which mounts the ReactionsOverlay.
+      // Purely cosmetic — no leaderboard side-effect.
+      onCheerRef.current?.(msg)
     } else if (msg.type === 'score_update') {
       // Reconcile to the leaderboard absolute, with a regression guard.
       //
