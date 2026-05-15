@@ -24,7 +24,7 @@ export const TRACKS = [
     title:         'A Fresh Energy',
     artist:        'Gaskin',
     file:          '/songs/intro.mp3',
-    artwork:       null, // not from Spotify — falls back to CSS letter
+    artwork:       '/songs/intro.jpg',
     requiredBadge: null,
   },
   { id: 'avicii-the-nights', title: 'The Nights', artist: 'Avicii', file: '/songs/avicii-the-nights.mp3', artwork: '/songs/avicii-the-nights.jpg', requiredBadge: null },
