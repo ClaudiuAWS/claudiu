@@ -73,3 +73,8 @@ export const badgesApi = {
   list:    () => request('/badges'),
   catalog: () => request('/badges/catalog'),
 }
+
+export const creditsApi = {
+  balance: () => request('/credits'),
+  friends: () => request('/credits/friends'),
+}

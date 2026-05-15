@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useMatches } from '../hooks/useMatch'
+import { useCredits } from '../hooks/useCredits'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 
 const STATUS = {
@@ -83,6 +84,7 @@ function MatchCard({ match, onSelect }) {
 export default function HomePage() {
   const { user } = useAuth()
   const { matches, loading, error } = useMatches()
+  const { balance: credits } = useCredits()
   const navigate = useNavigate()
 
   if (loading) return <LoadingSpinner />
@@ -97,18 +99,34 @@ export default function HomePage() {
           and a thin red accent rule. The displayName drops in as the Mister's
           name; default is "Boss" so the slot never collapses. */}
       <div className="px-2">
-        <div
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-3"
-          style={{
-            background: 'rgba(220,38,38,0.12)',
-            border: '1px solid rgba(220,38,38,0.35)',
-            boxShadow: '0 0 14px -4px rgba(220,38,38,0.45)',
-          }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-          <span className="text-[10px] font-bold tracking-widest uppercase text-red-300">
-            Matchday
-          </span>
+        <div className="flex items-center gap-2 mb-3">
+          <div
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+            style={{
+              background: 'rgba(220,38,38,0.12)',
+              border: '1px solid rgba(220,38,38,0.35)',
+              boxShadow: '0 0 14px -4px rgba(220,38,38,0.45)',
+            }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-[10px] font-bold tracking-widest uppercase text-red-300">
+              Matchday
+            </span>
+          </div>
+          {/* Credit pill — currency the user accumulates from match scoring. */}
+          <div
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+            style={{
+              background: 'rgba(250,204,21,0.10)',
+              border: '1px solid rgba(250,204,21,0.30)',
+            }}
+            title="In-game credits"
+          >
+            <span className="text-amber-300 text-[11px] leading-none">¢</span>
+            <span className="text-amber-200 text-[10px] font-bold tracking-widest tabular-nums">
+              {Number(credits || 0).toLocaleString()}
+            </span>
+          </div>
         </div>
         <h1
           className="text-white font-stadium text-4xl leading-none"

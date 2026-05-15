@@ -15,6 +15,16 @@ except Exception as _e:  # pragma: no cover
     _badges = None
     print(f"[badges] module import skipped: {_e}")
 
+# Credits integration — same pattern as badges. Bundled from
+# `backend/shared/credits.py` by the deploy workflow. Awarding credits
+# on scoring events is purely additive; a failure here can never break
+# the underlying fantasy scoring or room broadcast.
+try:
+    import credits as _credits  # type: ignore
+except Exception as _e:  # pragma: no cover
+    _credits = None
+    print(f"[credits] module import skipped: {_e}")
+
 dynamodb = boto3.resource('dynamodb')
 
 matches_table       = dynamodb.Table(os.environ['MATCHES_TABLE'])
@@ -329,6 +339,27 @@ def _score_rooms_for_event(match_id: str, event_type: str, data: dict) -> None:
                         )
                 except Exception as _e:  # pragma: no cover
                     print(f"[badges] evaluate_score_changes failed: {_e}")
+
+            # Credits layer (also additive). Awards in-game credits for
+            # positive fantasy-points deltas. Same try/except discipline
+            # as badges — a failure here cannot break match flow.
+            if _credits is not None:
+                try:
+                    _credits.award_for_score_changes(
+                        [
+                            {
+                                'userId':     c['userId'],
+                                'delta':      c['delta'],
+                                'eventType':  event_type,
+                                'reason':     c.get('reason') or '',
+                                'playerName': c.get('playerName') or '',
+                            }
+                            for c in member_changes if c.get('delta')
+                        ],
+                        match_id=match_id,
+                    )
+                except Exception as _e:  # pragma: no cover
+                    print(f"[credits] award_for_score_changes failed: {_e}")
 
 
 def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:

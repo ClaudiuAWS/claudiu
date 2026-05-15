@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu DynamoDB Table - Credits (per-user wallet balance)
+
+# One row per user holding the in-game wallet:
+#   PK userId      (S)         Cognito sub
+#   balance        (N)         current spendable balance
+#   totalEarned    (N)         lifetime credits earned
+#   totalSpent     (N)         lifetime credits spent
+#   updatedAt      (S, ISO)
+#   lastReason     (S)         last award/debit reason — useful for debugging
+#
+# Writers (backend/shared/credits.py): use UpdateItem ADD on `balance`
+# (and `totalEarned` for award, `totalSpent` for debit). Debit is gated
+# by a ConditionExpression `balance >= :amount` so credits can never
+# go negative.
+#
+# Reads are by GetItem (single user) or BatchGetItem (friend leaderboard).
+# PAY_PER_REQUEST keeps cost at zero when idle.
+
+Resources:
+        CreditsTable:
+                Type: AWS::DynamoDB::Table
+                Properties:
+                        TableName: claudiu-credits
+                        BillingMode: PAY_PER_REQUEST
+                        AttributeDefinitions:
+                                - AttributeName: userId
+                                  AttributeType: S
+                        KeySchema:
+                                - AttributeName: userId
+                                  KeyType: HASH
+
+Outputs:
+        CreditsTableName:
+                Value: !Ref CreditsTable
+                Export:
+                        Name: claudiu-credits-table
+
+        CreditsTableArn:
+                Value: !GetAtt CreditsTable.Arn
+                Export:
+                        Name: claudiu-credits-table-arn
