@@ -18,8 +18,10 @@ import FriendsPage from './pages/FriendsPage'
 import ProfilePage from './pages/ProfilePage'
 import BadgesPage from './pages/BadgesPage'
 import TracksPage from './pages/TracksPage'
+import InvitePage from './pages/InvitePage'
 import InviteListener from './components/InviteListener'
 import BadgeListener from './components/BadgeListener'
+import PendingInviteConsumer from './components/PendingInviteConsumer'
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null } }
@@ -54,6 +56,7 @@ const Layout = ({ children }) => (
   // audio via `useBgAmbientAudio` and are outside Layout, so the two
   // sources never play simultaneously.
   <AppAudioProvider>
+    <PendingInviteConsumer />
     <TopNav />
     <div className="pt-16 pb-24">
       {children}
@@ -106,6 +109,10 @@ export default function App() {
           <Route path="/tracks" element={
             <ProtectedRoute><Layout><TracksPage /></Layout></ProtectedRoute>
           }/>
+
+          {/* Invite link — public route. Decides whether to auto-friend
+              (logged in) or stash the inviter for after signup. */}
+          <Route path="/invite/:inviterUserId" element={<InvitePage />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

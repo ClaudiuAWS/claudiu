@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu Lambda Functions - Credits Feature (read API)
+
+# Read-only Lambda for the in-game wallet. Writes are performed by other
+# Lambdas (event-processor) via `backend/shared/credits.py`. The credits
+# Lambda only ever Gets/Queries.
+
+Resources:
+        CreditsLambdaRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-credits-lambda-role
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Service: lambda.amazonaws.com
+                                          Action: sts:AssumeRole
+                        ManagedPolicyArns:
+                                - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+                        Policies:
+                                - PolicyName: claudiu-credits-lambda-policy
+                                  PolicyDocument:
+                                          Version: "2012-10-17"
+                                          Statement:
+                                                  - Sid: CreditsTableRead
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:GetItem
+                                                            - dynamodb:BatchGetItem
+                                                    Resource: !ImportValue claudiu-credits-table-arn
+                                                  - Sid: FriendsTableRead
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:Query
+                                                            - dynamodb:GetItem
+                                                    Resource: !ImportValue claudiu-friends-table-arn
+
+        CreditsLambda:
+                Type: AWS::Lambda::Function
+                Properties:
+                        FunctionName: claudiu-credits
+                        Runtime: python3.14
+                        Handler: handler.handler
+                        Role: !GetAtt CreditsLambdaRole.Arn
+                        Timeout: 10
+                        MemorySize: 128
+                        Environment:
+                                Variables:
+                                        CREDITS_TABLE: !ImportValue claudiu-credits-table
+                                        FRIENDS_TABLE: !ImportValue claudiu-friends-table
+                        Code:
+                                ZipFile: |
+                                        def handler(event, context):
+                                            return {'statusCode': 200, 'body': 'ok'}
+
+Outputs:
+        CreditsLambdaArn:
+                Value: !GetAtt CreditsLambda.Arn
+                Export:
+                        Name: claudiu-credits-lambda-arn

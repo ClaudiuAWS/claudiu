@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { profileApi } from '../services/api'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import { useAppAudio } from '../hooks/useAppAudio'
+import { useCredits } from '../hooks/useCredits'
 import DiscArtwork from '../components/ui/DiscArtwork'
 
 const AVATAR_COLORS = [
@@ -186,6 +187,9 @@ export default function ProfilePage() {
         <p className="text-gray-500 text-sm mt-1 truncate max-w-full">{user.email}</p>
       </div>
 
+      {/* Wallet */}
+      <CreditsCard />
+
       {/* Account details */}
       <div
         className="mt-4 rounded-2xl overflow-hidden"
@@ -243,8 +247,7 @@ function MusicCard() {
   const navigate = useNavigate()
   const {
     appEnabled, toggleApp, appVolume, setAppVolume,
-    introEnabled, toggleIntro,
-    appTrack, tracks,
+    appTrack,
   } = useAppAudio()
 
   const volPct = Math.round(appVolume * 100)
@@ -265,7 +268,6 @@ function MusicCard() {
       <MusicToggleRow
         icon="🎵"
         title="App music"
-        sub="Background track while you watch matches"
         enabled={appEnabled}
         onToggle={toggleApp}
       />
@@ -294,15 +296,6 @@ function MusicCard() {
         </div>
       )}
 
-      {/* Intro music toggle row */}
-      <MusicToggleRow
-        icon="🎬"
-        title="Intro music"
-        sub="Plays during the splash screen"
-        enabled={introEnabled}
-        onToggle={toggleIntro}
-      />
-
       {/* "Now playing" link to the full TracksPage. */}
       <button
         type="button"
@@ -330,9 +323,6 @@ function MusicCard() {
           </div>
           <span className="text-gray-500 text-lg leading-none flex-shrink-0">›</span>
         </div>
-        <p className="text-gray-500 text-[10px] mt-2 leading-snug">
-          Browse all {tracks.length} {tracks.length === 1 ? 'disc' : 'discs'} you own →
-        </p>
       </button>
     </div>
   )
@@ -357,7 +347,9 @@ function MusicToggleRow({ icon, title, sub, enabled, onToggle }) {
         </div>
         <div className="min-w-0">
           <p className="text-white text-sm font-semibold leading-tight">{title}</p>
-          <p className="text-gray-500 text-[11px] truncate leading-tight">{sub}</p>
+          {sub && (
+            <p className="text-gray-500 text-[11px] truncate leading-tight">{sub}</p>
+          )}
         </div>
       </div>
 
@@ -380,6 +372,41 @@ function MusicToggleRow({ icon, title, sub, enabled, onToggle }) {
           }}
         />
       </button>
+    </div>
+  )
+}
+
+/**
+ * Wallet card — current balance + lifetime earned/spent.
+ * Balance ticks up via event-processor awards during live matches.
+ */
+function CreditsCard() {
+  const { balance, totalEarned, totalSpent, loading } = useCredits()
+  return (
+    <div
+      className="mt-4 rounded-2xl px-5 py-4"
+      style={{
+        background: 'linear-gradient(145deg, #1a1410 0%, #0d0806 100%)',
+        border: '1px solid rgba(250,204,21,0.20)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px -16px rgba(250,204,21,0.35)',
+      }}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-500">
+          Wallet
+        </p>
+        <span className="text-[10px] text-amber-300/80 tracking-widest uppercase">¢ Credits</span>
+      </div>
+      <p
+        className="text-white font-stadium text-3xl leading-none tabular-nums mt-1"
+        style={{ letterSpacing: '0.05em', textShadow: '0 2px 0 rgba(0,0,0,0.6)' }}
+      >
+        {loading ? '—' : Number(balance).toLocaleString()}
+      </p>
+      <div className="mt-3 flex items-center gap-4 text-[10px] tracking-wider uppercase text-gray-500">
+        <span>Earned <span className="text-gray-300 tabular-nums">{Number(totalEarned).toLocaleString()}</span></span>
+        <span>Spent  <span className="text-gray-300 tabular-nums">{Number(totalSpent).toLocaleString()}</span></span>
+      </div>
     </div>
   )
 }

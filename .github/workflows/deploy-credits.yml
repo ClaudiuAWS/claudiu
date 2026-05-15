@@ -1,0 +1,37 @@
+name: Deploy Credits Lambda
+
+on:
+        push:
+                branches: [main]
+                paths:
+                        - "backend/credits/**"
+                        - "backend/shared/credits.py"
+
+permissions:
+        id-token: write
+        contents: read
+
+jobs:
+        deploy:
+                runs-on: ubuntu-latest
+                steps:
+                        - uses: actions/checkout@v4
+
+                        - name: Configure AWS credentials
+                          uses: aws-actions/configure-aws-credentials@v4
+                          with:
+                                  role-to-assume: ${{ secrets.AWS_BACKEND_GITHUB_ACTIONS_ROLE_ARN }}
+                                  aws-region: eu-central-1
+
+                        - name: Build and deploy
+                          run: |
+                                  cd backend/credits
+                                  # Bundle the shared writer module alongside the local handler.
+                                  # Renamed to `credits_shared.py` to avoid the import name
+                                  # colliding with the local handler module (mirrors what the
+                                  # badges Lambda does).
+                                  cp ../shared/credits.py ./credits_shared.py
+                                  zip function.zip handler.py credits_shared.py
+                                  aws lambda update-function-code \
+                                    --function-name claudiu-credits \
+                                    --zip-file fileb://function.zip
