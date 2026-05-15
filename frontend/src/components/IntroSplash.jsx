@@ -3,9 +3,10 @@ import { getIntroAudioPrefs } from '../hooks/useAppAudio'
 
 const STORAGE_KEY = 'claudiu_intro_seen'
 const TRIM_START = 6.5
-const END_PAD    = 0.5
 const BUMPER_AT  = 29.5
-const FADE_DURATION_MS = 1500   // longer + equal-power curve = smoother intro→login handoff
+const FADE_DURATION_MS    = 1500   // splash fade-out on tap-to-advance
+const CROSSFADE_DURATION  = 1.0    // intro-loop cross-fade between buffers (seconds)
+const CROSSFADE_LEAD      = 1.1    // seconds before duration to start the fade
 
 function pickSrc() {
   if (typeof window === 'undefined') return '/intro-mobile.mp4'
@@ -14,35 +15,51 @@ function pickSrc() {
 }
 
 /**
- * Intro splash.
+ * Intro splash with double-buffered loop + cinematic pre-roll.
  *
- * Pre-roll: black background + the geometric brand panel idling
- * with float + logo-tilt animations + a TAP TO BEGIN prompt. Video
- * stays paused (opacity 0). First tap triggers a brief press
- * animation, starts the video unmuted (using that gesture for
- * browser audio permission), and fades the panel out.
+ * Pre-roll: black bg + brand panel with idle float/tilt motion +
+ * TAP TO BEGIN prompt. Both videos are paused, opacity 0.
  *
- * Playback: video plays at scale 1.0 until BUMPER_AT, then the
- * cinematic zoom (1.0 → 3.0) runs while the brand panel fades back
- * in with the same design but a TAP ANYWHERE prompt. Loop is
- * pre-emptive at duration - END_PAD.
+ * On tap: press animation, both videos seeked to TRIM_START, A
+ * starts playing with audio (gesture grants permission), B is
+ * play()ed then paused to engage the browser's per-element
+ * playback state (so the cross-fade's `play()` later resolves
+ * without a fresh gesture).
  *
- * Fade-out: on the bumper tap, the splash fades over FADE_DURATION_MS
- * with an equal-power cosine curve on the audio. `claudiu:intro-ending`
- * event carries the splash's currentTime so AuthLayout can seek its
- * own video to the same position before its sine-curve fade-in —
- * making the crossfade between two identical musical positions
- * inaudible.
+ * Playback: video plays from TRIM_START. At BUMPER_AT the brand
+ * panel fades back in (now with TAP ANYWHERE) and the cinematic
+ * push-in 1.0 → 3.0 runs over 2.5 s.
+ *
+ * Loop: at `currentTime >= duration - CROSSFADE_LEAD`, the standby
+ * video starts from TRIM_START and we cross-fade opacity + volume
+ * over 1 s. After the fade, the previously-active video pauses and
+ * rewinds — becomes the standby for the next cycle. Matches the
+ * AuthLayout pattern so the intro loop reads as smoothly as the
+ * login bg loop.
+ *
+ * Fade-out: on the bumper tap, splash fades over FADE_DURATION_MS
+ * with an equal-power cosine on the active video's audio. The
+ * `claudiu:intro-ending` event carries the splash's currentTime so
+ * AuthLayout can seek its own video to match before its
+ * sine-curve fade-in.
  */
 export default function IntroSplash({ onFinish }) {
-  const videoRef = useRef(null)
+  const videoARef = useRef(null)
+  const videoBRef = useRef(null)
+  const activeRef = useRef('a')
+  const crossfadingRef = useRef(false)
+  const doubleBufferEnabledRef = useRef(true)
   const finishedRef = useRef(false)
   const bumperShownRef = useRef(false)
+
   const [src] = useState(pickSrc)
+  const [activeKey, setActiveKey] = useState('a')
   const [started, setStarted] = useState(false)
   const [pressing, setPressing] = useState(false)
   const [showBumper, setShowBumper] = useState(false)
   const [fadingOut, setFadingOut] = useState(false)
+
+  useEffect(() => { activeRef.current = activeKey }, [activeKey])
 
   const finish = () => {
     if (finishedRef.current) return
@@ -50,8 +67,8 @@ export default function IntroSplash({ onFinish }) {
     setFadingOut(true)
     try { sessionStorage.setItem(STORAGE_KEY, '1') } catch {}
 
-    const v = videoRef.current
-    const handoffTime = v ? v.currentTime : null
+    const activeV = activeRef.current === 'a' ? videoARef.current : videoBRef.current
+    const handoffTime = activeV ? activeV.currentTime : null
 
     try {
       window.dispatchEvent(new CustomEvent('claudiu:intro-ending', {
@@ -59,16 +76,15 @@ export default function IntroSplash({ onFinish }) {
       }))
     } catch {}
 
-    if (v) {
-      const startVol = v.volume || 1
+    if (activeV) {
+      const startVol = activeV.volume || 1
       const startTime = performance.now()
       const tick = (now) => {
         const t = Math.min(1, (now - startTime) / FADE_DURATION_MS)
-        // Equal-power fade-out: cos(π/2·t) goes 1 → 0 with a curve
-        // that pairs cleanly against AuthLayout's sin(π/2·t) fade-in.
-        try { v.volume = startVol * Math.cos((Math.PI / 2) * t) } catch {}
+        // Equal-power fade-out — pairs with AuthLayout's sin fade-in.
+        try { activeV.volume = startVol * Math.cos((Math.PI / 2) * t) } catch {}
         if (t < 1) requestAnimationFrame(tick)
-        else { try { v.pause() } catch {} }
+        else { try { activeV.pause() } catch {} }
       }
       requestAnimationFrame(tick)
     }
@@ -80,21 +96,49 @@ export default function IntroSplash({ onFinish }) {
     if (started || finishedRef.current) return
     setPressing(true)
     setStarted(true)
-    // Press animation runs ~200ms; reset the flag after CSS completes.
     setTimeout(() => setPressing(false), 250)
 
-    const v = videoRef.current
-    if (!v) return
+    const a = videoARef.current
+    const b = videoBRef.current
+    if (!a || !b) return
+
     const prefs = getIntroAudioPrefs()
+
+    // Seek BOTH to TRIM_START so the first play AND the first
+    // cross-fade target both land at the loop-back point.
+    try { a.currentTime = TRIM_START } catch {}
+    try { b.currentTime = TRIM_START } catch {}
+
+    // Play A unmuted (the tap is the user gesture granting audio).
     try {
-      v.muted = !prefs.enabled
-      v.volume = 1
+      a.muted = !prefs.enabled
+      a.volume = 1
     } catch {}
-    const p = v.play()
-    if (p && typeof p.catch === 'function') {
-      p.catch(() => {
-        try { v.muted = true } catch {}
-        v.play().catch(() => {})
+    const pa = a.play()
+    if (pa && typeof pa.catch === 'function') {
+      pa.catch(() => {
+        try { a.muted = true } catch {}
+        a.play().catch(() => {})
+      })
+    }
+
+    // Engage B: brief play+pause within the gesture so later
+    // cross-fade play() works without needing another gesture.
+    try {
+      b.muted = true
+      b.volume = 0
+    } catch {}
+    const pb = b.play()
+    if (pb && typeof pb.then === 'function') {
+      pb.then(() => {
+        try {
+          b.pause()
+          b.currentTime = TRIM_START
+        } catch {}
+      }).catch(() => {
+        // Couldn't engage B even muted — disable double-buffer,
+        // fall back to single-element seek-loop on A.
+        doubleBufferEnabledRef.current = false
       })
     }
   }
@@ -108,49 +152,113 @@ export default function IntroSplash({ onFinish }) {
   }
 
   useEffect(() => {
-    const v = videoRef.current
-    if (!v) return
+    const a = videoARef.current
+    const b = videoBRef.current
+    if (!a || !b) return
 
-    const seek = () => {
-      try { if (v.currentTime < TRIM_START) v.currentTime = TRIM_START } catch {}
+    let disposed = false
+
+    const rampVolume = (v, from, to, durationMs) => {
+      const start = performance.now()
+      return new Promise((resolve) => {
+        const tick = (now) => {
+          const t = Math.min(1, (now - start) / durationMs)
+          try { v.volume = from + (to - from) * t } catch {}
+          if (t < 1 && !disposed) requestAnimationFrame(tick)
+          else resolve()
+        }
+        requestAnimationFrame(tick)
+      })
     }
-    if (v.readyState >= 1) seek()
-    else v.addEventListener('loadedmetadata', seek, { once: true })
 
-    let isLooping = false
-    const onTimeUpdate = () => {
+    const performCrossfade = async () => {
+      const fromKey = activeRef.current
+      const toKey = fromKey === 'a' ? 'b' : 'a'
+      const fromV = fromKey === 'a' ? a : b
+      const toV   = toKey   === 'a' ? a : b
+
+      const prefs = getIntroAudioPrefs()
+      const targetVol = prefs.enabled ? 1.0 : 0.0
+
+      try {
+        toV.currentTime = TRIM_START
+        toV.muted = !prefs.enabled
+        toV.volume = 0
+      } catch {}
+
+      try { await toV.play() } catch { /* engagement should have prevented this */ }
+
+      setActiveKey(toKey)
+
+      const durationMs = CROSSFADE_DURATION * 1000
+      const fromStartVol = (() => { try { return fromV.volume } catch { return targetVol } })()
+      await Promise.all([
+        rampVolume(fromV, fromStartVol, 0, durationMs),
+        rampVolume(toV,   0, targetVol, durationMs),
+      ])
+
+      try {
+        fromV.pause()
+        fromV.currentTime = TRIM_START
+        fromV.volume = 0
+        fromV.muted = true
+      } catch {}
+
+      activeRef.current = toKey
+      crossfadingRef.current = false
+    }
+
+    const onTimeUpdate = (e) => {
+      const v = e.target
+      const key = activeRef.current
+      const isActive = (key === 'a' && v === a) || (key === 'b' && v === b)
+      if (!isActive) return
+
       if (v.currentTime >= BUMPER_AT && !bumperShownRef.current) {
         bumperShownRef.current = true
         setShowBumper(true)
       }
-      if (isLooping) return
+      if (crossfadingRef.current) return
       const d = v.duration
       if (!isFinite(d) || d <= 0) return
-      if (v.currentTime >= d - END_PAD) {
-        isLooping = true
-        try {
-          v.currentTime = TRIM_START
-          const p = v.play()
-          if (p && typeof p.catch === 'function') p.catch(() => {})
-        } catch {}
-        setTimeout(() => { isLooping = false }, 100)
+      if (v.currentTime >= d - CROSSFADE_LEAD) {
+        crossfadingRef.current = true
+        if (doubleBufferEnabledRef.current) {
+          performCrossfade()
+        } else {
+          // Single-buffer fallback: hard seek-loop on the active video.
+          try {
+            v.currentTime = TRIM_START
+            const p = v.play()
+            if (p && typeof p.catch === 'function') p.catch(() => {})
+          } catch {}
+          crossfadingRef.current = false
+        }
       }
     }
-    v.addEventListener('timeupdate', onTimeUpdate)
+    a.addEventListener('timeupdate', onTimeUpdate)
+    b.addEventListener('timeupdate', onTimeUpdate)
 
-    const onEnded = () => {
+    const onEnded = (e) => {
+      const v = e.target
+      const key = activeRef.current
+      const isActive = (key === 'a' && v === a) || (key === 'b' && v === b)
+      if (!isActive || crossfadingRef.current) return
       try {
         v.currentTime = TRIM_START
         const p = v.play()
         if (p && typeof p.catch === 'function') p.catch(() => {})
       } catch {}
     }
-    v.addEventListener('ended', onEnded)
+    a.addEventListener('ended', onEnded)
+    b.addEventListener('ended', onEnded)
 
     return () => {
-      v.removeEventListener('loadedmetadata', seek)
-      v.removeEventListener('timeupdate', onTimeUpdate)
-      v.removeEventListener('ended', onEnded)
+      disposed = true
+      a.removeEventListener('timeupdate', onTimeUpdate)
+      b.removeEventListener('timeupdate', onTimeUpdate)
+      a.removeEventListener('ended', onEnded)
+      b.removeEventListener('ended', onEnded)
     }
   }, [])
 
@@ -158,20 +266,27 @@ export default function IntroSplash({ onFinish }) {
   const showPanel = !started || showBumper
   const inPreRoll = !started
 
-  // Animation string for the panel container.
-  // - Pre-roll idle: gentle vertical float
-  // - On tap: one-shot press
-  // - During playback: no animation (panel is hidden anyway via opacity)
   const panelAnim = pressing
     ? 'preRollPress 0.22s ease-out'
     : inPreRoll
       ? 'preRollFloat 2.4s ease-in-out infinite'
       : 'none'
 
-  // Logo tilt — only during pre-roll idle.
   const logoAnim = inPreRoll && !pressing
     ? 'preRollLogoTilt 3.6s ease-in-out infinite'
     : 'none'
+
+  // Shared inline style for both video elements. Opacity comes from
+  // `activeKey` (which one is currently visible during cross-fade)
+  // AND `started` (both invisible during pre-roll).
+  const videoStyle = (key) => ({
+    opacity: !started ? 0 : (activeKey === key ? 1 : 0),
+    transform: showBumper ? 'scale(3.0)' : 'scale(1.0)',
+    transformOrigin: 'center center',
+    transitionProperty: 'opacity, transform',
+    transitionDuration: '500ms, 2500ms',
+    transitionTimingFunction: 'ease-out, cubic-bezier(0.45, 0, 0.55, 1)',
+  })
 
   return (
     <div
@@ -187,32 +302,25 @@ export default function IntroSplash({ onFinish }) {
       }}
     >
       <video
-        ref={videoRef}
+        ref={videoARef}
         src={src}
         muted
         playsInline
         poster="/intro-poster.jpg"
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-        style={{
-          // Hidden during pre-roll so only the panel + black bg are
-          // visible. Fades in over 500ms once the user taps.
-          opacity: started ? 1 : 0,
-          transition: 'opacity 500ms ease-out',
-          // Cinematic push-in at the bumper.
-          transform: showBumper ? 'scale(3.0)' : 'scale(1.0)',
-          transformOrigin: 'center center',
-          // The transform transition only applies after `started`
-          // so we don't get a phantom zoom from the initial render.
-          // (We use `style` so React commits this every render; the
-          // long duration is only for the scale transform.)
-          transitionProperty: 'opacity, transform',
-          transitionDuration: '500ms, 2500ms',
-          transitionTimingFunction: 'ease-out, cubic-bezier(0.45, 0, 0.55, 1)',
-        }}
+        style={videoStyle('a')}
+      />
+      <video
+        ref={videoBRef}
+        src={src}
+        muted
+        playsInline
+        poster="/intro-poster.jpg"
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+        style={videoStyle('b')}
       />
 
-      {/* Shared brand panel — pre-roll AND bumper.
-          Only prompt text + idle animations differ between phases. */}
+      {/* Shared brand panel — pre-roll AND bumper. */}
       <div
         className="absolute inset-0 flex items-center justify-center pointer-events-none px-6"
         style={{
@@ -231,7 +339,7 @@ export default function IntroSplash({ onFinish }) {
             padding: '2.25rem 2.75rem',
             animation: panelAnim,
             transformOrigin: 'center center',
-            perspective: '800px',  // gives the logo's rotateY some depth
+            perspective: '800px',
           }}
         >
           <div
