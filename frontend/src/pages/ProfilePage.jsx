@@ -6,6 +6,8 @@ import LoadingSpinner from '../components/ui/LoadingSpinner'
 import { useAppAudio } from '../hooks/useAppAudio'
 import { useCredits } from '../hooks/useCredits'
 import DiscArtwork from '../components/ui/DiscArtwork'
+import PretzelCoin from '../components/ui/PretzelCoin'
+import BadgesShowcase from '../components/profile/BadgesShowcase'
 
 const AVATAR_COLORS = [
   'from-violet-500 to-fuchsia-600',
@@ -186,6 +188,9 @@ export default function ProfilePage() {
         </p>
         <p className="text-gray-500 text-sm mt-1 truncate max-w-full">{user.email}</p>
       </div>
+
+      {/* Portfolio: earned crests above the wallet — trophies first. */}
+      <BadgesShowcase />
 
       {/* Wallet */}
       <CreditsCard />
@@ -377,7 +382,7 @@ function MusicToggleRow({ icon, title, sub, enabled, onToggle }) {
 }
 
 /**
- * Wallet card — current balance + lifetime earned/spent.
+ * Wallet card — current Brezn balance + lifetime earned/spent.
  * Balance ticks up via event-processor awards during live matches.
  */
 function CreditsCard() {
@@ -395,14 +400,20 @@ function CreditsCard() {
         <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-500">
           Wallet
         </p>
-        <span className="text-[10px] text-amber-300/80 tracking-widest uppercase">¢ Credits</span>
+        <span className="inline-flex items-center gap-1 text-[10px] text-amber-300/80 tracking-widest uppercase">
+          <PretzelCoin size={12} color="#fcd34d" />
+          Brezn
+        </span>
       </div>
-      <p
-        className="text-white font-stadium text-3xl leading-none tabular-nums mt-1"
-        style={{ letterSpacing: '0.05em', textShadow: '0 2px 0 rgba(0,0,0,0.6)' }}
-      >
-        {loading ? '—' : Number(balance).toLocaleString()}
-      </p>
+      <div className="flex items-center gap-2 mt-1">
+        <PretzelCoin size={24} color="#fcd34d" />
+        <p
+          className="text-white font-stadium text-3xl leading-none tabular-nums"
+          style={{ letterSpacing: '0.05em', textShadow: '0 2px 0 rgba(0,0,0,0.6)' }}
+        >
+          {loading ? '—' : Number(balance).toLocaleString()}
+        </p>
+      </div>
       <div className="mt-3 flex items-center gap-4 text-[10px] tracking-wider uppercase text-gray-500">
         <span>Earned <span className="text-gray-300 tabular-nums">{Number(totalEarned).toLocaleString()}</span></span>
         <span>Spent  <span className="text-gray-300 tabular-nums">{Number(totalSpent).toLocaleString()}</span></span>

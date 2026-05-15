@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useMatches } from '../hooks/useMatch'
 import { useCredits } from '../hooks/useCredits'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
+import PretzelCoin from '../components/ui/PretzelCoin'
 
 const STATUS = {
   upcoming: { label: 'Upcoming',  pill: 'bg-white/5 text-gray-400',                dot: null },
@@ -113,16 +114,16 @@ export default function HomePage() {
               Matchday
             </span>
           </div>
-          {/* Credit pill — currency the user accumulates from match scoring. */}
+          {/* Brezn pill — the in-game currency (Bavarian pretzel coin). */}
           <div
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
             style={{
               background: 'rgba(250,204,21,0.10)',
               border: '1px solid rgba(250,204,21,0.30)',
             }}
-            title="In-game credits"
+            title="Brezn — in-game currency"
           >
-            <span className="text-amber-300 text-[11px] leading-none">¢</span>
+            <PretzelCoin size={12} color="#fcd34d" />
             <span className="text-amber-200 text-[10px] font-bold tracking-widest tabular-nums">
               {Number(credits || 0).toLocaleString()}
             </span>

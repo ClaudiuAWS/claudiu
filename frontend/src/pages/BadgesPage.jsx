@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useBadges } from '../hooks/useBadges'
-import { BADGE_CATALOG, TIER_COLORS } from '../utils/badges'
+import { BADGE_CATALOG, TIER_COLORS, getBadgePrice } from '../utils/badges'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
+import PretzelCoin from '../components/ui/PretzelCoin'
 
 export default function BadgesPage() {
   const { badges, loading } = useBadges()
@@ -104,7 +105,12 @@ function BadgeCard({ badge, earned, earnedAt }) {
       )}
 
       {/* Badge artwork — full-bleed when we have a real PNG, plinth
-          fallback only for the CSS-letter placeholder. */}
+          fallback only for the CSS-letter placeholder. `mix-blend-mode:
+          screen` makes the dark circular background baked into the AI-
+          generated crests drop out against the dark page bg, so the
+          icon "floats" instead of being framed by a black blob. The
+          brightness/contrast lift compensates for the wash-out screen
+          mode causes on mid-tones. */}
       <div className="relative mb-3">
         {!imgFailed ? (
           <img
@@ -112,9 +118,10 @@ function BadgeCard({ badge, earned, earnedAt }) {
             alt={badge.title}
             className="w-20 h-20 object-contain"
             style={{
+              mixBlendMode: 'screen',
               filter: earned
-                ? `drop-shadow(0 4px 12px ${tierColor}66) drop-shadow(0 0 10px ${tierColor}88)`
-                : 'grayscale(1) brightness(0.5)',
+                ? `brightness(1.15) contrast(1.05) drop-shadow(0 4px 12px ${tierColor}66) drop-shadow(0 0 10px ${tierColor}88)`
+                : 'grayscale(1) brightness(0.45) contrast(0.95)',
             }}
             onError={() => setImgFailed(true)}
           />
@@ -155,6 +162,26 @@ function BadgeCard({ badge, earned, earnedAt }) {
       <p className="text-gray-500 text-[11px] mt-1 leading-snug">
         {badge.description}
       </p>
+
+      {/* Price tag — Brezn (in-game currency). Earning in-match is
+          always free; this is the credit-grind alternative. */}
+      <div
+        className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full"
+        style={{
+          background: earned
+            ? 'rgba(250,204,21,0.08)'
+            : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${earned ? 'rgba(250,204,21,0.25)' : 'rgba(255,255,255,0.08)'}`,
+        }}
+      >
+        <PretzelCoin size={11} color={earned ? '#fcd34d' : '#6b7280'} />
+        <span
+          className="text-[10px] font-bold tracking-wider tabular-nums"
+          style={{ color: earned ? '#fde68a' : '#6b7280' }}
+        >
+          {getBadgePrice(badge).toLocaleString()}
+        </span>
+      </div>
 
       {/* Disc-reward marker */}
       {badge.discReward && (
