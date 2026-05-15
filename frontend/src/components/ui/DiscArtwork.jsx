@@ -1,14 +1,23 @@
+import { useState } from 'react'
+
 /**
- * DiscArtwork — CSS-only vinyl-style disc.
+ * DiscArtwork — vinyl-style disc with album cover or letter label.
  *
- * Renders a glossy red-and-black disc with the track's first
- * letter centered in a Bebas Neue label. Used everywhere a track
- * is represented in the UI: ProfilePage's "Now playing" link,
- * TracksPage rows, future BadgeAwardToast for disc-rewards.
+ * When `track.artwork` is a valid image URL, the cover sits inside the
+ * vinyl's inner-circle label area. Outer black rim + sheen + concentric
+ * red ring stay the same so the aesthetic is consistent across the
+ * library.
  *
- * Locked discs render dimmed + grayscale via the `locked` prop.
+ * Without artwork (or if the image fails to load), falls back to the
+ * red-and-black radial gradient + the track's first initial in Bebas
+ * Neue — the original CSS-only treatment.
+ *
+ * `locked` dims the whole disc via grayscale + brightness; used for
+ * badge-gated tracks the user hasn't earned yet.
  */
 export default function DiscArtwork({ track, size = 40, locked = false }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  const hasArt = !!(track && track.artwork) && !imgFailed
   const initial = (track?.title || '·').trim().charAt(0).toUpperCase()
   const half = size / 2
 
@@ -22,7 +31,7 @@ export default function DiscArtwork({ track, size = 40, locked = false }) {
         transition: 'filter 200ms ease',
       }}
     >
-      {/* Outer rim — black with red highlight */}
+      {/* Outer vinyl rim — black with red highlight */}
       <div
         className="absolute inset-0 rounded-full"
         style={{
@@ -33,7 +42,7 @@ export default function DiscArtwork({ track, size = 40, locked = false }) {
         }}
       />
 
-      {/* Concentric ring detail */}
+      {/* Concentric red detail ring */}
       <div
         className="absolute rounded-full"
         style={{
@@ -43,25 +52,47 @@ export default function DiscArtwork({ track, size = 40, locked = false }) {
         }}
       />
 
-      {/* Center label */}
-      <div
-        className="absolute rounded-full flex items-center justify-center font-stadium"
-        style={{
-          top: half * 0.55, left: half * 0.55, right: half * 0.55, bottom: half * 0.55,
-          background:
-            'radial-gradient(circle at 35% 30%, #ef4444 0%, #dc2626 50%, #7f1d1d 100%)',
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.25), 0 1px 2px rgba(0,0,0,0.5)',
-          color: '#fff',
-          fontSize: Math.max(8, size * 0.28),
-          letterSpacing: '0.05em',
-          textShadow: '0 1px 0 rgba(0,0,0,0.6)',
-        }}
-      >
-        {initial}
-      </div>
+      {/* Inner label — either album cover or CSS letter */}
+      {hasArt ? (
+        <div
+          className="absolute rounded-full overflow-hidden"
+          style={{
+            top: half * 0.45, left: half * 0.45, right: half * 0.45, bottom: half * 0.45,
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.20), 0 1px 2px rgba(0,0,0,0.5)',
+          }}
+        >
+          <img
+            src={track.artwork}
+            alt=""
+            onError={() => setImgFailed(true)}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+        </div>
+      ) : (
+        <div
+          className="absolute rounded-full flex items-center justify-center font-stadium"
+          style={{
+            top: half * 0.55, left: half * 0.55, right: half * 0.55, bottom: half * 0.55,
+            background:
+              'radial-gradient(circle at 35% 30%, #ef4444 0%, #dc2626 50%, #7f1d1d 100%)',
+            boxShadow:
+              'inset 0 1px 0 rgba(255,255,255,0.25), 0 1px 2px rgba(0,0,0,0.5)',
+            color: '#fff',
+            fontSize: Math.max(8, size * 0.28),
+            letterSpacing: '0.05em',
+            textShadow: '0 1px 0 rgba(0,0,0,0.6)',
+          }}
+        >
+          {initial}
+        </div>
+      )}
 
-      {/* Top sheen */}
+      {/* Top sheen over the whole disc */}
       <div
         className="absolute rounded-full pointer-events-none"
         style={{

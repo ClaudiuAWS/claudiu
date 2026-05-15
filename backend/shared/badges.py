@@ -76,7 +76,7 @@ BADGE_CATALOG = {
         'description': 'Three goals from your squad in a single match.',
         'image':       '/badge-hattrick.png',
         'tier':        'gold',
-        'discReward':  'disc-hattrick',
+        'discReward':  'pitbull-we-are-one',
     },
     'clean_sheet': {
         'id':          'clean_sheet',
@@ -92,7 +92,7 @@ BADGE_CATALOG = {
         'description': 'Perfect score on a Halftime Quiz mini-game.',
         'image':       '/badge-quiz-master.png',
         'tier':        'silver',
-        'discReward':  'disc-mind-games',
+        'discReward':  'kwabs-walk',
     },
     'first_win': {
         'id':          'first_win',
@@ -100,7 +100,7 @@ BADGE_CATALOG = {
         'description': 'Won your first match.',
         'image':       '/badge-first-win.png',
         'tier':        'bronze',
-        'discReward':  'disc-victory-lap',
+        'discReward':  'shakira-waka-waka',
     },
     'veteran_10': {
         'id':          'veteran_10',
