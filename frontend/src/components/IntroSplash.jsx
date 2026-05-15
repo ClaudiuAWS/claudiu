@@ -172,6 +172,16 @@ export default function IntroSplash({ onFinish }) {
         playsInline
         poster="/intro-poster.jpg"
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+        style={{
+          // Cinematic push-in: the video plays at its natural framing
+          // through the run-up, then smoothly zooms to fill the mobile
+          // viewport the moment the brand panel begins fading in. Same
+          // 2.0× scale AuthLayout uses, so the cut to /login lands on
+          // continuous framing.
+          transform: showBumper ? 'scale(2.0)' : 'scale(1.0)',
+          transformOrigin: 'center center',
+          transition: 'transform 2.5s cubic-bezier(0.45, 0, 0.55, 1)',
+        }}
       />
 
       {/* Geometric brand panel — clipped-corner stadium card sitting
