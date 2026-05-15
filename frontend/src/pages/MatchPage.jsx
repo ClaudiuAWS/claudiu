@@ -17,6 +17,9 @@ import SkillFlashBadge from '../components/match/SkillFlashBadge'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import MatchMiniGameModal from '../components/minigame/MatchMiniGameModal'
 import DirectorCommentary from '../components/match/DirectorCommentary'
+import LeaderboardPanel from '../components/match/LeaderboardPanel'
+import ReactionsOverlay, { pushCheer } from '../components/match/ReactionsOverlay'
+import ReactionsButton from '../components/match/ReactionsButton'
 import { useMiniGame } from '../hooks/useMiniGame'
 import { useDirector } from '../hooks/useDirector'
 import { computeOptimisticDeltas } from '../utils/fplScoring'
@@ -37,7 +40,14 @@ export default function MatchPage() {
   // arg. We construct a ref-stable forwarder here and feed it both ways.
   const minigameMsgRef = useRef(null)
   const minigameMsgHandler = useCallback((msg) => minigameMsgRef.current?.(msg), [])
-  const { room, loading: roomLoading, scoreEvents, applyOptimisticDeltas, applyAuthoritativeScoreChange } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler)
+  // Cheer messages from party members flow into the floating ReactionsOverlay.
+  // The local push (sender-side optimistic floater) is handled inside
+  // ReactionsButton itself; here we only forward the WS-side message.
+  const onCheerHandler = useCallback((msg) => {
+    if (msg?.userId === user?.userId) return  // skip own echo to avoid duplicate
+    pushCheer(msg)
+  }, [user?.userId])
+  const { room, loading: roomLoading, scoreEvents, applyOptimisticDeltas, applyAuthoritativeScoreChange } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler, null, onCheerHandler)
 
   // Optimistic local scoring — when an event reveals on the displayed clock,
   // compute deltas client-side and bump the leaderboard immediately. The
@@ -206,7 +216,7 @@ export default function MatchPage() {
 
       {/* Tab bar */}
       <div className="flex border-b border-white/[0.04]">
-        {['feed', 'squad', 'chat'].map(t => (
+        {['feed', 'squad', 'ranks', 'chat'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -248,6 +258,14 @@ export default function MatchPage() {
           </div>
         )}
 
+        {tab === 'ranks' && (
+          <LeaderboardPanel
+            members={room?.members ?? []}
+            currentUserId={user?.userId}
+            roomCode={room?.roomCode}
+          />
+        )}
+
         {tab === 'chat' && (
           <ChatPanel
             messages={messages}
@@ -260,6 +278,12 @@ export default function MatchPage() {
           <ChatBubbles bubbles={bubbles} />
         )}
       </div>
+
+      {/* Floating-emoji reactions — party members tap the button bottom-right
+          to fire one of 6 emojis; every member sees it animate up the right
+          edge of the screen. Purely cosmetic, no scoring side-effects. */}
+      <ReactionsOverlay />
+      <ReactionsButton roomCode={room?.roomCode} />
     </div>
   )
 }

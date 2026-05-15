@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import toast from 'react-hot-toast'
+import { roomsApi } from '../../services/api'
 
 const MEDALS = ['🥇', '🥈', '🥉']
 
@@ -27,7 +29,11 @@ const TEAM_RING = {
   away: { solid: '#1d4ed8', ring: 'rgba(29,78,216,0.18)' },
 }
 
-function SquadList({ details = [] }) {
+// Each tile renders with a captain indicator. When the squad belongs to
+// the current user, tapping a tile sets that player as captain (2x boost).
+// The `onPickCaptain` prop being defined toggles "interactive" mode — for
+// other members' squads, it's display-only.
+function SquadList({ details = [], captainPlayerId = '', onPickCaptain = null }) {
   if (!details.length) {
     return <p className="text-gray-600 text-xs text-center py-3">No squad selected</p>
   }
@@ -40,6 +46,11 @@ function SquadList({ details = [] }) {
 
   return (
     <div className="mt-2 mb-1 space-y-1.5">
+      {onPickCaptain && (
+        <p className="text-[9px] text-amber-300/80 tracking-widest uppercase mb-1">
+          Tap a player to set as captain (2× boost)
+        </p>
+      )}
       {['GK', 'DEF', 'MID', 'FWD'].map(g => {
         const players = grouped[g]
         if (!players.length) return null
@@ -52,15 +63,35 @@ function SquadList({ details = [] }) {
             <div className="flex gap-1 flex-wrap">
               {players.map((d, i) => {
                 const tc = TEAM_RING[d.teamRole] ?? TEAM_RING.home
+                const isCaptain = d.playerId && captainPlayerId === d.playerId
+                const interactive = !!onPickCaptain
+                const Tile = interactive ? 'button' : 'div'
                 return (
-                  <div
+                  <Tile
                     key={i}
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-white flex-shrink-0"
-                    style={{ background: tc.ring, border: `1.5px solid ${tc.solid}` }}
-                    title={`${d.position} · ${d.teamRole}`}
+                    type={interactive ? 'button' : undefined}
+                    onClick={interactive ? () => onPickCaptain(d.playerId) : undefined}
+                    className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-white flex-shrink-0 transition-all ${interactive ? 'active:scale-90 hover:scale-110' : ''}`}
+                    style={{
+                      background: tc.ring,
+                      border: `1.5px solid ${isCaptain ? '#fcd34d' : tc.solid}`,
+                      boxShadow: isCaptain ? '0 0 8px -1px rgba(252,211,77,0.75)' : 'none',
+                    }}
+                    title={`${d.displayName || d.position} · ${d.teamRole}${isCaptain ? ' · Captain' : ''}`}
                   >
                     {d.shirtNumber ?? '?'}
-                  </div>
+                    {isCaptain && (
+                      <span
+                        className="absolute -top-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-black text-black"
+                        style={{
+                          background: '#fcd34d',
+                          boxShadow: '0 0 4px rgba(252,211,77,0.8)',
+                        }}
+                      >
+                        C
+                      </span>
+                    )}
+                  </Tile>
                 )
               })}
             </div>
@@ -71,9 +102,18 @@ function SquadList({ details = [] }) {
   )
 }
 
-export default function LeaderboardPanel({ members = [], currentUserId }) {
+export default function LeaderboardPanel({ members = [], currentUserId, roomCode }) {
   const [expandedId, setExpandedId] = useState(null)
   const sorted = [...members].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+
+  const handlePickCaptain = async (playerId) => {
+    try {
+      await roomsApi.setCaptain(roomCode, playerId)
+      toast.success('Captain set — 2× boost active')
+    } catch (err) {
+      toast.error(err?.message || 'Could not set captain')
+    }
+  }
 
   if (sorted.length === 0) {
     return (
@@ -135,7 +175,11 @@ export default function LeaderboardPanel({ members = [], currentUserId }) {
 
             {/* Squad */}
             {isExpanded && (
-              <SquadList details={member.teamSelectionDetails ?? []} />
+              <SquadList
+                details={member.teamSelectionDetails ?? []}
+                captainPlayerId={member.captainPlayerId || ''}
+                onPickCaptain={isMe && roomCode ? handlePickCaptain : null}
+              />
             )}
           </div>
         )

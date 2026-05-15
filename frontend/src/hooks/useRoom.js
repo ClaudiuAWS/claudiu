@@ -34,9 +34,11 @@ function _writeScoreEvents(roomCode, events) {
 // subscribe via useRoom's `onMinigameMessage` callback so the WS connection
 // stays single (one channel subscription per room).
 
-export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMinigameMessage = null, onMatchStarted = null) {
+export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMinigameMessage = null, onMatchStarted = null, onCheer = null) {
   const [room, setRoom] = useState(initialRoom)
   const [loading, setLoading] = useState(initialRoom ? false : true)
+  const onCheerRef = useRef(onCheer)
+  onCheerRef.current = onCheer
   const [scoreEvents, setScoreEvents] = useState([])
   // Held in a ref so handleMessage stays stable even when the callback
   // identity changes between renders — same pattern as _resolveBoth in
@@ -123,6 +125,26 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       logger.info('useRoom', 'WS match_started', msg.matchId)
     } else if (msg.type === 'chat_message') {
       onChatMessage?.(msg)
+    } else if (msg.type === 'cheer') {
+      // Free-form floating-emoji reaction from a party member. Forwarded
+      // to the consumer (MatchPage) which mounts the ReactionsOverlay.
+      // Purely cosmetic — no leaderboard side-effect.
+      onCheerRef.current?.(msg)
+    } else if (msg.type === 'captain_update') {
+      // A party member picked / changed their captain. Merge into the
+      // local room state so the squad-list captain star updates live for
+      // everyone. The server already persisted; this is pure UI sync.
+      setRoom(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          members: (prev.members || []).map(m =>
+            m.userId === msg.userId
+              ? { ...m, captainPlayerId: msg.playerId || '' }
+              : m
+          ),
+        }
+      })
     } else if (msg.type === 'score_update') {
       // Reconcile to the leaderboard absolute, with a regression guard.
       //
@@ -225,11 +247,23 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       // AI Match Director commentary — push onto a stack. Newest first (top),
       // older entries flow down. Each entry self-purges after 7s. Cap at 5
       // visible to keep the feed clean if the AI gets chatty.
+      //
+      // Personal-commentary filter: when the broadcast carries a non-empty
+      // `forUserIds` array, only show it to the listed users. The flag
+      // `personal: true` on the local entry lets DirectorCommentary render
+      // it with a gold-tinged style so the owner notices the line is
+      // addressed to them. Empty/missing forUserIds = ambient commentary,
+      // shown to everyone.
+      const forUserIds = Array.isArray(msg.forUserIds) ? msg.forUserIds : []
+      if (forUserIds.length > 0 && currentUserId && !forUserIds.includes(currentUserId)) {
+        return
+      }
       const entry = {
         id:             `${msg.relatedEventId || 'cm'}-${Date.now()}`,
         text:           msg.text,
         relatedEventId: msg.relatedEventId,
         reasoning:      msg.reasoning || null,
+        personal:       forUserIds.length > 0,
         ts:             msg.createdAtMs ?? Date.now(),
       }
       setRoom(prev => prev ? {

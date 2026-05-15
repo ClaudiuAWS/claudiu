@@ -47,6 +47,8 @@ export const roomsApi = {
   draftPick:   (roomCode, pairIndex, playerId) => request(`/rooms/${roomCode}/draft-pick`, 'POST', { pairIndex, playerId }),
   directorTick: (roomCode, snapshot)        => request(`/rooms/${roomCode}/director-tick`, 'POST', { snapshot }),
   react:        (roomCode, eventId, reactionType) => request(`/rooms/${roomCode}/react`, 'POST', { eventId, reactionType }),
+  cheer:        (roomCode, emoji)                 => request(`/rooms/${roomCode}/cheer`, 'POST', { emoji }),
+  setCaptain:   (roomCode, playerId)              => request(`/rooms/${roomCode}/captain`, 'POST', { playerId }),
 }
 
 export const matchesApi = {

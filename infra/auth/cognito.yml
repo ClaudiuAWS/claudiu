@@ -18,9 +18,10 @@ Resources:
                                 SourceArn: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/mihaiciorascu11@gmail.com
                         VerificationMessageTemplate:
                                 DefaultEmailOption: CONFIRM_WITH_CODE
-                                EmailSubject: "Your Bundesliga Fantasy verification code"
+                                EmailSubject: "Your Brezn verification code"
                                 EmailMessage: |
-                                        Welcome to Bundesliga Fantasy! Your verification code is {####}.
+                                        Welcome to Brezn — the live Bundesliga matchday party.
+                                        Your verification code is {####}.
 
                                         If you didn't sign up, you can safely ignore this email.
                         Policies:
