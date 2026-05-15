@@ -93,12 +93,39 @@ export default function HomePage() {
   return (
     <div className="px-4 pt-10 pb-4 space-y-8">
 
-      {/* Header */}
+      {/* Matchday greeting — Serie-A "Mister" style with a stadium-glow chip
+          and a thin red accent rule. The displayName drops in as the Mister's
+          name; default is "Boss" so the slot never collapses. */}
       <div className="px-2">
-        <p className="text-gray-500 text-sm">Welcome back</p>
-        <h1 className="text-white text-2xl font-bold mt-0.5 tracking-tight">
-          {user?.displayName ?? 'Fan'} <span className="text-gray-600">👋</span>
+        <div
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-3"
+          style={{
+            background: 'rgba(220,38,38,0.12)',
+            border: '1px solid rgba(220,38,38,0.35)',
+            boxShadow: '0 0 14px -4px rgba(220,38,38,0.45)',
+          }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-[10px] font-bold tracking-widest uppercase text-red-300">
+            Matchday
+          </span>
+        </div>
+        <h1
+          className="text-white font-stadium text-4xl leading-none"
+          style={{
+            letterSpacing: '0.08em',
+            textShadow: '0 2px 0 rgba(0,0,0,0.6), 0 -1px 0 rgba(255,255,255,0.05)',
+          }}
+        >
+          MISTER {(user?.displayName ?? 'Boss').toUpperCase()}
         </h1>
+        <div
+          className="mt-2.5 h-px w-14"
+          style={{ background: 'linear-gradient(90deg, #dc2626 0%, transparent 100%)' }}
+        />
+        <p className="text-gray-400 text-xs mt-2 tracking-wide italic">
+          The squad is yours. Forza.
+        </p>
       </div>
 
       {error && (

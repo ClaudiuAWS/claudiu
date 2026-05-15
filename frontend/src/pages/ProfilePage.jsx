@@ -243,8 +243,7 @@ function MusicCard() {
   const navigate = useNavigate()
   const {
     appEnabled, toggleApp, appVolume, setAppVolume,
-    introEnabled, toggleIntro,
-    appTrack, tracks,
+    appTrack,
   } = useAppAudio()
 
   const volPct = Math.round(appVolume * 100)
@@ -265,7 +264,6 @@ function MusicCard() {
       <MusicToggleRow
         icon="🎵"
         title="App music"
-        sub="Background track while you watch matches"
         enabled={appEnabled}
         onToggle={toggleApp}
       />
@@ -294,15 +292,6 @@ function MusicCard() {
         </div>
       )}
 
-      {/* Intro music toggle row */}
-      <MusicToggleRow
-        icon="🎬"
-        title="Intro music"
-        sub="Plays during the splash screen"
-        enabled={introEnabled}
-        onToggle={toggleIntro}
-      />
-
       {/* "Now playing" link to the full TracksPage. */}
       <button
         type="button"
@@ -330,9 +319,6 @@ function MusicCard() {
           </div>
           <span className="text-gray-500 text-lg leading-none flex-shrink-0">›</span>
         </div>
-        <p className="text-gray-500 text-[10px] mt-2 leading-snug">
-          Browse all {tracks.length} {tracks.length === 1 ? 'disc' : 'discs'} you own →
-        </p>
       </button>
     </div>
   )
@@ -357,7 +343,9 @@ function MusicToggleRow({ icon, title, sub, enabled, onToggle }) {
         </div>
         <div className="min-w-0">
           <p className="text-white text-sm font-semibold leading-tight">{title}</p>
-          <p className="text-gray-500 text-[11px] truncate leading-tight">{sub}</p>
+          {sub && (
+            <p className="text-gray-500 text-[11px] truncate leading-tight">{sub}</p>
+          )}
         </div>
       </div>
 

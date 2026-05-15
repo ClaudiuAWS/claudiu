@@ -103,35 +103,37 @@ function BadgeCard({ badge, earned, earnedAt }) {
         />
       )}
 
-      {/* Plinth + badge artwork */}
+      {/* Badge artwork — full-bleed when we have a real PNG, plinth
+          fallback only for the CSS-letter placeholder. */}
       <div className="relative mb-3">
-        <div
-          className="w-16 h-16 rounded-xl flex items-center justify-center"
-          style={{
-            background: earned
-              ? 'radial-gradient(circle at 50% 30%, #2a1518 0%, #0a0404 100%)'
-              : 'rgba(255,255,255,0.04)',
-            border: earned ? `2px solid ${tierColor}80` : '2px solid rgba(255,255,255,0.10)',
-            boxShadow: earned
-              ? `inset 0 2px 4px rgba(0,0,0,0.5), 0 0 12px -4px ${tierColor}66`
-              : 'none',
-          }}
-        >
-          {!imgFailed ? (
-            <img
-              src={badge.image}
-              alt={badge.title}
-              className="w-12 h-12 object-contain"
-              style={{
-                filter: earned ? 'none' : 'grayscale(1)',
-              }}
-              onError={() => setImgFailed(true)}
-            />
-          ) : (
+        {!imgFailed ? (
+          <img
+            src={badge.image}
+            alt={badge.title}
+            className="w-20 h-20 object-contain"
+            style={{
+              filter: earned
+                ? `drop-shadow(0 4px 12px ${tierColor}66) drop-shadow(0 0 10px ${tierColor}88)`
+                : 'grayscale(1) brightness(0.5)',
+            }}
+            onError={() => setImgFailed(true)}
+          />
+        ) : (
+          <div
+            className="w-16 h-16 rounded-xl flex items-center justify-center"
+            style={{
+              background: earned
+                ? 'radial-gradient(circle at 50% 30%, #2a1518 0%, #0a0404 100%)'
+                : 'rgba(255,255,255,0.04)',
+              border: earned ? `2px solid ${tierColor}80` : '2px solid rgba(255,255,255,0.10)',
+              boxShadow: earned
+                ? `inset 0 2px 4px rgba(0,0,0,0.5), 0 0 12px -4px ${tierColor}66`
+                : 'none',
+            }}
+          >
             <BadgePlaceholder badge={badge} earned={earned} tierColor={tierColor} />
-          )}
-        </div>
-        {/* Red highlight bar under the icon */}
+          </div>
+        )}
         {earned && (
           <div
             className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-0.5 rounded-full"
