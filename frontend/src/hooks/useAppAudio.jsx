@@ -326,6 +326,41 @@ export function AppAudioProvider({ children }) {
     _writeFloat(KEYS.appVolume, clamped)
   }
 
+  // Temporary volume ramp on the underlying <audio> element WITHOUT
+  // persisting to localStorage. Used by ducking flows (e.g. the match-end
+  // celebration mutes the app music for the duration of the celebration
+  // song, then restores). Ramping the persisted volume via setAppVolume
+  // would overwrite the user's saved preference.
+  //
+  // Resolves once the ramp finishes. When `to === 0` the element is
+  // paused at the end; when `to > 0` and the element is paused, play()
+  // is called before the ramp starts.
+  const fadeAppMusic = ({ to = 0, durationMs = 800 } = {}) => {
+    const a = audioRef.current
+    if (!a) return Promise.resolve()
+    const target = Math.min(1, Math.max(0, Number(to) || 0))
+    return new Promise((resolve) => {
+      const from = a.volume
+      if (target > 0 && a.paused) {
+        a.volume = 0
+        try { a.play().catch(() => {}) } catch {}
+      }
+      const start = performance.now()
+      const tick = (now) => {
+        const t = Math.min(1, (now - start) / Math.max(1, durationMs))
+        a.volume = from + (target - from) * t
+        if (t < 1) requestAnimationFrame(tick)
+        else {
+          if (target === 0) {
+            try { a.pause() } catch {}
+          }
+          resolve()
+        }
+      }
+      requestAnimationFrame(tick)
+    })
+  }
+
   // Intro toggle (sound on/off only — no track override)
   const setIntroEnabled = (next) => { setIntroEnabledState(next); _writeBool(KEYS.introEnabled, next) }
   const toggleIntro     = () => setIntroEnabled(!introEnabled)
@@ -411,7 +446,7 @@ export function AppAudioProvider({ children }) {
       // App music
       appEnabled, toggleApp, setAppEnabled,
       appTrackId, setAppTrack, appTrack,
-      appVolume, setAppVolume,
+      appVolume, setAppVolume, fadeAppMusic,
       // Intro audio (toggle only)
       introEnabled, toggleIntro, setIntroEnabled,
       // List of currently-unlocked tracks for the Profile picker.
@@ -435,7 +470,7 @@ export function useAppAudio() {
     return {
       appEnabled: false, toggleApp: () => {}, setAppEnabled: () => {},
       appTrackId: DEFAULT_TRACK_ID, setAppTrack: () => {}, appTrack: null,
-      appVolume: TARGET_VOLUME, setAppVolume: () => {},
+      appVolume: TARGET_VOLUME, setAppVolume: () => {}, fadeAppMusic: () => Promise.resolve(),
       introEnabled: true, toggleIntro: () => {}, setIntroEnabled: () => {},
       tracks: TRACKS,
       albums: [], activeAlbumId: null,

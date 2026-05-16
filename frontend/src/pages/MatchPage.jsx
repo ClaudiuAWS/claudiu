@@ -310,10 +310,18 @@ export default function MatchPage() {
       <ReactionsOverlay />
       <ReactionsButton roomCode={room?.roomCode} />
 
-      {/* Full-time celebration: red confetti rain + TikTok-sourced match-end
-          sound. Driven by useRoom's one-shot matchJustEnded flag, which the
-          hook auto-resets after 5s. */}
-      <MatchEndCelebration shown={matchJustEnded} />
+      {/* Full-time celebration: red confetti (5s) + looped match-end sting
+          + full-screen summary modal (final score, per-member credits,
+          win streak, badges earned this match). Owns the app-music duck +
+          celebration song fade lifecycle; dismissed only via "Back to
+          Home". The matchJustEnded flag stays true until MatchPage
+          unmounts on navigate. */}
+      <MatchEndCelebration
+        shown={matchJustEnded}
+        match={match}
+        room={room}
+        scoreEvents={scoreEvents}
+      />
     </div>
   )
 }
