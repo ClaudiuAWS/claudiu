@@ -182,6 +182,16 @@ Resources:
                                                             - dynamodb:UpdateItem
                                                     Resource:
                                                             - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-leaderboard
+                                                  # Credits feature: event-processor uses backend/shared/credits.py
+                                                  # to award the in-game pretzel-coin currency whenever a member
+                                                  # accrues positive fantasy points (delta × CREDITS_PER_POINT).
+                                                  # Idempotent ADD on a single user row — UpdateItem only.
+                                                  - Sid: CreditsWrite
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:UpdateItem
+                                                    Resource:
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-credits
         MatchesLambdaRole:
                 Type: AWS::IAM::Role
                 Properties:
@@ -307,6 +317,7 @@ Resources:
                                         BADGES_TABLE: claudiu-badges
                                         MATCH_HISTORY_TABLE: claudiu-match-history
                                         LEADERBOARD_TABLE: claudiu-leaderboard
+                                        CREDITS_TABLE: claudiu-credits
                         Code:
                                 ZipFile: |
                                         def handler(event, context):
