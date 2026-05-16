@@ -113,6 +113,20 @@ export default function LobbyPage() {
     }
   }
 
+  // Closes the Draft Reveal Show and — on the host's tab — auto-fires the
+  // match start so the lobby doesn't sit there waiting for a manual button
+  // tap once both squads are locked. Non-host tabs receive the match_started
+  // WS broadcast and redirect themselves. SessionStorage flag prevents
+  // re-firing across remounts (StrictMode, hot reload).
+  const handleRevealClose = () => {
+    setRevealOpen(false)
+    if (!isHost || !room?.roomCode || isLive || starting) return
+    const flagKey = `lobby_auto_started_${room.roomCode}`
+    if (sessionStorage.getItem(flagKey)) return
+    sessionStorage.setItem(flagKey, '1')
+    handleStart()
+  }
+
   if (loading) return <LoadingSpinner />
 
   return (
@@ -291,7 +305,7 @@ export default function LobbyPage() {
       <DraftRevealShow
         open={revealOpen}
         room={room}
-        onClose={() => setRevealOpen(false)}
+        onClose={handleRevealClose}
       />
     </div>
   )

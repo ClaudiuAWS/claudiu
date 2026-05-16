@@ -73,13 +73,14 @@ export default function InviteFriendsModal({ roomCode, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center pb-[88px] sm:pb-0">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Panel */}
+      {/* Panel — capped to the visible area minus the BottomNav so the list
+          never disappears under the nav on mobile. */}
       <div
-        className="relative w-full max-w-md max-h-[70vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-md max-h-[calc(100vh-120px)] sm:max-h-[70vh] rounded-3xl overflow-hidden flex flex-col"
         style={cardStyle}
       >
         {/* Header */}
