@@ -17,7 +17,6 @@ import SkillFlashBadge from '../components/match/SkillFlashBadge'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import MatchMiniGameModal from '../components/minigame/MatchMiniGameModal'
 import DirectorCommentary from '../components/match/DirectorCommentary'
-import LeaderboardPanel from '../components/match/LeaderboardPanel'
 import ReactionsOverlay, { pushCheer } from '../components/match/ReactionsOverlay'
 import ReactionsButton from '../components/match/ReactionsButton'
 import MatchEndCelebration from '../components/match/MatchEndCelebration'
@@ -250,7 +249,7 @@ export default function MatchPage() {
 
       {/* Tab bar */}
       <div className="flex border-b border-white/[0.04]">
-        {['feed', 'squad', 'ranks', 'chat'].map(t => (
+        {['feed', 'squad', 'chat'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -290,14 +289,6 @@ export default function MatchPage() {
               playerMap={playerMap}
             />
           </div>
-        )}
-
-        {tab === 'ranks' && (
-          <LeaderboardPanel
-            members={room?.members ?? []}
-            currentUserId={user?.userId}
-            roomCode={room?.roomCode}
-          />
         )}
 
         {tab === 'chat' && (

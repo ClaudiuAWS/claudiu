@@ -99,6 +99,9 @@ export default function BottomNav() {
         const location = useLocation();
         const navigate = useNavigate();
 
+        // Hide during live matches — players shouldn't leave the match view.
+        if (location.pathname.startsWith("/match/")) return null;
+
         return (
                 <nav className="fixed bottom-0 left-0 right-0 z-50 px-3 pt-3">
                         <div className="bg-gray-900 rounded-t-2xl px-2 py-3 border border-b-0 border-white/8 max-w-lg mx-auto">
