@@ -249,7 +249,7 @@ export default function AuthLayout() {
     <>
       <video
         ref={videoARef}
-        src="/intro-mobile.mp4"
+        src="/intro-mobile-4k.mp4"
         autoPlay
         muted
         playsInline
@@ -258,7 +258,7 @@ export default function AuthLayout() {
       />
       <video
         ref={videoBRef}
-        src="/intro-mobile.mp4"
+        src="/intro-mobile-4k.mp4"
         muted
         playsInline
         poster="/intro-poster.jpg"
