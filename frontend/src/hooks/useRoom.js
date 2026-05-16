@@ -123,8 +123,11 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     } else if (msg.type === 'match_ended') {
       toast('Full time! 🏁')
       logger.info('useRoom', 'WS match_ended', msg.finalResult)
+      // Stays true until the MatchPage unmounts (i.e. the user dismisses
+      // the celebration via "Back to Home"). The end-of-match overlay
+      // owns the long-running popup + audio fades and only completes on
+      // explicit user action.
       setMatchJustEnded(true)
-      setTimeout(() => setMatchJustEnded(false), 5000)
     } else if (msg.type === 'match_started') {
       // Host's `start_match_for_room` pushes this once the replay-emitter
       // confirms the match is live. Non-host clients use it to navigate to

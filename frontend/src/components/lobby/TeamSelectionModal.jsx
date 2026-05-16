@@ -55,6 +55,26 @@ const ZONE_META = {
   ATK:  { label: 'Attacker',    textClass: 'text-red-400' },
 }
 
+// Per-position rgba palette for the FIFA-UT face-off card glow + ring.
+// The draft card frame uses these to tint itself with the player's
+// position colour — yellow GK, blue DEF, emerald MID, orange wide,
+// red FWD — so the pair-pick feels visually charged.
+const TYPE_GLOW = {
+  GK:  { ring: 'rgba(234,179,8,0.50)',  glow: 'rgba(234,179,8,0.30)'  },
+  CB:  { ring: 'rgba(59,130,246,0.50)', glow: 'rgba(59,130,246,0.30)' },
+  LB:  { ring: 'rgba(59,130,246,0.50)', glow: 'rgba(59,130,246,0.30)' },
+  RB:  { ring: 'rgba(59,130,246,0.50)', glow: 'rgba(59,130,246,0.30)' },
+  CDM: { ring: 'rgba(16,185,129,0.50)', glow: 'rgba(16,185,129,0.30)' },
+  CM:  { ring: 'rgba(20,184,166,0.50)', glow: 'rgba(20,184,166,0.30)' },
+  LM:  { ring: 'rgba(249,115,22,0.50)', glow: 'rgba(249,115,22,0.30)' },
+  RM:  { ring: 'rgba(249,115,22,0.50)', glow: 'rgba(249,115,22,0.30)' },
+  LW:  { ring: 'rgba(249,115,22,0.50)', glow: 'rgba(249,115,22,0.30)' },
+  RW:  { ring: 'rgba(249,115,22,0.50)', glow: 'rgba(249,115,22,0.30)' },
+  CAM: { ring: 'rgba(245,158,11,0.50)', glow: 'rgba(245,158,11,0.30)' },
+  CF:  { ring: 'rgba(239,68,68,0.50)',  glow: 'rgba(239,68,68,0.30)'  },
+  ST:  { ring: 'rgba(239,68,68,0.50)',  glow: 'rgba(239,68,68,0.30)'  },
+}
+
 // ─── Team colours ─────────────────────────────────────────────────────────────
 
 const TEAM_ACCENT = {
@@ -160,6 +180,12 @@ function DraftCard({ player, state, onClick }) {
                   : type  // GK, DEF types map directly
   const tm = TYPE_META[type] ?? TYPE_META.CAM
   const tc = ac(player.teamRole)
+  const tg = TYPE_GLOW[type] ?? TYPE_GLOW.CAM
+
+  // Layered shadows: idle gets a soft position-tinted glow (FIFA UT vibe);
+  // chosen intensifies to a bright red ring so the moment lands.
+  const idleShadow = `0 0 20px -2px ${tg.glow}, 0 12px 28px -12px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04)`
+  const chosenShadow = `0 0 36px ${tg.glow}, 0 0 0 4px ${tg.ring}, 0 0 48px rgba(248,113,113,0.45)`
 
   return (
     <button
@@ -168,17 +194,20 @@ function DraftCard({ player, state, onClick }) {
       className={`
         flex-1 rounded-2xl overflow-hidden flex flex-col text-left
         transition-all duration-300 ease-out select-none
-        ${state === 'chosen'   ? 'scale-105 ring-4 ring-red-400' : ''}
+        ${state === 'chosen'   ? 'scale-105' : ''}
         ${state === 'rejected' ? 'scale-95 opacity-20 pointer-events-none' : ''}
         ${state === 'idle'     ? 'hover:scale-[1.025] active:scale-[0.98]' : ''}
       `}
       style={{
-        background: '#161d2e',
-        border: `1px solid rgba(255,255,255,0.07)`,
-        boxShadow: state === 'chosen' ? '0 0 28px rgba(248,113,113,0.4)' : undefined,
+        background: 'linear-gradient(160deg, #1a2238 0%, #131a2a 55%, #0f1421 100%)',
+        border: `1px solid ${state === 'chosen' ? tg.ring : 'rgba(255,255,255,0.08)'}`,
+        boxShadow: state === 'chosen' ? chosenShadow : idleShadow,
       }}
     >
-      <div className="h-1.5 w-full flex-shrink-0" style={{ background: tc.solid }} />
+      <div
+        className="h-1.5 w-full flex-shrink-0"
+        style={{ background: `linear-gradient(90deg, ${tc.solid} 0%, ${tc.solid} 70%, transparent 100%)` }}
+      />
       <div className="flex flex-col items-center gap-2 px-3 pt-4 pb-3 flex-1">
         <div className="relative w-14 h-14 flex-shrink-0">
           {player.imageUrl ? (
@@ -710,13 +739,19 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
         <div className="w-8 h-8" aria-hidden="true" />
 
         <div className="text-center">
-          <p className="text-white font-bold text-sm tracking-wider uppercase">
-            {phase === 'draft'     && 'Draft Battle'}
-            {phase === 'select_xi' && 'Pick Your XI'}
-            {phase === 'preview'   && 'Squad Ready'}
+          <p
+            className="text-white font-stadium text-lg leading-none"
+            style={{ letterSpacing: '0.14em', textShadow: '0 2px 8px rgba(0,0,0,0.7)' }}
+          >
+            {phase === 'draft'     && 'DRAFT BATTLE'}
+            {phase === 'select_xi' && 'PICK YOUR XI'}
+            {phase === 'preview'   && 'SQUAD READY'}
           </p>
           {phase === 'draft' && effectiveCurrentPair && (
-            <p className={`text-[11px] font-semibold mt-0.5 ${zoneMeta.textClass}`}>
+            <p
+              className={`text-[11px] font-bold mt-1.5 tracking-widest uppercase ${zoneMeta.textClass}`}
+              style={{ filter: `drop-shadow(0 0 6px currentColor)` }}
+            >
               Pick a {zoneMeta.label}
             </p>
           )}
@@ -725,13 +760,32 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
           )}
         </div>
 
-        <div className={`text-sm font-bold tabular-nums px-2.5 py-1 rounded-full transition-colors ${
-          phase === 'draft'
-            ? 'bg-white/10 text-gray-300'
-            : starterCount === 11
-              ? 'bg-red-500/20 text-red-400'
-              : 'bg-white/10 text-gray-300'
-        }`}>
+        <div
+          className={`text-sm font-bold tabular-nums px-3 py-1 rounded-full transition-all ${
+            phase === 'draft'
+              ? 'text-amber-200'
+              : starterCount === 11
+                ? 'text-red-400'
+                : 'text-gray-300'
+          }`}
+          style={{
+            background: phase === 'draft'
+              ? 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(217,119,6,0.10) 100%)'
+              : starterCount === 11
+                ? 'linear-gradient(135deg, rgba(220,38,38,0.22) 0%, rgba(127,29,29,0.12) 100%)'
+                : 'rgba(255,255,255,0.08)',
+            border: phase === 'draft'
+              ? '1px solid rgba(245,158,11,0.35)'
+              : starterCount === 11
+                ? '1px solid rgba(248,113,113,0.40)'
+                : '1px solid rgba(255,255,255,0.08)',
+            boxShadow: phase === 'draft'
+              ? '0 0 12px -2px rgba(245,158,11,0.30)'
+              : starterCount === 11
+                ? '0 0 12px -2px rgba(220,38,38,0.35)'
+                : 'none',
+          }}
+        >
           {phase === 'draft' ? `${decisionsMade} / ${effectiveTotalPairs}` : `${starterCount} / 11`}
         </div>
       </div>
@@ -743,17 +797,33 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
         </div>
 
       ) : phase === 'draft' && effectiveCurrentPair?.length ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-5 px-4">
+        <div className="relative flex-1 flex flex-col items-center justify-center gap-5 px-4">
+          {/* Ambient home/away rivalry tint in the corners — subtle, just
+              enough to suggest a face-off without pulling focus from the
+              cards. */}
+          <div
+            className="pointer-events-none absolute inset-0 -z-10"
+            aria-hidden="true"
+            style={{
+              background:
+                'radial-gradient(circle at 8% 12%, rgba(220,38,38,0.10) 0%, transparent 38%), ' +
+                'radial-gradient(circle at 92% 12%, rgba(29,78,216,0.10) 0%, transparent 38%)',
+            }}
+          />
+
           {/* Coordinated mode: hide the "goes to opponent" hint — both
               players pick simultaneously, and a tiebreak handles same-pick. */}
-          <p className="text-gray-600 text-[10px] uppercase tracking-widest text-center">
+          <p
+            className="text-amber-200/70 text-[10px] uppercase tracking-[0.25em] text-center font-semibold"
+            style={{ textShadow: '0 0 8px rgba(245,158,11,0.30)' }}
+          >
             {isCoordinated
               ? 'Both pick at the same time — tap your choice'
               : "Unchosen player goes to opponent's squad"}
           </p>
 
-          {/* Cards */}
-          <div className="flex gap-3 w-full max-w-sm">
+          {/* Cards + VS divider */}
+          <div className="relative flex gap-3 w-full max-w-sm">
             {effectiveCurrentPair.map((player, idx) => {
               const other = effectiveCurrentPair[1 - idx]
               return (
@@ -769,6 +839,25 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
                 />
               )
             })}
+
+            {/* VS divider — centred between the two cards. Pointer-events
+                disabled so the cards behind it stay tappable at the gap. */}
+            <div
+              className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 flex items-center justify-center"
+              aria-hidden="true"
+            >
+              <div
+                className="flex items-center justify-center w-9 h-9 rounded-full text-[10px] font-black tracking-widest"
+                style={{
+                  background: 'linear-gradient(135deg, #fcd34d 0%, #d97706 100%)',
+                  color: '#1a1207',
+                  border: '2px solid rgba(252,211,77,0.55)',
+                  boxShadow: '0 0 18px rgba(252,211,77,0.55), inset 0 1px 0 rgba(255,255,255,0.35)',
+                }}
+              >
+                VS
+              </div>
+            </div>
           </div>
 
           {/* Coordinated mode: "waiting for opponent" indicator while our pick

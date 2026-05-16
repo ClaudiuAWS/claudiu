@@ -51,17 +51,23 @@ export function computeOptimisticDeltas(event, members) {
     for (const m of members) {
       const details = {}
       for (const d of (m.teamSelectionDetails || [])) details[d.playerId] = d
+      // Captain multiplier — must mirror backend/event-processor/service.py
+      // _calculate_member_changes. Without this, the optimistic delta (e.g.
+      // +4 for a FWD goal) disagrees with the WS broadcast (+8 if captain
+      // doubled), and the dedup fingerprint in useRoom.js falls through to
+      // its delta-aware fallback — letting both entries land as duplicates.
+      const captain = m.captainPlayerId || ''
       let delta = 0
       let reason = ''
       let name   = ''
 
       if (scoringPid && details[scoringPid]) {
-        delta += goalValue
+        delta += goalValue * (captain === scoringPid ? 2 : 1)
         reason = 'scored for your squad'
         name   = scoringDisplay
       }
       if (assistPid && details[assistPid]) {
-        delta += 3
+        delta += 3 * (captain === assistPid ? 2 : 1)
         if (!reason) {
           reason = 'assisted for your squad'
           name   = assistDisplay
@@ -73,7 +79,8 @@ export function computeOptimisticDeltas(event, members) {
           d => d.position === 'TW' && d.teamRole === oppRole
         )
         if (concedingGK) {
-          delta -= 1
+          const gkPid = concedingGK.playerId || ''
+          delta += -1 * (captain && captain === gkPid ? 2 : 1)
           if (!reason) {
             reason = 'conceded'
             // select_team persists displayName on each teamSelectionDetails
@@ -96,17 +103,21 @@ export function computeOptimisticDeltas(event, members) {
 
     for (const m of members) {
       const selection = new Set(m.teamSelection || [])
+      const captain   = m.captainPlayerId || ''
       if (playerId && selection.has(playerId)) {
-        out.push({ userId: m.userId, delta: magnitude, reason: verb, playerName: playerDisplay })
+        const delta = magnitude * (captain === playerId ? 2 : 1)
+        out.push({ userId: m.userId, delta, reason: verb, playerName: playerDisplay })
       }
     }
   } else if (type === 'saved_shot') {
     const gkId      = event.goalKeeperId
     const gkDisplay = event.goalKeeperDisplay || ''
     for (const m of members) {
-      const ownsGK = (m.teamSelectionDetails || []).some(d => d.playerId === gkId)
+      const ownsGK  = (m.teamSelectionDetails || []).some(d => d.playerId === gkId)
+      const captain = m.captainPlayerId || ''
       if (gkId && ownsGK) {
-        out.push({ userId: m.userId, delta: 2, reason: 'made a save', playerName: gkDisplay })
+        const delta = 2 * (captain === gkId ? 2 : 1)
+        out.push({ userId: m.userId, delta, reason: 'made a save', playerName: gkDisplay })
       }
     }
   }

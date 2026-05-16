@@ -4,10 +4,11 @@ import { roomsApi } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { pushCheer } from './ReactionsOverlay'
 
-// Pretzel first — the brand emoji, intentional default at the top of the
-// flex-col-reverse stack so it's the closest tap-target to the trigger
-// button.
-const EMOJIS = ['🥨', '⚽', '🔥', '🤣', '😱', '🙌', '💀']
+// Order is tuned for the 2-column grid layout below: items fill
+// left-to-right, top-to-bottom, and the last item (pretzel) gets an
+// explicit `gridColumnStart: 2` so it lands at the bottom-right slot —
+// the cell closest to the FAB, making it the natural default tap.
+const EMOJIS = ['💀', '🙌', '😱', '🤣', '🔥', '⚽', '🥨']
 
 /**
  * Floating reactions button (bottom-right of the match view).
@@ -51,10 +52,10 @@ export default function ReactionsButton({ roomCode }) {
     <div className="fixed bottom-24 right-4 z-50">
       {open && (
         <div
-          className="absolute bottom-14 right-0 flex flex-col-reverse gap-1.5 mb-2"
+          className="absolute bottom-14 right-0 grid grid-cols-2 gap-1.5 mb-2"
           onClick={e => e.stopPropagation()}
         >
-          {EMOJIS.map(e => (
+          {EMOJIS.map((e, i) => (
             <button
               key={e}
               onClick={() => send(e)}
@@ -63,6 +64,11 @@ export default function ReactionsButton({ roomCode }) {
                 background: 'linear-gradient(145deg, #14181f 0%, #0a0d12 100%)',
                 border: '1px solid rgba(255,255,255,0.10)',
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 4px 12px -4px rgba(0,0,0,0.5)',
+                // Force the pretzel (last item) into the bottom-right slot
+                // so it sits directly above the FAB and is the natural
+                // default tap. Without this, the dangling 7th item would
+                // fall into the bottom-left of the 2×4 grid.
+                gridColumnStart: i === EMOJIS.length - 1 ? 2 : undefined,
               }}
               aria-label={`React with ${e}`}
             >
