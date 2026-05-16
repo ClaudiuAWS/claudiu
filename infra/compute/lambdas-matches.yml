@@ -167,6 +167,7 @@ Resources:
                                                     Effect: Allow
                                                     Action:
                                                             - dynamodb:PutItem
+                                                            - dynamodb:UpdateItem
                                                     Resource:
                                                             - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-badges
         MatchesLambdaRole:
