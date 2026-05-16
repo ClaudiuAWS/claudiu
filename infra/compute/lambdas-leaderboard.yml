@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu Lambda Functions - Global Leaderboard (read API)
+
+Resources:
+        LeaderboardLambdaRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-leaderboard-lambda-role
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Service: lambda.amazonaws.com
+                                          Action: sts:AssumeRole
+                        ManagedPolicyArns:
+                                - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+                        Policies:
+                                - PolicyName: claudiu-leaderboard-lambda-policy
+                                  PolicyDocument:
+                                          Version: "2012-10-17"
+                                          Statement:
+                                                  - Sid: LeaderboardTableRead
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:Query
+                                                            - dynamodb:GetItem
+                                                    Resource:
+                                                            - !ImportValue claudiu-leaderboard-table-arn
+                                                            - !Sub
+                                                                    - "${TableArn}/index/*"
+                                                                    - TableArn: !ImportValue claudiu-leaderboard-table-arn
+
+        LeaderboardLambda:
+                Type: AWS::Lambda::Function
+                Properties:
+                        FunctionName: claudiu-leaderboard
+                        Runtime: python3.14
+                        Handler: handler.handler
+                        Role: !GetAtt LeaderboardLambdaRole.Arn
+                        Timeout: 10
+                        MemorySize: 128
+                        Environment:
+                                Variables:
+                                        LEADERBOARD_TABLE: !ImportValue claudiu-leaderboard-table
+                        Code:
+                                ZipFile: |
+                                        def handler(event, context):
+                                            return {'statusCode': 200, 'body': 'ok'}
+
+Outputs:
+        LeaderboardLambdaArn:
+                Value: !GetAtt LeaderboardLambda.Arn
+                Export:
+                        Name: claudiu-leaderboard-lambda-arn

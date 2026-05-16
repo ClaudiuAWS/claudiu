@@ -1455,6 +1455,110 @@ Resources:
                         SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:${RestApi}/*
 
         # -----------------------------------------
+        # /leaderboard
+        # -----------------------------------------
+
+        LeaderboardResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !GetAtt RestApi.RootResourceId
+                        PathPart: leaderboard
+
+        LeaderboardMeResource:
+                Type: AWS::ApiGateway::Resource
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ParentId: !Ref LeaderboardResource
+                        PathPart: me
+
+        GetLeaderboardMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref LeaderboardResource
+                        HttpMethod: GET
+                        AuthorizationType: COGNITO_USER_POOLS
+                        AuthorizerId: !Ref CognitoAuthorizer
+                        Integration:
+                                Type: AWS_PROXY
+                                IntegrationHttpMethod: POST
+                                Uri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-leaderboard/invocations
+
+        LeaderboardOptionsMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref LeaderboardResource
+                        HttpMethod: OPTIONS
+                        AuthorizationType: NONE
+                        Integration:
+                                Type: MOCK
+                                IntegrationResponses:
+                                        - StatusCode: 200
+                                          ResponseParameters:
+                                                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+                                                  method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+                                                  method.response.header.Access-Control-Allow-Origin: "'*'"
+                                          ResponseTemplates:
+                                                  application/json: ""
+                                RequestTemplates:
+                                        application/json: '{"statusCode": 200}'
+                        MethodResponses:
+                                - StatusCode: 200
+                                  ResponseParameters:
+                                          method.response.header.Access-Control-Allow-Headers: true
+                                          method.response.header.Access-Control-Allow-Methods: true
+                                          method.response.header.Access-Control-Allow-Origin: true
+
+        GetLeaderboardMeMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref LeaderboardMeResource
+                        HttpMethod: GET
+                        AuthorizationType: COGNITO_USER_POOLS
+                        AuthorizerId: !Ref CognitoAuthorizer
+                        Integration:
+                                Type: AWS_PROXY
+                                IntegrationHttpMethod: POST
+                                Uri: !Sub arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-leaderboard/invocations
+
+        LeaderboardMeOptionsMethod:
+                Type: AWS::ApiGateway::Method
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResourceId: !Ref LeaderboardMeResource
+                        HttpMethod: OPTIONS
+                        AuthorizationType: NONE
+                        Integration:
+                                Type: MOCK
+                                IntegrationResponses:
+                                        - StatusCode: 200
+                                          ResponseParameters:
+                                                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+                                                  method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+                                                  method.response.header.Access-Control-Allow-Origin: "'*'"
+                                          ResponseTemplates:
+                                                  application/json: ""
+                                RequestTemplates:
+                                        application/json: '{"statusCode": 200}'
+                        MethodResponses:
+                                - StatusCode: 200
+                                  ResponseParameters:
+                                          method.response.header.Access-Control-Allow-Headers: true
+                                          method.response.header.Access-Control-Allow-Methods: true
+                                          method.response.header.Access-Control-Allow-Origin: true
+
+        LeaderboardLambdaPermission:
+                Type: AWS::Lambda::Permission
+                Properties:
+                        FunctionName: claudiu-leaderboard
+                        Action: lambda:InvokeFunction
+                        Principal: apigateway.amazonaws.com
+                        SourceArn: !Sub arn:aws:execute-api:eu-central-1:${AWS::AccountId}:${RestApi}/*
+
+        # -----------------------------------------
         # /credits
         # -----------------------------------------
 
@@ -1649,9 +1753,13 @@ Resources:
                         - RoomsCaptainOptionsMethod
                         - GetHistoryMethod
                         - HistoryOptionsMethod
+                        - GetLeaderboardMethod
+                        - LeaderboardOptionsMethod
+                        - GetLeaderboardMeMethod
+                        - LeaderboardMeOptionsMethod
                 Properties:
                         RestApiId: !Ref RestApi
-                        Description: "2026-05-16-history"
+                        Description: "2026-05-16-leaderboard"
 
         RestApiStage:
                 Type: AWS::ApiGateway::Stage

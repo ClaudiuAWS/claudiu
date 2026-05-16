@@ -155,6 +155,58 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* Global Leaderboard CTA — links to the all-time rankings page.
+          Same glossy red header treatment as the BadgesPage / TracksPage
+          banners so it reads as a "section entry" rather than a button. */}
+      <button
+        onClick={() => navigate('/leaderboard')}
+        className="block w-full text-left active:scale-[0.99] transition-transform"
+      >
+        <div className="relative overflow-hidden rounded-2xl">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/60 to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.07] to-transparent pointer-events-none" />
+          <div
+            className="relative px-5 py-4 flex items-center gap-4"
+            style={{
+              background: 'linear-gradient(180deg, #1a0a0a 0%, #0d0606 100%)',
+              border: '1px solid rgba(220,38,38,0.25)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px -12px rgba(220,38,38,0.50)',
+            }}
+          >
+            {/* Trophy / podium icon */}
+            <div
+              className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, rgba(234,179,8,0.20) 0%, rgba(202,138,4,0.10) 100%)',
+                border: '1px solid rgba(234,179,8,0.40)',
+                boxShadow: '0 0 18px -4px rgba(234,179,8,0.45)',
+              }}
+            >
+              <span className="text-xl leading-none" aria-hidden>🏆</span>
+            </div>
+
+            {/* Text */}
+            <div className="flex-1 min-w-0">
+              <p
+                className="text-white font-stadium text-lg leading-none"
+                style={{
+                  letterSpacing: '0.08em',
+                  textShadow: '0 2px 0 rgba(0,0,0,0.6), 0 -1px 0 rgba(255,255,255,0.05)',
+                }}
+              >
+                LEADERBOARD
+              </p>
+              <p className="text-gray-400 text-[11px] mt-1 tracking-wider">
+                See where you stand globally
+              </p>
+            </div>
+
+            {/* Chevron */}
+            <span className="text-red-400 text-xl leading-none flex-shrink-0">›</span>
+          </div>
+        </div>
+      </button>
+
       {/* Live section */}
       {live.length > 0 && (
         <section className="space-y-3">

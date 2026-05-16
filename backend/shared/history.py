@@ -24,6 +24,15 @@ _history_table = _dynamodb.Table(_HISTORY_TABLE_NAME)
 _MATCHES_TABLE_NAME = os.environ.get('MATCHES_TABLE', 'claudiu-matches')
 _matches_table = _dynamodb.Table(_MATCHES_TABLE_NAME)
 
+# Leaderboard integration — bundled by the deploy workflow alongside this
+# module. Wrapped in try/except so a missing module (older deploy) cannot
+# break match-history writing.
+try:
+    import leaderboard as _leaderboard  # type: ignore
+except Exception as _e:  # pragma: no cover
+    _leaderboard = None
+    print(f"[history] leaderboard module import skipped: {_e}")
+
 
 def _get_team_names(match_id: str) -> tuple:
     """Return (homeTeamName, awayTeamName) for the match. Falls back to
@@ -104,10 +113,28 @@ def record_match_end(room: dict, final_result: str) -> None:
             code = e.response.get('Error', {}).get('Code')
             if code == 'ConditionalCheckFailedException':
                 # Already recorded for this exact (userId, endedAt). No-op.
+                # Skip leaderboard update too — it's already been applied.
                 continue
             print(f"[history] put_item failed for {user_id}/{match_id}: {e}")
+            # Do not apply leaderboard update if the canonical history
+            # row failed to land — keeps the two stores in sync.
+            continue
         except Exception as e:
             print(f"[history] unexpected error for {user_id}/{match_id}: {e}")
+            continue
+
+        # Leaderboard update — only reached when the history row was a NEW
+        # write (not a duplicate, not a failure). Wrapped so a leaderboard
+        # failure can't block the rest of the loop.
+        if _leaderboard is not None:
+            try:
+                _leaderboard.apply_member_match_result(
+                    member=member,
+                    score=score,
+                    won=item['won'],
+                )
+            except Exception as e:
+                print(f"[history] leaderboard apply failed for {user_id}: {e}")
 
 
 # --------------------------------------------------------------------------

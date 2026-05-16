@@ -81,6 +81,11 @@ export const historyApi = {
   list: (limit = 50) => request(`/history?limit=${limit}`),
 }
 
+export const leaderboardApi = {
+  list: (limit = 50) => request(`/leaderboard?limit=${limit}`),
+  me:   ()           => request('/leaderboard/me'),
+}
+
 export const creditsApi = {
   balance: () => request('/credits'),
   friends: () => request('/credits/friends'),

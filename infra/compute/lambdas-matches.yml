@@ -176,6 +176,12 @@ Resources:
                                                             - dynamodb:PutItem
                                                     Resource:
                                                             - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-match-history
+                                                  - Sid: LeaderboardWrite
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:UpdateItem
+                                                    Resource:
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-leaderboard
         MatchesLambdaRole:
                 Type: AWS::IAM::Role
                 Properties:
@@ -300,6 +306,7 @@ Resources:
                                         PLAYER_LOOKUP_TABLE: claudiu-player-lookup
                                         BADGES_TABLE: claudiu-badges
                                         MATCH_HISTORY_TABLE: claudiu-match-history
+                                        LEADERBOARD_TABLE: claudiu-leaderboard
                         Code:
                                 ZipFile: |
                                         def handler(event, context):

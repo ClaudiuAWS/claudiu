@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu DynamoDB Table - Global Leaderboard (all-time stats per user)
+
+# Single source of truth for cumulative per-user stats. One row per user.
+# Updated atomically (DDB ADD) at match-end time inside the event-processor
+# Lambda via `backend/shared/leaderboard.py`.
+#
+# Schema:
+#   PK userId        (S)        Cognito sub
+#   totalPoints      (N)        running sum of userScore across all matches
+#   matchesPlayed    (N)
+#   wins             (N)        rank == 1 in a multi-user room
+#   displayName      (S)        denormalised — refreshed every write
+#   avatarUrl        (S)        denormalised — refreshed every write
+#   updatedAt        (S, ISO)
+#   gsiPk            (S)        constant "GLOBAL" — partition for the GSI
+#
+# GSI `leaderboard-rank-index`:
+#   PK gsiPk         (S)        all rows share "GLOBAL" → single partition
+#   SK totalPoints   (N)        ScanIndexForward=false for top-N query
+#   Projection: KEYS_ONLY + denormalised fields needed by the leaderboard UI
+#               (userId, displayName, avatarUrl, totalPoints, matchesPlayed,
+#                wins). We use INCLUDE for the explicit attribute list.
+
+Resources:
+        LeaderboardTable:
+                Type: AWS::DynamoDB::Table
+                Properties:
+                        TableName: claudiu-leaderboard
+                        BillingMode: PAY_PER_REQUEST
+                        AttributeDefinitions:
+                                - AttributeName: userId
+                                  AttributeType: S
+                                - AttributeName: gsiPk
+                                  AttributeType: S
+                                - AttributeName: totalPoints
+                                  AttributeType: N
+                        KeySchema:
+                                - AttributeName: userId
+                                  KeyType: HASH
+                        GlobalSecondaryIndexes:
+                                - IndexName: leaderboard-rank-index
+                                  KeySchema:
+                                          - AttributeName: gsiPk
+                                            KeyType: HASH
+                                          - AttributeName: totalPoints
+                                            KeyType: RANGE
+                                  Projection:
+                                          ProjectionType: INCLUDE
+                                          NonKeyAttributes:
+                                                  - displayName
+                                                  - avatarUrl
+                                                  - matchesPlayed
+                                                  - wins
+
+Outputs:
+        LeaderboardTableName:
+                Value: !Ref LeaderboardTable
+                Export:
+                        Name: claudiu-leaderboard-table
+
+        LeaderboardTableArn:
+                Value: !GetAtt LeaderboardTable.Arn
+                Export:
+                        Name: claudiu-leaderboard-table-arn
