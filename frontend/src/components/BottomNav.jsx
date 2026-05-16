@@ -100,8 +100,8 @@ export default function BottomNav() {
         const navigate = useNavigate();
 
         return (
-                <nav className="fixed bottom-0 left-0 right-0 z-50 p-3">
-                        <div className="bg-gray-900 rounded-2xl px-2 py-3 border border-white/8 max-w-lg mx-auto">
+                <nav className="fixed bottom-0 left-0 right-0 z-50 px-3 pt-3">
+                        <div className="bg-gray-900 rounded-t-2xl px-2 py-3 border border-b-0 border-white/8 max-w-lg mx-auto">
                                 <div className="grid grid-cols-5 gap-1">
                                         {tabs.map((tab) => {
                                                 const active = location.pathname === tab.path;
