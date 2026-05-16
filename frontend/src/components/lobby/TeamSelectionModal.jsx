@@ -388,6 +388,11 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
   const [starterIds, setStarterIds] = useState(new Set())
   const [selectedId, setSelectedId] = useState(null)
 
+  // Captain pick — chosen in the preview phase, locked in alongside the XI.
+  // The captain gets a 2× scoring multiplier on every points event from their
+  // shirt over the course of the match.
+  const [captainPlayerId, setCaptainPlayerId] = useState(null)
+
   // Total number of pair-decisions in this draft (set once on load)
   const [totalPairs, setTotalPairs] = useState(0)
 
@@ -668,6 +673,11 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
     setSubmitting(true)
     try {
       await roomsApi.selectTeam(roomCode, starters.map(p => p.playerId))
+      // Captain is required by the preview-phase UI, but guard anyway so a
+      // future flow change can't ship a squad without one. Set after the
+      // selectTeam call so the server has the player on the user's team by
+      // the time it processes the captain pick.
+      if (captainPlayerId) await roomsApi.setCaptain(roomCode, captainPlayerId)
       // KEEP draft progress in sessionStorage even after lock-in. Reopening the
       // modal restores the user's 14 picks and starting XI, dropping them
       // straight into 'select_xi' (load path forces this when draft is
@@ -955,7 +965,15 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
 
       ) : phase === 'preview' ? (
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-4 py-4">
+          {/* Captain hint — sits above the pitch so the prompt is the first
+              thing the user reads when entering preview. */}
+          <p className="flex-shrink-0 px-4 pt-2 text-[10px] font-bold tracking-widest uppercase text-amber-300/80 text-center">
+            {captainPlayerId
+              ? '✓ Captain picked — 2× boost armed'
+              : 'Tap a starter — they get a 2× scoring boost as your captain'}
+          </p>
+
+          <div className="flex-1 overflow-y-auto px-4 pt-2 pb-4">
             <PitchView
               teamPlayers={starters}
               benchPlayers={benchPlayers}
@@ -963,6 +981,8 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
               teamName="Your Squad"
               formation={detectFormation(starters)}
               showHeader
+              onPlayerClick={p => setCaptainPlayerId(p.playerId)}
+              selectedPlayerId={captainPlayerId}
             />
           </div>
 
@@ -975,12 +995,16 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
             </button>
             <button
               onClick={confirm}
-              disabled={submitting}
+              disabled={submitting || !captainPlayerId}
               className="flex-[2] py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
                 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white
                 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {submitting ? 'Locking in…' : '⚡ Lock In Squad'}
+              {submitting
+                ? 'Locking in…'
+                : captainPlayerId
+                  ? '⚡ Lock In Squad'
+                  : 'Pick a captain first'}
             </button>
           </div>
         </div>
