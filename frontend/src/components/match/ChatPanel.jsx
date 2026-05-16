@@ -25,7 +25,7 @@ export default function ChatPanel({ messages, onSend, room }) {
   }
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100dvh - 340px)' }}>
+    <div className="flex flex-col" style={{ height: 'calc(100dvh - 240px)' }}>
 
       {/* Message list */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">

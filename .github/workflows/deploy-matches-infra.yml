@@ -1,0 +1,40 @@
+name: Deploy Matches Infra
+
+on:
+        push:
+                branches: [main]
+                paths:
+                        - "infra/compute/lambdas-matches.yml"
+
+permissions:
+        id-token: write
+        contents: read
+
+jobs:
+        deploy:
+                runs-on: ubuntu-latest
+                steps:
+                        - uses: actions/checkout@v4
+
+                        - name: Configure AWS credentials
+                          uses: aws-actions/configure-aws-credentials@v4
+                          with:
+                                  role-to-assume: ${{ secrets.AWS_BACKEND_GITHUB_ACTIONS_ROLE_ARN }}
+                                  aws-region: eu-central-1
+
+                        # The lambdas-matches CFN stack owns the IAM roles + Lambda
+                        # CFN resources for event-processor, replay-emitter, and the
+                        # matches API. Code zips for those Lambdas are pushed by
+                        # their per-feature workflows (deploy-event-processor.yml,
+                        # deploy-replay-emitter.yml, deploy-matches.yml). This
+                        # workflow is the missing piece — it propagates IAM/env
+                        # changes to AWS whenever lambdas-matches.yml is edited.
+                        - name: Deploy matches lambdas CFN
+                          run: |
+                                  aws cloudformation deploy \
+                                    --template-file infra/compute/lambdas-matches.yml \
+                                    --stack-name claudiu-matches-lambda \
+                                    --capabilities CAPABILITY_NAMED_IAM \
+                                    --no-fail-on-empty-changeset \
+                                    --s3-bucket claudiu-profile-pictures-507609143109 \
+                                    --s3-prefix cfn-templates

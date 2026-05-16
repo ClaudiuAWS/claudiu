@@ -1,18 +1,45 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { roomsApi } from '../services/api'
 
 const MAX_BUBBLE_MESSAGES = 3
 const BUBBLE_TTL_MS = 4000
 
-export function useChat() {
-  const [messages, setMessages] = useState([])
+// sessionStorage (not localStorage) is the right scope here: messages
+// survive a hard refresh — which is what the user asked for — but a new
+// browser tab starts with a clean slate, and the entry clears
+// automatically when the user closes the tab.
+const storageKey = (matchId) => `chat_history_${matchId || 'default'}`
+
+function loadMessages(matchId) {
+  if (!matchId) return []
+  try {
+    const raw = sessionStorage.getItem(storageKey(matchId))
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+}
+
+export function useChat(matchId) {
+  const [messages, setMessages] = useState(() => loadMessages(matchId))
   const [bubbles, setBubbles]   = useState([])
   const bubbleTimers            = useRef({})
+
+  // Persist on every change so a hard refresh restores the conversation.
+  // Bubbles are intentionally transient (ephemeral floaters) and not
+  // persisted.
+  useEffect(() => {
+    if (!matchId) return
+    try { sessionStorage.setItem(storageKey(matchId), JSON.stringify(messages)) } catch {}
+  }, [messages, matchId])
 
   const onChatMessage = useCallback((msg) => {
     const message = { id: `${msg.userId}-${msg.ts}`, ...msg }
 
-    setMessages(prev => [...prev, message])
+    setMessages(prev => {
+      // De-dup: a hard refresh restores messages, then the WS handler
+      // might re-deliver the same ones. Skip if the id is already there.
+      if (prev.some(m => m.id === message.id)) return prev
+      return [...prev, message]
+    })
     setBubbles(prev => [...prev, message].slice(-MAX_BUBBLE_MESSAGES))
 
     clearTimeout(bubbleTimers.current[message.id])

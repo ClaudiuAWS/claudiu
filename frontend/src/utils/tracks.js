@@ -43,7 +43,6 @@ export const TRACKS = [
   { id: 'pitbull-fireball', title: 'Fireball', artist: 'Pitbull', file: '/songs/pitbull-fireball.mp3', artwork: '/songs/pitbull-fireball.jpg', requiredBadge: null },
   { id: 'joao-lucas-marcelo-eu-quero-tchu', title: 'Eu Quero Tchu Eu Quero Tcha', artist: 'Joao Lucas & Marcelo', file: '/songs/joao-lucas-and-marcelo-eu-quero-tchu-eu-quero-tcha.mp3', artwork: '/songs/joao-lucas-and-marcelo-eu-quero-tchu-eu-quero-tcha.jpg', requiredBadge: null },
   { id: 'gusttavo-lima-balada', title: 'Balada', artist: 'Gusttavo Lima', file: '/songs/gusttavo-lima-balada.mp3', artwork: '/songs/gusttavo-lima-balada.jpg', requiredBadge: null },
-  { id: 'los-latinos-bara-bara-bere-bere', title: 'Bara Bara Bere Bere', artist: 'Los Latinos', file: '/songs/los-latinos-bara-bara-bere-bere.mp3', artwork: '/songs/los-latinos-bara-bara-bere-bere.jpg', requiredBadge: null },
   { id: 'shakira-la-la-la', title: 'La La La (Brazil 2014)', artist: 'Shakira', file: '/songs/shakira-la-la-la.mp3', artwork: '/songs/shakira-la-la-la.jpg', requiredBadge: null },
   { id: 'magic-system-magic-in-the-air', title: 'Magic in the Air', artist: 'Magic System', file: '/songs/magic-system-magic-in-the-air.mp3', artwork: '/songs/magic-system-magic-in-the-air.jpg', requiredBadge: null },
   { id: 'khaled-cest-la-vie', title: "C'est La Vie", artist: 'Khaled', file: '/songs/khaled-cest-la-vie.mp3', artwork: '/songs/khaled-cest-la-vie.jpg', requiredBadge: null },

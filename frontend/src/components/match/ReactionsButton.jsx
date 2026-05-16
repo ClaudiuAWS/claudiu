@@ -4,7 +4,10 @@ import { roomsApi } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { pushCheer } from './ReactionsOverlay'
 
-const EMOJIS = ['⚽', '🔥', '🤣', '😱', '🙌', '💀']
+// Pretzel first — the brand emoji, intentional default at the top of the
+// flex-col-reverse stack so it's the closest tap-target to the trigger
+// button.
+const EMOJIS = ['🥨', '⚽', '🔥', '🤣', '😱', '🙌', '💀']
 
 /**
  * Floating reactions button (bottom-right of the match view).
@@ -21,7 +24,9 @@ export default function ReactionsButton({ roomCode }) {
   if (!roomCode) return null
 
   const send = async (emoji) => {
-    setOpen(false)
+    // Keep the picker open so users can rapid-fire reactions. The picker
+    // closes only when the trigger button itself is tapped again (the ×
+    // state on the FAB).
     // Optimistic local push — the WS broadcast will fire a duplicate that
     // we de-dup by trusting "we know we just sent one"; with FLOAT_MS=3s
     // and the network roundtrip well under that, the duplicate is
