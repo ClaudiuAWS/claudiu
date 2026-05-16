@@ -272,14 +272,31 @@ export function PlayerStatsPopup({ player, isOpen, onClose, events = [], htStore
 
       {/* Modal */}
       <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 flex flex-col rounded-2xl overflow-hidden shadow-2xl"
-        style={{ background: '#0e1420', border: `1px solid ${teamColor}40`, maxWidth: 440, width: 'calc(100% - 32px)',
-                 maxHeight: 'calc(100dvh - 160px)' }}
+        style={{
+          background: 'linear-gradient(180deg, #0f1622 0%, #0a0f1a 100%)',
+          border: `1px solid ${teamColor}55`,
+          boxShadow: `0 30px 80px -20px rgba(0,0,0,0.75), 0 0 0 1px ${teamRing}`,
+          maxWidth: 440,
+          width: 'calc(100% - 32px)',
+          maxHeight: 'calc(100dvh - 160px)',
+          animation: 'playerPopupIn 320ms cubic-bezier(.22,1.4,.36,1)',
+        }}
       >
         {/* ── FIFA-style header ── */}
         <div
           className="flex-shrink-0 relative overflow-hidden"
           style={{ background: `linear-gradient(135deg, ${teamColor}55, ${teamColor}22)` }}
         >
+          {/* Header shimmer accent — a faint diagonal highlight band that
+              sweeps in once on mount, FUT-card style. */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            aria-hidden="true"
+            style={{
+              background: 'linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.06) 50%, transparent 70%)',
+              animation: 'playerHeaderSweep 1.2s ease-out 0.1s 1',
+            }}
+          />
           {/* Close */}
           <button
             onClick={onClose}
@@ -325,15 +342,42 @@ export function PlayerStatsPopup({ player, isOpen, onClose, events = [], htStore
               <p className="text-white font-bold text-sm leading-tight truncate">{displayName}</p>
               <p className="text-gray-400 text-[11px] mt-0.5">{player.positionName || player.position}</p>
 
-              {/* Match points badge */}
+              {/* Match points badge — glow when non-zero so an active scorer
+                  reads as "hot" at a glance. Live pulsing dot reinforces
+                  the "this is live" feel even when the count is 0. */}
               <div className="flex items-center gap-2 mt-3">
                 <div
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
-                  style={{ background: totalPoints >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                           border: `1px solid ${totalPoints >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}` }}
+                  style={{
+                    background: totalPoints > 0 ? 'rgba(34,197,94,0.22)'
+                              : totalPoints < 0 ? 'rgba(239,68,68,0.22)'
+                              : 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${
+                      totalPoints > 0 ? 'rgba(34,197,94,0.55)'
+                      : totalPoints < 0 ? 'rgba(239,68,68,0.55)'
+                      : 'rgba(255,255,255,0.10)'
+                    }`,
+                    boxShadow: totalPoints > 0 ? '0 0 14px rgba(34,197,94,0.35)'
+                             : totalPoints < 0 ? '0 0 14px rgba(239,68,68,0.30)'
+                             : 'none',
+                  }}
                 >
-                  <span className="text-[10px] text-gray-400 uppercase tracking-wider">Match pts</span>
-                  <span className={`text-sm font-black tabular-nums ${totalPoints >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <span
+                    className="inline-block w-1.5 h-1.5 rounded-full"
+                    style={{
+                      background: totalPoints > 0 ? '#22c55e'
+                                : totalPoints < 0 ? '#ef4444'
+                                : '#6b7280',
+                      animation: 'playerPtsPulse 1.6s ease-in-out infinite',
+                    }}
+                    aria-hidden="true"
+                  />
+                  <span className="text-[10px] text-gray-300 uppercase tracking-wider font-bold">Match pts</span>
+                  <span className={`text-sm font-black tabular-nums ${
+                    totalPoints > 0 ? 'text-emerald-300'
+                    : totalPoints < 0 ? 'text-red-300'
+                    : 'text-gray-300'
+                  }`}>
                     {totalPoints > 0 ? `+${totalPoints}` : totalPoints || '0'}
                   </span>
                 </div>
@@ -356,20 +400,86 @@ export function PlayerStatsPopup({ player, isOpen, onClose, events = [], htStore
               <EventTimeline events={playerEvents} />
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full gap-2 py-8">
-              <span className="text-3xl">🏃</span>
-              <p className="text-gray-600 text-sm">No recorded events yet</p>
+            <div className="flex flex-col items-center justify-center h-full gap-3 py-10">
+              {/* Soft team-tinted ring + pulse so the empty state still
+                  feels lively. Beats a flat emoji + grey text. */}
+              <div
+                className="relative w-16 h-16 rounded-full flex items-center justify-center"
+                style={{
+                  background: `radial-gradient(circle at 50% 35%, ${teamColor}25 0%, transparent 70%)`,
+                  border: `1px dashed ${teamColor}55`,
+                  boxShadow: `inset 0 0 18px ${teamColor}22`,
+                  animation: 'playerEmptyPulse 2.4s ease-in-out infinite',
+                }}
+              >
+                <span className="text-3xl" aria-hidden="true">⏱️</span>
+              </div>
+              <p className="text-gray-300 text-sm font-semibold tracking-wide">No moments yet</p>
+              <p className="text-gray-600 text-xs">
+                Watch the feed — events involving {displayName} land here.
+              </p>
             </div>
           )}
         </div>
 
-        {/* ── Footer ── */}
-        <div className="flex-shrink-0 border-t border-white/[0.06] px-4 py-2.5 flex items-center justify-between">
-          <p className="text-[9px] text-gray-600 uppercase tracking-widest">
-            Goal: GK +10 / DEF +6 / MID +5 / FWD +4 · Assist +3 · Save +2 · Conceded −1 · Yellow −1 · Red −3
-          </p>
+        {/* ── Footer ── compact pill chips per scoring rule so the legend
+            reads as a glanceable summary instead of a long sentence. */}
+        <div className="flex-shrink-0 border-t border-white/[0.06] px-3 py-2.5">
+          <div className="flex flex-wrap gap-1 justify-center">
+            <ScoreChip label="GOL"   sub="GK +10 / DEF +6 / MID +5 / FWD +4" tone="emerald" />
+            <ScoreChip label="AST"   sub="+3" tone="sky" />
+            <ScoreChip label="SAVE"  sub="+2" tone="violet" />
+            <ScoreChip label="CONC"  sub="−1" tone="rose-dim" />
+            <ScoreChip label="YEL"   sub="−1" tone="amber" />
+            <ScoreChip label="RED"   sub="−3" tone="rose" />
+          </div>
         </div>
       </div>
+
+      {/* Inline keyframes — keeps the component self-contained, matches
+          the convention used by ScoreToast / MatchEndCelebration. */}
+      <style>{`
+        @keyframes playerPopupIn {
+          0%   { opacity: 0; transform: translate(-50%, calc(-50% + 14px)) scale(0.95); }
+          100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        @keyframes playerHeaderSweep {
+          0%   { transform: translateX(-30%); }
+          100% { transform: translateX(30%); }
+        }
+        @keyframes playerPtsPulse {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50%      { opacity: 1;   transform: scale(1.25); }
+        }
+        @keyframes playerEmptyPulse {
+          0%, 100% { transform: scale(1);    opacity: 0.85; }
+          50%      { transform: scale(1.04); opacity: 1; }
+        }
+      `}</style>
     </>
+  )
+}
+
+// Tiny chip used in the scoring-rules footer. Tone keys hold the
+// (bg, border, text) Tailwind classes literally so the JIT keeps them
+// during build.
+function ScoreChip({ label, sub, tone }) {
+  const tones = {
+    emerald:  { bg: 'bg-emerald-500/12', border: 'border-emerald-500/30', text: 'text-emerald-300' },
+    sky:      { bg: 'bg-sky-500/12',     border: 'border-sky-500/30',     text: 'text-sky-300' },
+    violet:   { bg: 'bg-violet-500/12',  border: 'border-violet-500/30',  text: 'text-violet-300' },
+    amber:    { bg: 'bg-amber-500/12',   border: 'border-amber-500/30',   text: 'text-amber-300' },
+    rose:     { bg: 'bg-rose-500/15',    border: 'border-rose-500/35',    text: 'text-rose-300' },
+    'rose-dim': { bg: 'bg-rose-500/8',   border: 'border-rose-500/22',    text: 'text-rose-300/80' },
+  }
+  const t = tones[tone] ?? tones.emerald
+  return (
+    <div
+      className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${t.bg} ${t.border}`}
+      title={`${label}: ${sub}`}
+    >
+      <span className={`text-[8px] font-black tracking-widest uppercase ${t.text}`}>{label}</span>
+      <span className="text-[8px] text-gray-500 font-medium">{sub}</span>
+    </div>
   )
 }
