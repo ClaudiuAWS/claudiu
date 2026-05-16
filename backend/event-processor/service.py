@@ -25,6 +25,16 @@ except Exception as _e:  # pragma: no cover
     _credits = None
     print(f"[credits] module import skipped: {_e}")
 
+# Match history integration — same additive pattern. Writes one row per
+# user per match into claudiu-match-history at end-of-match time. A
+# failure here cannot break the existing room cleanup or match_ended
+# broadcast.
+try:
+    import history as _history  # type: ignore
+except Exception as _e:  # pragma: no cover
+    _history = None
+    print(f"[history] module import skipped: {_e}")
+
 dynamodb = boto3.resource('dynamodb')
 
 matches_table       = dynamodb.Table(os.environ['MATCHES_TABLE'])
@@ -831,6 +841,16 @@ def _end_rooms(match_id: str, final_result: str) -> None:
             'type':        'match_ended',
             'finalResult': final_result,
         })
+
+        # Match history (additive — wrapped so a failure here cannot
+        # affect the room state above or any subsequent cleanup). Writes
+        # one permanent row per user into claudiu-match-history.
+        if _history is not None:
+            try:
+                _history.record_match_end(room, final_result)
+            except Exception as _e:  # pragma: no cover
+                print(f"[history] record_match_end failed for {code}: {_e}")
+
     count = len(response.get('Items', []))
     if count:
         print(f"Ended {count} rooms for match {match_id}")

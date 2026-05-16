@@ -77,6 +77,10 @@ export const badgesApi = {
   catalog: () => request('/badges/catalog'),
 }
 
+export const historyApi = {
+  list: (limit = 50) => request(`/history?limit=${limit}`),
+}
+
 export const creditsApi = {
   balance: () => request('/credits'),
   friends: () => request('/credits/friends'),

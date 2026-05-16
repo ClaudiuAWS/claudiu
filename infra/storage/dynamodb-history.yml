@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu DynamoDB Table - Match History (per-user permanent record)
+
+# One row per (userId, endedAt). Permanent — no TTL. Written once at
+# match end by the event-processor via `backend/shared/history.py`.
+#
+# Schema:
+#   PK userId       (S)         Cognito sub
+#   SK endedAt      (S, ISO)    timestamp the match ended; lex-sortable
+#   matchId         (S)         the match id (DFL-MAT-...)
+#   roomCode        (S)         the room the user played in
+#   homeTeamName    (S)
+#   awayTeamName    (S)
+#   finalResult     (S)         e.g. "2:0"
+#   userScore       (N)         user's fantasy points at match end
+#   rank            (N)         1-based rank in the room leaderboard
+#   members         (N)         total members in the room
+#   won             (BOOL)      rank == 1
+#
+# Listing the user's history is a single Query by PK with
+# ScanIndexForward=false → newest first. No GSI needed.
+
+Resources:
+        MatchHistoryTable:
+                Type: AWS::DynamoDB::Table
+                Properties:
+                        TableName: claudiu-match-history
+                        BillingMode: PAY_PER_REQUEST
+                        AttributeDefinitions:
+                                - AttributeName: userId
+                                  AttributeType: S
+                                - AttributeName: endedAt
+                                  AttributeType: S
+                        KeySchema:
+                                - AttributeName: userId
+                                  KeyType: HASH
+                                - AttributeName: endedAt
+                                  KeyType: RANGE
+
+Outputs:
+        MatchHistoryTableName:
+                Value: !Ref MatchHistoryTable
+                Export:
+                        Name: claudiu-match-history-table
+
+        MatchHistoryTableArn:
+                Value: !GetAtt MatchHistoryTable.Arn
+                Export:
+                        Name: claudiu-match-history-table-arn

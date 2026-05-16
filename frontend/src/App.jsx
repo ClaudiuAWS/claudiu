@@ -17,6 +17,7 @@ import MatchPage from './pages/MatchPage'
 import FriendsPage from './pages/FriendsPage'
 import ProfilePage from './pages/ProfilePage'
 import BadgesPage from './pages/BadgesPage'
+import HistoryPage from './pages/HistoryPage'
 import TracksPage from './pages/TracksPage'
 import InvitePage from './pages/InvitePage'
 import InviteListener from './components/InviteListener'
@@ -102,6 +103,9 @@ export default function App() {
           }/>
           <Route path="/badges" element={
             <ProtectedRoute><Layout><BadgesPage /></Layout></ProtectedRoute>
+          }/>
+          <Route path="/history" element={
+            <ProtectedRoute><Layout><HistoryPage /></Layout></ProtectedRoute>
           }/>
           <Route path="/profile" element={
             <ProtectedRoute><Layout><ProfilePage /></Layout></ProtectedRoute>
