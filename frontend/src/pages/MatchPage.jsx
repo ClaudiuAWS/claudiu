@@ -38,7 +38,7 @@ export default function MatchPage() {
   const [playerMap, setPlayerMap] = useState({})
 
   const { user }                                = useAuth()
-  const { messages, bubbles, onChatMessage, sendMessage } = useChat()
+  const { messages, bubbles, onChatMessage, sendMessage } = useChat(matchId)
   // useRoom's WS handler will forward minigame messages via the optional 4th
   // arg. We construct a ref-stable forwarder here and feed it both ways.
   const minigameMsgRef = useRef(null)
