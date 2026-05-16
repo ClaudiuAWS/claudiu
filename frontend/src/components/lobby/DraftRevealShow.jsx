@@ -1,7 +1,43 @@
 import { useEffect, useState } from 'react'
 
-const TOTAL_MS = 6000
+// Reveal needs longer dwell now that we actually show the squads — the
+// member tile + 11-avatar strip needs time to read.
 const COUNTDOWN_S = 3
+const REVEAL_MS   = 5500
+const KICKOFF_MS  = 1500
+const TOTAL_MS    = COUNTDOWN_S * 1000 + REVEAL_MS + KICKOFF_MS
+
+// Position-bucket map — keep in sync with formationPositions but inlined
+// so DraftRevealShow stays self-contained.
+const POS_GROUP = {
+  TW:  'GK',
+  IVZ: 'DEF', IVL: 'DEF', IVR: 'DEF', IV: 'DEF', LV: 'DEF', RV: 'DEF',
+  DMZ: 'MID', DML: 'MID', DMR: 'MID', DLM: 'MID', DRM: 'MID',
+  ZO:  'MID', OLM: 'MID', ORM: 'MID',
+  LA:  'FWD', RA: 'FWD', STZ: 'FWD', STL: 'FWD', STR: 'FWD',
+}
+const GROUP_ORDER = ['GK', 'DEF', 'MID', 'FWD']
+const GROUP_TINT = {
+  GK:  'rgba(234,179,8,0.20)',   // yellow
+  DEF: 'rgba(59,130,246,0.20)',  // blue
+  MID: 'rgba(16,185,129,0.20)',  // emerald
+  FWD: 'rgba(239,68,68,0.20)',   // red
+}
+
+function groupPlayers(details = []) {
+  const out = { GK: [], DEF: [], MID: [], FWD: [] }
+  for (const p of details) {
+    const g = POS_GROUP[p.position] || 'MID'
+    out[g].push(p)
+  }
+  return out
+}
+
+function formationString(details = []) {
+  const g = groupPlayers(details)
+  // Skip GK in the conventional formation label (e.g. "4-3-3" = 4 DEF + 3 MID + 3 FWD).
+  return `${g.DEF.length}-${g.MID.length}-${g.FWD.length}`
+}
 
 /**
  * DraftRevealShow — the pre-match "all squads locked" moment.
@@ -9,12 +45,11 @@ const COUNTDOWN_S = 3
  * Fires once per room session when every member has confirmed their
  * 11-player teamSelection. Hot beats:
  *   1. Stadium-font countdown 3-2-1 (red glow)
- *   2. "ALL SQUADS LOCKED" banner with the room name
- *   3. Member tile reel — each `displayName` slides in with a small
- *      crest and a "READY" badge
- *   4. "KICKOFF" pulse, then auto-close
+ *   2. "TEAMS REVEALED" banner + each member's full XI as a position-
+ *      grouped row of player avatars with their detected formation.
+ *   3. "KICKOFF" pulse, then auto-close
  *
- * Skip control (corner X) for impatient hosts. Total run ~6 s.
+ * Skip control (corner X) for impatient hosts.
  */
 export default function DraftRevealShow({ open, room, onClose }) {
   const [phase, setPhase] = useState('countdown') // countdown -> reveal -> kickoff
@@ -30,7 +65,7 @@ export default function DraftRevealShow({ open, room, onClose }) {
     }, 1000)
 
     const toReveal  = setTimeout(() => setPhase('reveal'),  COUNTDOWN_S * 1000)
-    const toKickoff = setTimeout(() => setPhase('kickoff'), COUNTDOWN_S * 1000 + 2500)
+    const toKickoff = setTimeout(() => setPhase('kickoff'), COUNTDOWN_S * 1000 + REVEAL_MS)
     const toClose   = setTimeout(onClose, TOTAL_MS)
 
     return () => {
@@ -83,9 +118,9 @@ export default function DraftRevealShow({ open, room, onClose }) {
       )}
 
       {phase === 'reveal' && (
-        <div className="text-center px-8">
+        <div className="text-center px-4 max-h-[90vh] overflow-y-auto py-6">
           <p
-            className="text-white font-stadium text-4xl leading-none mb-8"
+            className="text-white font-stadium text-3xl leading-none mb-6"
             style={{
               letterSpacing: '0.08em',
               textShadow: '0 0 24px rgba(220,38,38,0.55), 0 4px 0 rgba(0,0,0,0.6)',
@@ -93,31 +128,115 @@ export default function DraftRevealShow({ open, room, onClose }) {
           >
             TEAMS REVEALED
           </p>
-          <div className="flex flex-col gap-2 max-w-xs mx-auto">
-            {members.map((m, i) => (
-              <div
-                key={m.userId}
-                className="flex items-center justify-between px-4 py-2.5 rounded-2xl"
-                style={{
-                  background: 'linear-gradient(145deg, rgba(40,12,12,0.85) 0%, rgba(20,6,6,0.95) 100%)',
-                  border: '1px solid rgba(248,113,113,0.40)',
-                  animation: `slideIn 350ms ${i * 120}ms ease-out backwards`,
-                }}
-              >
-                <span className="text-white text-sm font-bold tracking-wide truncate">
-                  {m.displayName}
-                </span>
-                <span
-                  className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full text-amber-300"
+          <div className="flex flex-col gap-3 max-w-md mx-auto">
+            {members.map((m, i) => {
+              const details  = m.teamSelectionDetails || []
+              const grouped  = groupPlayers(details)
+              const captain  = m.captainPlayerId || ''
+              const formation = details.length === 11 ? formationString(details) : ''
+              return (
+                <div
+                  key={m.userId}
+                  className="rounded-2xl px-4 py-3"
                   style={{
-                    background: 'rgba(252,211,77,0.10)',
-                    border: '1px solid rgba(252,211,77,0.35)',
+                    background: 'linear-gradient(145deg, rgba(40,12,12,0.85) 0%, rgba(20,6,6,0.95) 100%)',
+                    border: '1px solid rgba(248,113,113,0.40)',
+                    animation: `slideIn 350ms ${i * 150}ms ease-out backwards`,
                   }}
                 >
-                  Ready · 11/11
-                </span>
-              </div>
-            ))}
+                  {/* Header row */}
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <span className="text-white text-sm font-bold tracking-wide truncate text-left flex-1">
+                      {m.displayName}
+                    </span>
+                    {formation && (
+                      <span className="text-gray-400 text-[10px] font-bold tracking-widest tabular-nums">
+                        {formation}
+                      </span>
+                    )}
+                    <span
+                      className="text-[9px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full text-amber-300 flex-shrink-0"
+                      style={{
+                        background: 'rgba(252,211,77,0.10)',
+                        border: '1px solid rgba(252,211,77,0.35)',
+                      }}
+                    >
+                      11/11
+                    </span>
+                  </div>
+
+                  {/* Position-grouped player rows */}
+                  <div className="flex flex-col gap-1.5">
+                    {GROUP_ORDER.map(group => {
+                      const players = grouped[group] || []
+                      if (!players.length) return null
+                      return (
+                        <div key={group} className="flex items-center gap-1.5">
+                          <span
+                            className="text-[8px] font-black tracking-widest text-white/70 w-7 text-center py-0.5 rounded flex-shrink-0"
+                            style={{ background: GROUP_TINT[group] }}
+                          >
+                            {group}
+                          </span>
+                          <div className="flex gap-1 flex-wrap flex-1 justify-start">
+                            {players.map(p => {
+                              const isCaptain = p.playerId && captain === p.playerId
+                              return (
+                                <div
+                                  key={p.playerId || p.shirtNumber}
+                                  className="relative w-7 h-7 rounded-full overflow-hidden flex-shrink-0"
+                                  style={{
+                                    border: `1.5px solid ${isCaptain ? '#60a5fa' : 'rgba(255,255,255,0.20)'}`,
+                                    boxShadow: isCaptain
+                                      ? '0 0 8px rgba(96,165,250,0.85)'
+                                      : '0 2px 6px rgba(0,0,0,0.5)',
+                                  }}
+                                  title={p.displayName || p.shirtNumber}
+                                >
+                                  {p.imageUrl ? (
+                                    <img
+                                      src={p.imageUrl}
+                                      alt=""
+                                      referrerPolicy="no-referrer"
+                                      className="w-full h-full object-cover object-top"
+                                    />
+                                  ) : (
+                                    <div
+                                      className="w-full h-full flex items-center justify-center text-[9px] font-black text-white"
+                                      style={{ background: 'rgba(8,12,26,0.92)' }}
+                                    >
+                                      {p.shirtNumber || '?'}
+                                    </div>
+                                  )}
+                                  {isCaptain && (
+                                    <span
+                                      className="absolute -top-1 left-1/2 -translate-x-1/2 text-[7px] font-black"
+                                      style={{
+                                        color: '#0b1330',
+                                        background: 'linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)',
+                                        border: '1px solid #bfdbfe',
+                                        width: 11,
+                                        height: 11,
+                                        borderRadius: '50%',
+                                        lineHeight: '9px',
+                                        textAlign: 'center',
+                                      }}
+                                      aria-hidden="true"
+                                    >
+                                      C
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

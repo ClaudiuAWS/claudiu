@@ -1071,7 +1071,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
               formation={detectFormation(starters)}
               showHeader
               onPlayerClick={p => setCaptainPlayerId(p.playerId)}
-              selectedPlayerId={captainPlayerId}
+              captainPlayerId={captainPlayerId}
             />
           </div>
 
