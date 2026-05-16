@@ -92,7 +92,7 @@ export default function ReactionsOverlay() {
 
   return (
     <div
-      className="pointer-events-none fixed bottom-32 right-4 z-40 flex flex-col items-end gap-1"
+      className="pointer-events-none fixed bottom-32 left-4 z-40 flex flex-col items-start gap-1"
       aria-hidden="true"
     >
       {floaters.map(f => (

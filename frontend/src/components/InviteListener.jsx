@@ -35,11 +35,23 @@ export default function InviteListener() {
     if (!pending) return
     setAccepting(true)
     try {
-      await roomsApi.join(pending.roomCode)
+      // roomsApi.join returns the freshly-joined room — use its matchId
+      // as the canonical source. The WS payload may carry a stale or
+      // missing matchId (older rooms, race against room-create), and a
+      // null landing on /lobby/null renders a broken lobby page.
+      const joined = await roomsApi.join(pending.roomCode)
+      const matchId = joined?.room?.matchId || joined?.matchId || pending.matchId
+      if (!matchId) {
+        toast.error("Couldn't find that party — try again from the friend's profile.")
+        setPending(null)
+        return
+      }
       sessionStorage.setItem('fan_squad_room_code', pending.roomCode)
       toast.success('Joined the party!')
-      navigate(`/lobby/${pending.matchId}`)
+      // Tear down the popup BEFORE the route transition so it doesn't
+      // flash visible on the destination page.
       setPending(null)
+      navigate(`/lobby/${matchId}`)
     } catch (err) {
       toast.error(err.message || 'Failed to join')
     } finally {
