@@ -21,6 +21,7 @@ import LeaderboardPanel from '../components/match/LeaderboardPanel'
 import ReactionsOverlay, { pushCheer } from '../components/match/ReactionsOverlay'
 import ReactionsButton from '../components/match/ReactionsButton'
 import MatchEndCelebration from '../components/match/MatchEndCelebration'
+import MemberAvatar from '../components/ui/MemberAvatar'
 import { useMiniGame } from '../hooks/useMiniGame'
 import { useDirector } from '../hooks/useDirector'
 import { useHighlights, buildHighlightFromEvent } from '../hooks/useHighlights'
@@ -231,12 +232,13 @@ export default function MatchPage() {
       <div className="px-4 py-3 flex items-center gap-3 border-b border-white/[0.04]">
         <div className="flex -space-x-2">
           {room.members?.slice(0, 5).map((m, i) => (
-            <div
+            <MemberAvatar
               key={m.userId}
-              className={`w-7 h-7 rounded-full ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white text-[10px] font-bold ring-2 ring-gray-950`}
-            >
-              {m.displayName?.[0]?.toUpperCase()}
-            </div>
+              member={m}
+              size={28}
+              colorIndex={i}
+              ring="ring-2 ring-gray-950"
+            />
           ))}
         </div>
         <p className="text-gray-500 text-xs">
