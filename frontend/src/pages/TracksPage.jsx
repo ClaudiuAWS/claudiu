@@ -6,6 +6,7 @@ import { TRACKS } from '../utils/tracks'
 import { getBadgeById } from '../utils/badges'
 import DiscArtwork from '../components/ui/DiscArtwork'
 import AlbumEditor from '../components/AlbumEditor'
+import PretzelCoin from '../components/ui/PretzelCoin'
 
 /**
  * Tracks library — full list of every disc in the catalog. Unlocked
@@ -119,12 +120,20 @@ export default function TracksPage() {
         </div>
       </div>
 
-      {/* Albums — horizontal strip */}
+      {/* Albums — horizontal strip. The "All Discs" tile is virtual:
+          not stored in localStorage, always present, can't be deleted.
+          It maps to activeAlbumId === null which the playback engine
+          already treats as the full unlocked rotation. */}
       <div className="mb-5">
         <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-500 mb-2 px-1">
-          My Albums
+          Albums
         </p>
         <div className="flex gap-2.5 overflow-x-auto pb-2 -mx-2 px-2" style={{ scrollbarWidth: 'thin' }}>
+          <DefaultAlbumCard
+            isActive={!activeAlbumId}
+            count={TRACKS.filter(unlocked).length}
+            onSelect={() => setActiveAlbum(null)}
+          />
           {albums.map(album => (
             <AlbumCard
               key={album.id}
@@ -242,6 +251,45 @@ function ModePill({ active, onClick, label, icon }) {
     >
       <span className="leading-none">{icon}</span>
       {label}
+    </button>
+  )
+}
+
+// Virtual default "All Discs" album — always present, can't be edited
+// or deleted. Maps to activeAlbumId === null in useAppAudio (which the
+// auto-advance engine already treats as the full unlocked rotation).
+// Visually distinct from user-created albums via the pretzel-coin icon
+// in its art tile.
+function DefaultAlbumCard({ isActive, count, onSelect }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="flex-shrink-0 w-28 rounded-2xl p-3 text-left transition-all active:scale-[0.97]"
+      style={{
+        background: isActive
+          ? 'linear-gradient(145deg, rgba(40,12,12,0.85) 0%, rgba(20,6,6,0.95) 100%)'
+          : 'linear-gradient(145deg, #14181f 0%, #0a0d12 100%)',
+        border: `1px solid ${isActive ? 'rgba(220,38,38,0.55)' : 'rgba(255,255,255,0.08)'}`,
+        boxShadow: isActive
+          ? 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 16px -8px rgba(220,38,38,0.45)'
+          : 'inset 0 1px 0 rgba(255,255,255,0.03)',
+      }}
+    >
+      <div
+        className="w-full aspect-square rounded-xl flex items-center justify-center mb-2"
+        style={{
+          background: 'radial-gradient(circle at 30% 25%, #4a0808 0%, #1a0303 60%, #000 100%)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+        }}
+      >
+        <PretzelCoin size={36} color="#fcd34d" />
+      </div>
+      <p className="text-white text-xs font-semibold truncate leading-tight">All Discs</p>
+      <p className="text-gray-500 text-[10px] leading-tight mt-0.5">
+        {count} {count === 1 ? 'disc' : 'discs'}
+        {isActive && <span className="ml-1 text-red-400">· Active</span>}
+      </p>
     </button>
   )
 }

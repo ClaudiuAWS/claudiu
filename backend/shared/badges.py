@@ -313,6 +313,48 @@ BADGE_CATALOG = {
         'tier':        'bronze',
         'discReward':  None,
     },
+
+    # ---- Cumulative counter badges (earned via atomic counters) ----------
+    'striker_5': {
+        'id':          'striker_5',
+        'title':       'Sharp Shooter',
+        'description': 'Your squad scored 5 goals total.',
+        'image':       '/badge-striker-5.jpg',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+    'goalkeeper_1': {
+        'id':          'goalkeeper_1',
+        'title':       'Safe Hands',
+        'description': 'Your goalkeeper made their first save.',
+        'image':       '/badge-goalkeeper-1.jpg',
+        'tier':        'bronze',
+        'discReward':  None,
+    },
+    'goalkeeper_5': {
+        'id':          'goalkeeper_5',
+        'title':       'The Wall',
+        'description': 'Your goalkeeper made 5 saves.',
+        'image':       '/badge-goalkeeper-5.jpg',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+    'penalty_1': {
+        'id':          'penalty_1',
+        'title':       'From the Spot',
+        'description': 'Your squad scored their first penalty.',
+        'image':       '/badge-penalty-1.jpg',
+        'tier':        'bronze',
+        'discReward':  None,
+    },
+    'penalty_5': {
+        'id':          'penalty_5',
+        'title':       'Penalty Expert',
+        'description': 'Your squad scored 5 penalties.',
+        'image':       '/badge-penalty-5.jpg',
+        'tier':        'silver',
+        'discReward':  None,
+    },
 }
 
 
@@ -341,6 +383,45 @@ def get_catalog():
         row['creditPrice'] = TIER_PRICES.get(entry.get('tier'), 0)
         out.append(row)
     return out
+
+
+# --------------------------------------------------------------------------
+# Counter thresholds — maps counter SK to badge thresholds
+# --------------------------------------------------------------------------
+# Ordered ascending. After each atomic increment, we check all thresholds
+# and attempt to award any that are now met. award() is idempotent so
+# re-checking already-crossed thresholds is a harmless no-op.
+_COUNTER_BADGES = {
+    'counter#goals':     [(1, 'striker_1'), (5, 'striker_5')],
+    'counter#saves':     [(1, 'goalkeeper_1'), (5, 'goalkeeper_5')],
+    'counter#penalties': [(1, 'penalty_1'), (5, 'penalty_5')],
+}
+
+
+def _increment_counter(user_id: str, counter_key: str, match_id: str = '', context: dict | None = None) -> None:
+    """Atomically increment a counter and award badges whose threshold is met.
+
+    Uses UpdateItem ADD — atomic, no race conditions between concurrent
+    Lambda invocations. ReturnValues gives us the new count without a
+    separate read.
+    """
+    try:
+        response = _badges_table.update_item(
+            Key={'userId': user_id, 'badgeId': counter_key},
+            UpdateExpression='ADD #c :inc',
+            ExpressionAttributeNames={'#c': 'count'},
+            ExpressionAttributeValues={':inc': 1},
+            ReturnValues='UPDATED_NEW',
+        )
+        new_count = int(response['Attributes']['count'])
+    except Exception as e:
+        print(f"[badges] counter increment failed {user_id}/{counter_key}: {e}")
+        return
+
+    thresholds = _COUNTER_BADGES.get(counter_key, [])
+    for threshold, badge_id in thresholds:
+        if new_count >= threshold:
+            award(user_id, badge_id, match_id=match_id, context=context)
 
 
 # --------------------------------------------------------------------------
@@ -432,40 +513,37 @@ def evaluate_score_changes(
 ) -> None:
     """Called from event-processor after a goal/card/save has been scored.
 
-    `score_changes` is the same list already broadcast in `score_update`
-    over the room channel — every entry includes `userId`, `delta`,
-    `eventType`, `reason`, `playerName`. We only need to read it; we never
-    mutate scoring.
+    Handles:
+      - Goals (event_type='goal', reason='scored for your squad')
+        → increments counter#goals
+        → if isPenalty in event_data, also increments counter#penalties
+      - Saves (event_type='saved_shot', reason='made a save')
+        → increments counter#saves
 
-    For striker_1: any score_change with eventType='goal' and
-    reason='scored for your squad' means a player THIS user drafted just
-    scored. Award the badge (idempotent — re-awarding is a silent no-op).
+    All counters are atomic (DDB ADD). Threshold checks happen inline.
+    award() is idempotent so re-checking is safe.
     """
-    if event_type != 'goal' or not score_changes:
+    if not score_changes:
         return
     event_data = event_data or {}
+
     for change in score_changes:
-        if change.get('eventType') != 'goal':
-            continue
-        if change.get('reason') != 'scored for your squad':
-            continue
         user_id = change.get('userId')
         if not user_id:
             continue
+        reason = change.get('reason') or ''
+        ctx = {'playerName': change.get('playerName') or ''}
+
         try:
-            award(
-                user_id=user_id,
-                badge_id='striker_1',
-                match_id=match_id,
-                context={
-                    'playerName': change.get('playerName') or '',
-                    'eventId':    change.get('sourceEventId') or '',
-                },
-            )
+            if event_type == 'goal' and reason == 'scored for your squad':
+                _increment_counter(user_id, 'counter#goals', match_id=match_id, context=ctx)
+                if event_data.get('isPenalty'):
+                    _increment_counter(user_id, 'counter#penalties', match_id=match_id, context=ctx)
+
+            elif event_type == 'saved_shot' and reason == 'made a save':
+                _increment_counter(user_id, 'counter#saves', match_id=match_id, context=ctx)
+
         except Exception as e:
-            # Belt-and-braces: award() already swallows everything, but
-            # belt-and-braces this loop too so one bad row can't block
-            # the next user's award.
             print(f"[badges] evaluate_score_changes inner error: {e}")
 
 
@@ -485,7 +563,8 @@ def evaluate_match_end(*args, **kwargs) -> None:  # noqa: D401
 # --------------------------------------------------------------------------
 
 def list_user_badges(user_id: str) -> list:
-    """Return all badges the user has earned, newest first."""
+    """Return all badges the user has earned, newest first.
+    Filters out counter rows (SK starts with 'counter#')."""
     if not user_id:
         return []
     try:
@@ -494,9 +573,10 @@ def list_user_badges(user_id: str) -> list:
             KeyConditionExpression=Key('userId').eq(user_id),
         )
         items = response.get('Items', [])
-        # earnedAt is ISO so lexicographic sort == chronological sort.
-        items.sort(key=lambda it: it.get('earnedAt', ''), reverse=True)
-        return items
+        # Filter out counter rows — they share the table but aren't badges
+        badges = [it for it in items if not it.get('badgeId', '').startswith('counter#')]
+        badges.sort(key=lambda it: it.get('earnedAt', ''), reverse=True)
+        return badges
     except Exception as e:
         print(f"[badges] list_user_badges failed for {user_id}: {e}")
         return []

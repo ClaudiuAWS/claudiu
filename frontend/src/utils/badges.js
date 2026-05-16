@@ -263,6 +263,48 @@ export const BADGE_CATALOG = [
     tier: 'bronze',
     discReward: null,
   },
+
+  // ---- Cumulative counter badges ----
+  {
+    id: 'striker_5',
+    title: 'Sharp Shooter',
+    description: 'Your squad scored 5 goals total.',
+    image: '/badge-striker-5.jpg',
+    tier: 'silver',
+    discReward: null,
+  },
+  {
+    id: 'goalkeeper_1',
+    title: 'Safe Hands',
+    description: 'Your goalkeeper made their first save.',
+    image: '/badge-goalkeeper-1.jpg',
+    tier: 'bronze',
+    discReward: null,
+  },
+  {
+    id: 'goalkeeper_5',
+    title: 'The Wall',
+    description: 'Your goalkeeper made 5 saves.',
+    image: '/badge-goalkeeper-5.jpg',
+    tier: 'silver',
+    discReward: null,
+  },
+  {
+    id: 'penalty_1',
+    title: 'From the Spot',
+    description: 'Your squad scored their first penalty.',
+    image: '/badge-penalty-1.jpg',
+    tier: 'bronze',
+    discReward: null,
+  },
+  {
+    id: 'penalty_5',
+    title: 'Penalty Expert',
+    description: 'Your squad scored 5 penalties.',
+    image: '/badge-penalty-5.jpg',
+    tier: 'silver',
+    discReward: null,
+  },
 ]
 
 export function getBadgeById(id) {

@@ -23,6 +23,8 @@ import ReactionsButton from '../components/match/ReactionsButton'
 import MatchEndCelebration from '../components/match/MatchEndCelebration'
 import { useMiniGame } from '../hooks/useMiniGame'
 import { useDirector } from '../hooks/useDirector'
+import { useHighlights, buildHighlightFromEvent } from '../hooks/useHighlights'
+import HighlightOverlay from '../components/match/HighlightOverlay'
 import { computeOptimisticDeltas } from '../utils/fplScoring'
 
 const AVATAR_COLORS = ['bg-violet-500','bg-blue-500','bg-emerald-500','bg-orange-500','bg-pink-500','bg-cyan-500']
@@ -50,6 +52,22 @@ export default function MatchPage() {
   }, [user?.userId])
   const { room, loading: roomLoading, scoreEvents, matchJustEnded, applyOptimisticDeltas, applyAuthoritativeScoreChange } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler, null, onCheerHandler)
 
+  // Highlight overlay queue — broadcast-style fullscreen card for goals
+  // and red cards. Driven entirely client-side from the same reveal
+  // pipeline that fires `handleScoreEvent` below.
+  const highlights = useHighlights()
+
+  // Set of playerIds the current user drafted, used to flag goals as
+  // "for your squad". Refs keep the closure of `handleScoreEvent`
+  // stable while always reading the latest squad — same pattern as
+  // `roomMembersRef` immediately below.
+  const userPlayerIdsRef = useRef(new Set())
+  useEffect(() => {
+    const me = room?.members?.find(m => m.userId === user?.userId)
+    const ids = (me?.teamSelection || []).filter(Boolean)
+    userPlayerIdsRef.current = new Set(ids)
+  }, [room?.members, user?.userId])
+
   // Optimistic local scoring — when an event reveals on the displayed clock,
   // compute deltas client-side and bump the leaderboard immediately. The
   // backend score_update WS still arrives later and silently reconciles to
@@ -67,7 +85,15 @@ export default function MatchPage() {
     const deltas = computeOptimisticDeltas(event, members)
       .map(d => ({ ...d, _sourceEventId: event.eventId || '' }))
     if (deltas.length) applyOptimisticDeltas(deltas)
-  }, [applyOptimisticDeltas])
+
+    // Broadcast-style highlight overlay (goals + red cards only). The
+    // builder returns null for any other event type, which the queue
+    // treats as a no-op. forYourSquad uses the user's current draft.
+    const highlight = buildHighlightFromEvent(event, {
+      userPlayerIds: userPlayerIdsRef.current,
+    })
+    if (highlight) highlights.pushHighlight(highlight)
+  }, [applyOptimisticDeltas, highlights])
 
   const { match, events, loading, flashEvent }  = useMatch(matchId, handleScoreEvent)
   const minigame = useMiniGame(room, user?.userId, events, matchId, match?.startedAt)
@@ -182,6 +208,11 @@ export default function MatchPage() {
   return (
     <div className="flex flex-col">
       <SkillFlashBadge event={flashEvent} onReact={handleReactTap} />
+      <HighlightOverlay
+        highlight={highlights.current}
+        onDismiss={highlights.dismiss}
+        reducedMotion={highlights.reducedMotion}
+      />
       <MatchMiniGameModal
         state={minigame.state}
         onSubmit={minigame.submit}

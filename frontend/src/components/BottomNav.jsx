@@ -29,6 +29,16 @@ const tabs = [
                 ),
         },
         {
+                label: "HISTORY",
+                path: "/history",
+                icon: (color) => (
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" />
+                                <path d="M12 7v5l3 2" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                ),
+        },
+        {
                 label: "BADGES",
                 path: "/badges",
                 icon: (color) => (
@@ -92,7 +102,7 @@ export default function BottomNav() {
         return (
                 <nav className="fixed bottom-0 left-0 right-0 z-50 p-3">
                         <div className="bg-gray-900 rounded-2xl px-2 py-3 border border-white/8 max-w-lg mx-auto">
-                                <div className="grid grid-cols-4 gap-1">
+                                <div className="grid grid-cols-5 gap-1">
                                         {tabs.map((tab) => {
                                                 const active = location.pathname === tab.path;
                                                 // Bundesliga-red active state, matches the rest of the

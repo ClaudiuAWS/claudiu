@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Claudiu Lambda Functions - Match History (read API)
+
+# Read-only Lambda for the match history feature. Writes happen
+# inside the event-processor Lambda via backend/shared/history.py
+# at match-end time — see lambdas-matches.yml for that role's
+# PutItem grant on this table.
+
+Resources:
+        HistoryLambdaRole:
+                Type: AWS::IAM::Role
+                Properties:
+                        RoleName: claudiu-history-lambda-role
+                        AssumeRolePolicyDocument:
+                                Version: "2012-10-17"
+                                Statement:
+                                        - Effect: Allow
+                                          Principal:
+                                                  Service: lambda.amazonaws.com
+                                          Action: sts:AssumeRole
+                        ManagedPolicyArns:
+                                - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+                        Policies:
+                                - PolicyName: claudiu-history-lambda-policy
+                                  PolicyDocument:
+                                          Version: "2012-10-17"
+                                          Statement:
+                                                  - Sid: HistoryTableRead
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:Query
+                                                            - dynamodb:GetItem
+                                                    Resource: !ImportValue claudiu-match-history-table-arn
+
+        HistoryLambda:
+                Type: AWS::Lambda::Function
+                Properties:
+                        FunctionName: claudiu-history
+                        Runtime: python3.14
+                        Handler: handler.handler
+                        Role: !GetAtt HistoryLambdaRole.Arn
+                        Timeout: 10
+                        MemorySize: 128
+                        Environment:
+                                Variables:
+                                        MATCH_HISTORY_TABLE: !ImportValue claudiu-match-history-table
+                        Code:
+                                ZipFile: |
+                                        def handler(event, context):
+                                            return {'statusCode': 200, 'body': 'ok'}
+
+Outputs:
+        HistoryLambdaArn:
+                Value: !GetAtt HistoryLambda.Arn
+                Export:
+                        Name: claudiu-history-lambda-arn

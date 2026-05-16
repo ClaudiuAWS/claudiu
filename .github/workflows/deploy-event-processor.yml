@@ -32,7 +32,7 @@ jobs:
                                     --implementation cp \
                                     --python-version 3.14 \
                                     --only-binary=:all:
-                                  cp handler.py service.py ../shared/ws.py ../shared/badges.py ../shared/credits.py ./package
+                                  cp handler.py service.py ../shared/ws.py ../shared/badges.py ../shared/credits.py ../shared/history.py ../shared/leaderboard.py ./package
                                   cd package && zip -r ../function.zip .
                                   aws lambda update-function-code \
                                     --function-name claudiu-event-processor \

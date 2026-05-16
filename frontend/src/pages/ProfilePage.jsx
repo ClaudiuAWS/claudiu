@@ -211,6 +211,9 @@ export default function ProfilePage() {
       {/* Music */}
       <MusicCard />
 
+      {/* Help & Tutorial */}
+      <HelpCard />
+
       {/* Logout */}
       <button
         onClick={handleLogout}
@@ -435,6 +438,252 @@ function Row({ label, value, divider, mono }) {
       >
         {value}
       </span>
+    </div>
+  )
+}
+
+/**
+ * Help & tutorial card.
+ *
+ * Same visual language as MusicCard — dark gradient surface, red accent.
+ * Plain-language explainers in collapsible sections so the card stays
+ * compact by default. Each section is a single self-contained "topic"
+ * the user can open without scrolling past everything else.
+ */
+function HelpCard() {
+  return (
+    <div
+      className="mt-4 rounded-2xl p-5"
+      style={{
+        background: 'linear-gradient(145deg, #111827 0%, #0d1117 100%)',
+        border: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-500 mb-3">
+        Help & how to play
+      </p>
+
+      <div className="space-y-2">
+        {HELP_TOPICS.map((topic, idx) => (
+          <HelpTopic key={topic.id} topic={topic} firstItem={idx === 0} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const HELP_TOPICS = [
+  {
+    id: 'overview',
+    icon: '⚽',
+    title: 'What is this app?',
+    body: (
+      <>
+        <p>
+          You and a friend watch a real Bundesliga match together. Before the
+          match starts, you each pick a squad of players. As the match plays
+          out, the players you picked earn you points when they do good things
+          (score, save, assist). Whoever has more points at the final whistle
+          wins.
+        </p>
+        <p className="mt-2">
+          You can play solo too — the app fills in a bot opponent so the
+          competition still happens.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'rooms',
+    icon: '🚪',
+    title: 'How do I play with someone?',
+    body: (
+      <>
+        <p>
+          From the home screen, pick a match and either <b>create a room</b>
+          {' '}or <b>join one</b> with a 6-character code. Share the code with
+          your friend, or send them a link from the Friends tab.
+        </p>
+        <p className="mt-2">
+          Two humans per room. Both need to be in the room before the host
+          starts the match.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'draft',
+    icon: '🎯',
+    title: 'How does the draft work?',
+    body: (
+      <>
+        <p>
+          The draft is how you pick your squad. The app shows you two players
+          at a time and you tap the one you want. Your opponent does the same
+          on their phone — neither of you sees what the other picked until
+          both have chosen.
+        </p>
+        <p className="mt-2">
+          Most of the time you'll both pick different players, so you each
+          just get the one you wanted. If you both pick the same player,
+          there's a coin flip — the winner gets the player they wanted, the
+          loser gets the other one. The flip is rigged to keep things even
+          (no one can win three coin flips in a row).
+        </p>
+        <p className="mt-2">
+          After the draft, you pick a starting XI from the players you
+          drafted. Those are the ones that earn you points during the match.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'scoring',
+    icon: '📊',
+    title: 'How do I earn points?',
+    body: (
+      <>
+        <p>
+          Every time a player on your starting XI does something good in the
+          real match, you get points:
+        </p>
+        <ul className="mt-2 space-y-1 text-gray-400">
+          <li>• Goal — <span className="text-white">+5</span></li>
+          <li>• Assist — <span className="text-white">+3</span></li>
+          <li>• Save (goalkeeper) — <span className="text-white">+3</span></li>
+          <li>• Yellow card — <span className="text-red-400">−1</span></li>
+        </ul>
+        <p className="mt-2">
+          On top of that, mini-games pop up during the match (offside reflex,
+          halftime quiz, penalty shootout). Tap fast and accurately for
+          bonus points.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'minigames',
+    icon: '⚡',
+    title: 'What are the mini-games?',
+    body: (
+      <>
+        <p>
+          When something interesting happens in the match, a quick reaction
+          challenge pops up for both players at the same time:
+        </p>
+        <ul className="mt-2 space-y-1.5 text-gray-400">
+          <li>
+            <span className="text-white font-semibold">Offside Reflex</span> —
+            tap the moment the attacker crosses the line. Faster = more
+            points (max +6).
+          </li>
+          <li>
+            <span className="text-white font-semibold">Halftime Quiz</span> —
+            three football trivia questions during the break. Answer fast
+            and right.
+          </li>
+          <li>
+            <span className="text-white font-semibold">Penalty Shootout</span>
+            {' '}— pick a corner. If you're the shooter, score it. If you're
+            the keeper, save it.
+          </li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'badges',
+    icon: '🏅',
+    title: 'Badges, history & leaderboard',
+    body: (
+      <>
+        <p>
+          Badges unlock automatically when you hit milestones — your first
+          goal, five saves, things like that. Open the Badges tab to see all
+          of them.
+        </p>
+        <p className="mt-2">
+          Every match you finish gets recorded in the History tab forever.
+          Your all-time score across every match shows up on the global
+          Leaderboard (link on the home screen).
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'tips',
+    icon: '💡',
+    title: 'A few tips',
+    body: (
+      <>
+        <ul className="space-y-1.5 text-gray-400">
+          <li>
+            • The match clock is what matters, not real wall time. If
+            something looks delayed, give it a second — events show up when
+            the clock catches up.
+          </li>
+          <li>
+            • Each browser tab is a separate session. Open two tabs to test
+            with two accounts on the same machine.
+          </li>
+          <li>
+            • Closing your tab signs you out of <i>that tab</i>, but your
+            badges, history and points are saved on the server.
+          </li>
+          <li>
+            • The host picks the playback speed when starting the match. 5×
+            is the recommended pace.
+          </li>
+        </ul>
+      </>
+    ),
+  },
+]
+
+function HelpTopic({ topic, firstItem }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div
+      className={firstItem ? '' : 'border-t border-white/5 pt-2'}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 py-2 text-left active:opacity-70 transition-opacity"
+        aria-expanded={open}
+      >
+        <span
+          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-base leading-none"
+          style={{
+            background: open
+              ? 'linear-gradient(135deg, rgba(220,38,38,0.20) 0%, rgba(153,27,27,0.10) 100%)'
+              : 'rgba(255,255,255,0.04)',
+            border: open
+              ? '1px solid rgba(248,113,113,0.35)'
+              : '1px solid rgba(255,255,255,0.08)',
+            transition: 'background 0.2s, border-color 0.2s',
+          }}
+          aria-hidden
+        >
+          {topic.icon}
+        </span>
+        <span className={`flex-1 text-sm font-semibold leading-tight ${open ? 'text-white' : 'text-gray-200'}`}>
+          {topic.title}
+        </span>
+        <span
+          className={`text-gray-500 text-xs flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          aria-hidden
+        >
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div className="pl-11 pr-1 pb-3 pt-1 text-[12.5px] leading-relaxed text-gray-300 space-y-1">
+          {topic.body}
+        </div>
+      )}
     </div>
   )
 }
