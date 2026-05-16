@@ -326,6 +326,30 @@ export function AppAudioProvider({ children }) {
     _writeFloat(KEYS.appVolume, clamped)
   }
 
+  // Manual prev/next — user-driven track skip via the mini-player. Ignores
+  // repeatMode === 'one' (a hard skip should always advance, even when the
+  // user has the current track on repeat). Wraps at the playlist ends.
+  const nextTrack = () => {
+    const playlist = _resolvePlaylist(albumsRef.current, activeAlbumIdRef.current)
+    if (playlist.length <= 1) return
+    const idx = playlist.findIndex(t => t.id === appTrackId)
+    const next = playlist[(idx + 1) % playlist.length]
+    if (!next || next.id === appTrackId) return
+    _writePosition(next.id, 0)
+    setAppTrackIdState(next.id)
+    _writeString(KEYS.appTrack, next.id)
+  }
+  const prevTrack = () => {
+    const playlist = _resolvePlaylist(albumsRef.current, activeAlbumIdRef.current)
+    if (playlist.length <= 1) return
+    const idx = playlist.findIndex(t => t.id === appTrackId)
+    const prev = playlist[(idx - 1 + playlist.length) % playlist.length]
+    if (!prev || prev.id === appTrackId) return
+    _writePosition(prev.id, 0)
+    setAppTrackIdState(prev.id)
+    _writeString(KEYS.appTrack, prev.id)
+  }
+
   // Temporary volume ramp on the underlying <audio> element WITHOUT
   // persisting to localStorage. Used by ducking flows (e.g. the match-end
   // celebration mutes the app music for the duration of the celebration
@@ -447,6 +471,7 @@ export function AppAudioProvider({ children }) {
       appEnabled, toggleApp, setAppEnabled,
       appTrackId, setAppTrack, appTrack,
       appVolume, setAppVolume, fadeAppMusic,
+      nextTrack, prevTrack,
       // Intro audio (toggle only)
       introEnabled, toggleIntro, setIntroEnabled,
       // List of currently-unlocked tracks for the Profile picker.
@@ -471,6 +496,7 @@ export function useAppAudio() {
       appEnabled: false, toggleApp: () => {}, setAppEnabled: () => {},
       appTrackId: DEFAULT_TRACK_ID, setAppTrack: () => {}, appTrack: null,
       appVolume: TARGET_VOLUME, setAppVolume: () => {}, fadeAppMusic: () => Promise.resolve(),
+      nextTrack: () => {}, prevTrack: () => {},
       introEnabled: true, toggleIntro: () => {}, setIntroEnabled: () => {},
       tracks: TRACKS,
       albums: [], activeAlbumId: null,

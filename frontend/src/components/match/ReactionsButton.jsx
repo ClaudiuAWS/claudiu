@@ -4,10 +4,10 @@ import { roomsApi } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { pushCheer } from './ReactionsOverlay'
 
-// Order is tuned for the 2-column grid layout below: items fill
-// left-to-right, top-to-bottom, and the last item (pretzel) gets an
-// explicit `gridColumnStart: 2` so it lands at the bottom-right slot —
-// the cell closest to the FAB, making it the natural default tap.
+// Pretzel last in the array → renders at the BOTTOM of the vertical
+// column (closest to the FAB above which the picker pops). Single
+// continuous column reads as one strip; the previous 2-col grid felt
+// like four discrete pairs.
 const EMOJIS = ['💀', '🙌', '😱', '🤣', '🔥', '⚽', '🥨']
 
 /**
@@ -52,23 +52,18 @@ export default function ReactionsButton({ roomCode }) {
     <div className="fixed bottom-24 right-4 z-50">
       {open && (
         <div
-          className="absolute bottom-14 right-0 grid grid-cols-2 gap-1.5 mb-2"
+          className="absolute bottom-14 right-0 flex flex-col gap-1 mb-2"
           onClick={e => e.stopPropagation()}
         >
-          {EMOJIS.map((e, i) => (
+          {EMOJIS.map(e => (
             <button
               key={e}
               onClick={() => send(e)}
-              className="w-11 h-11 rounded-full flex items-center justify-center text-2xl transition-all active:scale-90 hover:scale-110"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-xl transition-all active:scale-90 hover:scale-110"
               style={{
                 background: 'linear-gradient(145deg, #14181f 0%, #0a0d12 100%)',
                 border: '1px solid rgba(255,255,255,0.10)',
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 4px 12px -4px rgba(0,0,0,0.5)',
-                // Force the pretzel (last item) into the bottom-right slot
-                // so it sits directly above the FAB and is the natural
-                // default tap. Without this, the dangling 7th item would
-                // fall into the bottom-left of the 2×4 grid.
-                gridColumnStart: i === EMOJIS.length - 1 ? 2 : undefined,
               }}
               aria-label={`React with ${e}`}
             >
@@ -93,7 +88,7 @@ export default function ReactionsButton({ roomCode }) {
         }}
         aria-label="Open reactions"
       >
-        <span className="text-xl leading-none">{open ? '×' : '⚽'}</span>
+        <span className="text-xl leading-none">{open ? '×' : '🥨'}</span>
       </button>
     </div>
   )

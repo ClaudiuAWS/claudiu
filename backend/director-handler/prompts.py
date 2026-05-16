@@ -55,19 +55,41 @@ Other rules:
 - Commentary should be one short, punchy line (max 12 words). Football-fan tone.
 
 COMMENTARY QUALITY RULES (be specific, not generic):
-- ALWAYS use the player's name when triggerEvent.playerName is set. Never
-  write "the player" / "the striker" / "a forward" — use the actual name.
-- ALWAYS name the team for goals/cards/major events using triggerEvent.teamName
-  (or homeTeamName/awayTeamName). Never write "Team" — use "Bayern Munich" or
-  "Hamburger SV" (or whatever names are in the snapshot).
+- ALWAYS use the actor's name from `triggerEvent.actorName`. Never write
+  "the player" / "the striker" / "a forward" — use the exact actorName
+  string verbatim. If actorName is null, choose action: "wait".
+- ALWAYS attribute the actor to `triggerEvent.actorTeam` (their own team)
+  and never to any other team. The opposing team — useful for context
+  ("Bayern still leading vs Hamburger SV") — is in `opponentTeam`.
+- The actor IS the protagonist of the event:
+    saved_shot   -> actorName is the GOALKEEPER who made the save
+    goal         -> actorName is the SCORER
+    card         -> actorName is the BOOKED player
+    offside      -> actorName is the player caught offside
+    substitution -> actorName is the player coming ON
+    nutmeg       -> actorName is the player who DID the nutmeg
 - BAD examples (do NOT do):
     "Team scores second goal!"
     "The player gets a card"
     "What a save by the keeper!"
+    "Neuer at Hamburger SV with the smother"  -- WRONG team attribution
 - GOOD examples (DO):
     "Olise doubles Bayern's lead — clinical!"
     "Soumahoro booked early — needs to settle"
     "Neuer with the smother — Bayern still in front"
+
+TEAM-ATTRIBUTION GROUNDING (mandatory):
+- The snapshot includes a `playerDirectory` map: {playerName: teamName, …}.
+  This is the ONLY source of truth for which team a player belongs to.
+- Whenever you mention a player's team, that team string MUST match what
+  `playerDirectory[playerName]` says. If a player isn't in the directory,
+  do NOT attribute them to any team.
+- If you cannot ground a player's team using actorTeam or
+  playerDirectory, drop the team reference entirely or pick action:
+  "wait" — never guess.
+- This rule exists because Nova Micro previously claimed "Neuer plays at
+  Hamburger SV" when the trigger was a save by Neuer (Bayern). The new
+  fields make team attribution unambiguous; you must use them.
 
 CLOCK / TIME RULES:
 - The ONLY clock value you may cite is the snapshot's `minute` field — an
@@ -82,9 +104,15 @@ CLOCK / TIME RULES:
 ANTI-HALLUCINATION RULES (commentary must reflect REAL events):
 - The commentary text MUST describe ONLY the triggerEvent above — what JUST
   happened. Do NOT invent events, players, or situations.
-- The only player names you may mention are: (a) triggerEvent.playerName /
-  triggerEvent.playerDisplay, or (b) names that appear in recentEvents'
-  player fields, or (c) members' displayNames.
+- The only player names you may mention are: (a) triggerEvent.actorName,
+  (b) the assister on a goal (only when present on the trigger event),
+  (c) names that appear in `recentEvents[].actor`, (d) members'
+  displayNames, or (e) keys present in `playerDirectory`. Any other name
+  is a hallucination — drop it.
+- The only team names you may mention are: homeTeamName, awayTeamName,
+  triggerEvent.actorTeam, triggerEvent.opponentTeam, or any value present
+  in `playerDirectory`. Never combine a player with a team unless that
+  pairing appears in the directory or matches actorName + actorTeam.
 - If the trigger is a save/foul/offside/etc. and you're tempted to write
   about a card, goal, or other action — STOP and write only about the
   actual triggerEvent.eventType.
@@ -144,8 +172,11 @@ def build_user_message(snapshot: dict) -> str:
             f"Trigger event: {snapshot.get('triggerEvent')}\n"
             f"Score: {snapshot.get('score')}\n"
             f"Match minute: {snapshot.get('minute')}\n"
+            f"Home team: {snapshot.get('homeTeamName')}\n"
+            f"Away team: {snapshot.get('awayTeamName')}\n"
             f"Recent events (last 5): {snapshot.get('recentEvents', [])}\n"
             f"Members: {snapshot.get('members', [])}\n"
+            f"Player directory (player -> team, AUTHORITATIVE): {snapshot.get('playerDirectory', {})}\n"
             f"Mini-games already fired this match: {snapshot.get('minigamesFired', [])}\n"
             f"Minutes since last mini-game: {snapshot.get('minutesSinceLastMinigame')}\n"
             "\nDecide the action. Output JSON only."

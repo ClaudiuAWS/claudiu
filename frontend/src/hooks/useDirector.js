@@ -99,6 +99,22 @@ export function useDirector(room, events, currentUserId, match) {
       return Math.min(90, 45 + Math.ceil((sec - htSec) / 60))
     })()
 
+    // Normalize the trigger event to an authoritative (actor, team) pair.
+    // For save events the actor is the KEEPER (whose name is in
+    // goalKeeperDisplay, not playerDisplay) and the actor's team is the
+    // KEEPER's team (data.teamRole on saved_shot events is already the
+    // keeper's role per the XML loader, but the older snapshot logic
+    // wasn't using it). Without this normalization the AI saw
+    // `playerName: null` on saves and made up names + team attributions —
+    // e.g. claiming "Neuer (Hamburger SV) saves" when Neuer is at Bayern.
+    const actor = _resolveActor(latest, teamNameOf)
+
+    // Build a small directory of every player the AI might mention with
+    // their authoritative team. Covers (a) drafted players on both
+    // members' squads and (b) the trigger event's actor. The prompt
+    // forbids any team attribution that isn't in this map.
+    const playerDirectory = _buildPlayerDirectory(room.members || [], latest, teamNameOf)
+
     const snapshot = {
       triggerEvent: {
         eventId:       latest.eventId,
@@ -107,10 +123,18 @@ export function useDirector(room, events, currentUserId, match) {
         // surface the flag so the AI can choose PENALTY_SHOOTOUT (and the
         // prompt's rule can validate the combo).
         isPenalty:     !!latest.isPenalty,
-        playerName:    latest.playerName || latest.playerDisplay || null,
-        playerDisplay: latest.playerDisplay || null,
+        // Canonical actor + team for the event. ALWAYS use these in the
+        // prompt; the legacy playerName / teamName fields are kept for
+        // back-compat but the prompt has been updated to ignore them.
+        actorName:     actor.name,
+        actorTeam:     actor.team,
+        opponentTeam:  actor.opponentTeam,
+        // Legacy aliases — kept temporarily so any partially-cached prompt
+        // path still works. Prompt rules now mandate actorName/actorTeam.
+        playerName:    actor.name,
+        playerDisplay: actor.name,
         teamRole:      latest.teamRole || null,
-        teamName:      teamNameOf(latest.teamRole),
+        teamName:      actor.team,
         // Intentionally do NOT pass gameTime here. It's "MM:SS" raw seconds
         // since kickoff and the AI was quoting it as if it were the displayed
         // minute (e.g. "5:19" while the scoreboard read 9'). The snapshot's
@@ -123,17 +147,27 @@ export function useDirector(room, events, currentUserId, match) {
       homeTeamName: match?.homeTeamName || 'Home',
       awayTeamName: match?.awayTeamName || 'Away',
       minute:    triggerMinute,
-      recentEvents: events.slice(-5).map(e => ({
-        type:          e.eventType,
-        player:        e.playerDisplay || e.playerName || null,
-        team:          teamNameOf(e.teamRole),
-        currentResult: e.currentResult || null,
-      })),
+      recentEvents: events.slice(-5).map(e => {
+        const a = _resolveActor(e, teamNameOf)
+        return {
+          type:          e.eventType,
+          actor:         a.name,
+          actorTeam:     a.team,
+          // Legacy aliases for back-compat.
+          player:        a.name,
+          team:          a.team,
+          currentResult: e.currentResult || null,
+        }
+      }),
       members: (room.members || []).map(m => ({
         userId:         m.userId,
         displayName:    m.displayName,
         ownedPlayerIds: (m.teamSelectionDetails || []).map(p => p.playerId),
       })),
+      // Authoritative lookup: any player name the AI references MUST appear
+      // here, with the team string from this map. The prompt forbids
+      // inventing team attributions outside this directory.
+      playerDirectory,
       // Map event-type entries on the room record to game-type names so
       // both the prompt's "once per match" rule and the backend hard gate
       // can compare apples to apples (the AI thinks in gameTypes).
@@ -198,4 +232,101 @@ function _computeSnapshotOwnership(event, members) {
     advantagedUserId:      owner?.userId || null,
     advantagedDisplayName: owner?.displayName || null,
   }
+}
+
+// ─── Snapshot-grounding helpers ──────────────────────────────────────────
+// The AI Director used to hallucinate team attributions ("Neuer at
+// Hamburger SV") because the snapshot's `playerName`/`teamName` pair
+// silently mismatched on certain event types. Two fixes below:
+//   1. `_resolveActor` picks the right (name, team, opponent) tuple per
+//      event type — keeper for saves, scorer for goals, etc.
+//   2. `_buildPlayerDirectory` lists every drafted + trigger player with
+//      their authoritative team; the prompt forbids team attributions
+//      that aren't in this map.
+
+// Returns { name, team, opponentTeam } for a flat event object. teamNameOf
+// maps the role 'home' / 'away' to the actual club name from the match.
+function _resolveActor(event, teamNameOf) {
+  if (!event) return { name: null, team: null, opponentTeam: null }
+
+  const role = event.teamRole || null
+  const teamFromRole = teamNameOf(role)
+  const opponentFromRole = role === 'home' ? teamNameOf('away')
+                         : role === 'away' ? teamNameOf('home')
+                         : null
+
+  switch (event.eventType) {
+    case 'saved_shot':
+      // For save events the loader already stamps teamRole as the KEEPER's
+      // role (data/loader/parsers/events.py:_handle_saved_shot). So the
+      // keeper's team comes straight from role. The "opponent" here is the
+      // team that just took the shot.
+      return {
+        name:         event.goalKeeperDisplay || event.goalKeeperName || null,
+        team:         teamFromRole,
+        opponentTeam: opponentFromRole,
+      }
+    case 'goal':
+      return {
+        name:         event.scoringDisplay || event.scoringPlayerDisplay || event.playerDisplay || null,
+        team:         teamFromRole,
+        opponentTeam: opponentFromRole,
+      }
+    case 'card':
+    case 'offside':
+    case 'nutmeg':
+    case 'spectacular_play':
+      return {
+        name:         event.playerDisplay || event.playerName || null,
+        team:         teamFromRole,
+        opponentTeam: opponentFromRole,
+      }
+    case 'substitution':
+      // The "actor" we cite is the player coming on; the player going off
+      // is secondary detail the AI can still pick up from event metadata.
+      return {
+        name:         event.playerInDisplay || event.playerInName || null,
+        team:         teamFromRole,
+        opponentTeam: opponentFromRole,
+      }
+    default:
+      return {
+        name:         event.playerDisplay || event.playerName || null,
+        team:         teamFromRole,
+        opponentTeam: opponentFromRole,
+      }
+  }
+}
+
+// Map of player display name (lowercased + trimmed) → authoritative team.
+// The AI prompt uses this as the ONLY allowed source for team
+// attributions, so a hallucinated "Neuer at Hamburger SV" can be
+// detected and corrected by validating against this map.
+function _buildPlayerDirectory(members, triggerEvent, teamNameOf) {
+  const out = {}
+  const add = (name, team) => {
+    if (!name || !team) return
+    const key = String(name).trim()
+    if (!key) return
+    out[key] = team
+  }
+
+  // Drafted players on each member's squad — team comes from teamRole on
+  // the teamSelectionDetails entry written at squad-lock time.
+  for (const m of (members || [])) {
+    for (const p of (m.teamSelectionDetails || [])) {
+      add(p.displayName, teamNameOf(p.teamRole))
+    }
+  }
+
+  // The trigger event's actor — covers non-drafted players (the opposing
+  // team's scorer for a conceded goal, etc.).
+  const actor = _resolveActor(triggerEvent, teamNameOf)
+  add(actor.name, actor.team)
+  // For goal events also stamp the assister.
+  if (triggerEvent?.eventType === 'goal' && triggerEvent.assistDisplay) {
+    add(triggerEvent.assistDisplay, teamNameOf(triggerEvent.teamRole))
+  }
+
+  return out
 }
