@@ -5,6 +5,7 @@ import time
 import random
 import string
 from boto3.dynamodb.conditions import Attr, Key
+from botocore.exceptions import ClientError
 
 import ws
 
@@ -641,136 +642,175 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
 def submit_draft_pick(room_code: str, user_id: str, pair_index: int, player_id: str) -> dict:
     """Record a user's pick for the current pair. When both users have submitted,
     resolve the pair (with random tiebreak on conflict) and advance.
+
+    Concurrency note: two near-simultaneous submits from both users used to race
+    on the read-modify-write — both Lambdas read an empty `pendingChoices`, both
+    wrote their own pending, and the second write clobbered the first. Both
+    users then froze "waiting for opponent" because one pending was lost.
+
+    Fix: CAS retry loop with strongly-consistent reads. The conditional update
+    rejects the write unless the draft's `pendingChoices` and `currentPairIndex`
+    are still exactly what we read. On conflict, retry — the loser of the race
+    now sees both pending choices on its next read and runs the resolve path.
     """
-    room = rooms_table.get_item(Key={'roomCode': room_code}).get('Item')
-    if not room:
-        raise ValueError('Room not found')
-    if not any(m['userId'] == user_id for m in room.get('members', [])):
-        raise ValueError('You are not in this room')
+    pair = None         # captured in the loop for the broadcast below
+    tiebreak = None
+    resolved = None
+    new_draft = None
+    cur_idx = None
+    is_last = False
+    is_waiting = True
 
-    draft = room.get('draft') or {}
-    if draft.get('status') != 'active':
-        raise ValueError('Draft is not active')
-
-    cur_idx = int(draft.get('currentPairIndex', 0))
-    if int(pair_index) != cur_idx:
-        raise ValueError('Pick is for a stale pair')
-
-    pairs = draft.get('pairs') or []
-    if cur_idx >= len(pairs):
-        raise ValueError('No more pairs')
-    pair = pairs[cur_idx]
-    if player_id not in pair:
-        raise ValueError('Player is not in the current pair')
-
-    pending = dict(draft.get('pendingChoices') or {})
-    if user_id in pending:
-        # User already submitted — re-lock to their original choice (per the
-        # disconnect-freeze design: no second-guessing once submitted).
-        return {'ok': True, 'lockedTo': pending[user_id]}
-    pending[user_id] = player_id
-
-    # Identify both members.
-    members = room.get('members', [])
-    member_ids = [m['userId'] for m in members]
-    other_ids = [uid for uid in member_ids if uid != user_id]
-
-    # If we still need the other user's pick, just save state and broadcast.
-    if not other_ids or other_ids[0] not in pending:
-        draft = {**draft, 'pendingChoices': pending}
-        rooms_table.update_item(
+    for attempt in range(5):
+        room = rooms_table.get_item(
             Key={'roomCode': room_code},
-            UpdateExpression='SET draft = :d',
-            ExpressionAttributeValues={':d': draft},
-        )
+            ConsistentRead=True,
+        ).get('Item')
+        if not room:
+            raise ValueError('Room not found')
+        if not any(m['userId'] == user_id for m in room.get('members', [])):
+            raise ValueError('You are not in this room')
+
+        draft = room.get('draft') or {}
+        if draft.get('status') != 'active':
+            raise ValueError('Draft is not active')
+
+        cur_idx = int(draft.get('currentPairIndex', 0))
+        if int(pair_index) != cur_idx:
+            raise ValueError('Pick is for a stale pair')
+
+        pairs = draft.get('pairs') or []
+        if cur_idx >= len(pairs):
+            raise ValueError('No more pairs')
+        pair = pairs[cur_idx]
+        if player_id not in pair:
+            raise ValueError('Player is not in the current pair')
+
+        old_pending = dict(draft.get('pendingChoices') or {})
+        if user_id in old_pending:
+            # Disconnect-freeze design: no second-guessing once submitted.
+            return {'ok': True, 'lockedTo': old_pending[user_id]}
+        pending = dict(old_pending)
+        pending[user_id] = player_id
+
+        members = room.get('members', [])
+        member_ids = [m['userId'] for m in members]
+        other_ids = [uid for uid in member_ids if uid != user_id]
+
+        # Compute the post-write draft state.
+        if not other_ids or other_ids[0] not in pending:
+            # Still waiting for the other user.
+            new_draft = {**draft, 'pendingChoices': pending}
+            tiebreak = None
+            resolved = None
+            is_last = False
+            is_waiting = True
+        else:
+            # Both have picked — resolve.
+            other_id = other_ids[0]
+            my_pick = pending[user_id]
+            other_pick = pending[other_id]
+
+            tiebreak = None
+            if my_pick == other_pick:
+                host_id = room.get('hostUserId') or members[0]['userId']
+                ordered = sorted(member_ids, key=lambda mid: 0 if mid == host_id else 1)
+                ties_won = dict(draft.get('tiebreakWinsByUser') or {})
+                wins_a = int(ties_won.get(ordered[0], 0))
+                wins_b = int(ties_won.get(ordered[1], 0))
+                forced = None
+                if wins_a - wins_b >= 1:
+                    winner_id = ordered[1]
+                    forced = 'capped'
+                elif wins_b - wins_a >= 1:
+                    winner_id = ordered[0]
+                    forced = 'capped'
+                else:
+                    winner_id = random.choice([ordered[0], ordered[1]])
+                loser_id = ordered[1] if winner_id == ordered[0] else ordered[0]
+
+                other_player = pair[0] if pair[1] == my_pick else pair[1]
+                tiebreak = {
+                    'winnerUserId':       winner_id,
+                    'contestedPlayerId':  my_pick,
+                    'capped':             forced == 'capped',
+                }
+                resolved = {winner_id: my_pick, loser_id: other_player}
+                ties_won[winner_id] = int(ties_won.get(winner_id, 0)) + 1
+                draft_with_ties = {**draft, 'tiebreakWinsByUser': ties_won}
+            else:
+                resolved = {user_id: my_pick, other_id: other_pick}
+                draft_with_ties = draft
+
+            picks_per_user = {uid: list(plist) for uid, plist in (draft_with_ties.get('picks') or {}).items()}
+            for uid, pid in resolved.items():
+                picks_per_user.setdefault(uid, []).append(pid)
+
+            next_idx = cur_idx + 1
+            is_last = next_idx >= len(pairs)
+            new_status = 'complete' if is_last else 'active'
+
+            new_draft = {
+                **draft_with_ties,
+                'currentPairIndex': next_idx,
+                'pendingChoices':   {},
+                'picks':            picks_per_user,
+                'status':           new_status,
+                **({'completedAt': int(time.time() * 1000)} if is_last else {}),
+            }
+            is_waiting = False
+
+        # Conditional write — only succeed if no one else has changed the draft
+        # between our read and this write. `pendingChoices` and
+        # `currentPairIndex` together are sufficient to detect any racing
+        # update from the other user.
+        try:
+            rooms_table.update_item(
+                Key={'roomCode': room_code},
+                UpdateExpression='SET draft = :new_draft',
+                ConditionExpression='draft.currentPairIndex = :expected_idx AND draft.pendingChoices = :expected_pending',
+                ExpressionAttributeValues={
+                    ':new_draft':        new_draft,
+                    ':expected_idx':     cur_idx,
+                    ':expected_pending': old_pending,
+                },
+            )
+            break  # write landed cleanly
+        except ClientError as e:
+            if e.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
+                # Race lost — the other user's Lambda landed first. Sleep
+                # briefly (jittered backoff) and retry; our next read will
+                # see the updated state.
+                time.sleep(0.04 * (attempt + 1) + random.random() * 0.02)
+                continue
+            raise
+    else:
+        # Exhausted retries — fail loud so the client can surface an error
+        # rather than silently freeze.
+        raise ValueError('Pick failed: too much contention, please try again')
+
+    # Broadcast the resulting state. Both branches publish a state_update;
+    # the resolve branch ALSO publishes pair_resolved (and draft_complete on
+    # the final pair).
+    if is_waiting:
         ws.push_to_channel(f"room#{room_code}", {
             'type':  'draft_state_update',
-            'draft': _normalize_draft(draft),
+            'draft': _normalize_draft(new_draft),
         })
         return {'ok': True, 'waiting': True}
 
-    # Both have picked — resolve.
-    other_id = other_ids[0]
-    my_pick = pending[user_id]
-    other_pick = pending[other_id]
-
-    tiebreak = None
-    if my_pick == other_pick:
-        # Conflict — capped random. The "winner" gets the picked player, the
-        # "loser" gets the other one in the pair.
-        #
-        # User wants luck back (deterministic alternation killed the gamble),
-        # but also wants to avoid the small-sample streaks that made the
-        # tiebreak feel rigged. Solution: real coin flip every tiebreak,
-        # except when one user is already 1 ahead — in that case force the
-        # trailing user to win, keeping the gap in [0, 1] across the draft.
-        host_id = room.get('hostUserId') or members[0]['userId']
-        ordered = sorted(member_ids, key=lambda mid: 0 if mid == host_id else 1)
-        ties_won = dict(draft.get('tiebreakWinsByUser') or {})
-        wins_a = int(ties_won.get(ordered[0], 0))
-        wins_b = int(ties_won.get(ordered[1], 0))
-        forced = None
-        if wins_a - wins_b >= 1:
-            winner_id = ordered[1]    # trailing
-            forced = 'capped'
-        elif wins_b - wins_a >= 1:
-            winner_id = ordered[0]    # trailing
-            forced = 'capped'
-        else:
-            winner_id = random.choice([ordered[0], ordered[1]])
-        loser_id = ordered[1] if winner_id == ordered[0] else ordered[0]
-
-        other_player = pair[0] if pair[1] == my_pick else pair[1]
-        winner_player = my_pick
-        loser_player = other_player
-        tiebreak = {
-            'winnerUserId':       winner_id,
-            'contestedPlayerId':  my_pick,
-            'capped':             forced == 'capped',
-        }
-        resolved = {winner_id: winner_player, loser_id: loser_player}
-        # Bump the winner's running total so the next tiebreak's cap check
-        # sees the updated gap.
-        ties_won[winner_id] = int(ties_won.get(winner_id, 0)) + 1
-        draft = {**draft, 'tiebreakWinsByUser': ties_won}
-    else:
-        # Distinct picks — each gets what they chose.
-        resolved = {user_id: my_pick, other_id: other_pick}
-
-    picks_per_user = {uid: list(plist) for uid, plist in (draft.get('picks') or {}).items()}
-    for uid, pid in resolved.items():
-        picks_per_user.setdefault(uid, []).append(pid)
-
-    next_idx = cur_idx + 1
-    is_last = next_idx >= len(pairs)
-    new_status = 'complete' if is_last else 'active'
-
-    draft = {
-        **draft,
-        'currentPairIndex': next_idx,
-        'pendingChoices':   {},
-        'picks':            picks_per_user,
-        'status':           new_status,
-        **({'completedAt': int(time.time() * 1000)} if is_last else {}),
-    }
-    rooms_table.update_item(
-        Key={'roomCode': room_code},
-        UpdateExpression='SET draft = :d',
-        ExpressionAttributeValues={':d': draft},
-    )
-
     ws.push_to_channel(f"room#{room_code}", {
-        'type':           'draft_pair_resolved',
-        'pairIndex':      cur_idx,
-        'pair':           pair,
-        'resolved':       resolved,
-        'tiebreak':       tiebreak,
-        'draft':          _normalize_draft(draft),
+        'type':      'draft_pair_resolved',
+        'pairIndex': cur_idx,
+        'pair':      pair,
+        'resolved':  resolved,
+        'tiebreak':  tiebreak,
+        'draft':     _normalize_draft(new_draft),
     })
     if is_last:
         ws.push_to_channel(f"room#{room_code}", {
             'type':  'draft_complete',
-            'draft': _normalize_draft(draft),
+            'draft': _normalize_draft(new_draft),
         })
 
     return {'ok': True, 'resolved': resolved, 'tiebreak': tiebreak}

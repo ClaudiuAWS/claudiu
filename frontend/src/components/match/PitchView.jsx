@@ -17,6 +17,7 @@ export function PitchView({
   formation        = '4-2-3-1',
   onPlayerClick,
   selectedPlayerId = null,
+  captainPlayerId  = null,
   maxHeight        = '380px',
   showHeader       = true,
 }) {
@@ -117,6 +118,13 @@ export function PitchView({
             const fill       = GROUP_COLORS[player.group] || '#374151'
             const stroke     = TEAM_COLORS[teamRole] || '#ffffff'
             const isSelected = !!(selectedPlayerId && player.playerId === selectedPlayerId)
+            const isCaptain  = !!(captainPlayerId && player.playerId === captainPlayerId)
+
+            // Border colour priority: captain blue > swap green > team stroke.
+            // Captain wins because the captain visual is a deliberate brand
+            // marker, while the swap green is a transient interaction state.
+            const cardBorder = isCaptain ? '#60a5fa' : isSelected ? '#22c55e' : stroke
+            const cardBg     = isSelected ? '#14532d' : 'rgba(8,12,26,0.92)'
 
             return (
               <div
@@ -134,8 +142,24 @@ export function PitchView({
                   WebkitTapHighlightColor: 'transparent',
                 }}
               >
-                {/* Selection glow ring */}
-                {isSelected && (
+                {/* Captain glow ring — blue sparkling frame. Distinct from
+                    the swap (green) selection state below. */}
+                {isCaptain && (
+                  <div style={{
+                    position: 'absolute',
+                    inset: -5,
+                    borderRadius: 12,
+                    border: '2px solid #60a5fa',
+                    boxShadow: '0 0 16px rgba(96,165,250,0.85), inset 0 0 8px rgba(147,197,253,0.45)',
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                    animation: 'captainPulse 1.8s ease-in-out infinite',
+                  }} />
+                )}
+
+                {/* Selection (swap) glow ring — only when NOT also captain.
+                    Captain visual wins to avoid the swap-arrow look. */}
+                {isSelected && !isCaptain && (
                   <div style={{
                     position: 'absolute',
                     inset: -4,
@@ -147,18 +171,49 @@ export function PitchView({
                   }} />
                 )}
 
+                {/* Captain "C" chip — top-centre, just above the card. */}
+                {isCaptain && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: -10,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      zIndex: 3,
+                      width: 16,
+                      height: 16,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)',
+                      border: '1.5px solid #bfdbfe',
+                      color: '#0b1330',
+                      fontSize: 9,
+                      fontWeight: 900,
+                      lineHeight: '13px',
+                      textAlign: 'center',
+                      fontFamily: 'system-ui, sans-serif',
+                      boxShadow: '0 0 10px rgba(96,165,250,0.85), 0 2px 4px rgba(0,0,0,0.5)',
+                      pointerEvents: 'none',
+                    }}
+                    aria-hidden="true"
+                  >
+                    C
+                  </div>
+                )}
+
                 {/* Card */}
                 <div style={{
                   width: 40,
                   borderRadius: 8,
                   overflow: 'hidden',
-                  background: isSelected ? '#14532d' : 'rgba(8,12,26,0.92)',
-                  border: `2px solid ${isSelected ? '#22c55e' : stroke}`,
+                  background: cardBg,
+                  border: `2px solid ${cardBorder}`,
                   boxShadow: '0 5px 18px rgba(0,0,0,0.9)',
                 }}>
-                  {/* Photo */}
+                  {/* Photo — captain keeps the photo (no swap-arrow icon).
+                      Swap-arrow only when actively selected for swap, AND
+                      not also the captain. */}
                   <div style={{ width: '100%', height: 46, background: fill, overflow: 'hidden', position: 'relative' }}>
-                    {player.imageUrl && !isSelected ? (
+                    {player.imageUrl && (!isSelected || isCaptain) ? (
                       <img
                         src={player.imageUrl}
                         alt=""
@@ -180,7 +235,7 @@ export function PitchView({
                         color: 'white', fontWeight: 900, fontSize: 15,
                         fontFamily: 'system-ui, sans-serif',
                       }}>
-                        {isSelected ? '⇄' : (player.shirtNumber || '?')}
+                        {isSelected && !isCaptain ? '⇄' : (player.shirtNumber || '?')}
                       </div>
                     )}
                   </div>
@@ -264,6 +319,14 @@ export function PitchView({
           </div>
         </div>
       )}
+
+      {/* Captain ring sparkle pulse — referenced by the captain glow above. */}
+      <style>{`
+        @keyframes captainPulse {
+          0%, 100% { box-shadow: 0 0 14px rgba(96,165,250,0.70), inset 0 0 6px rgba(147,197,253,0.35); }
+          50%      { box-shadow: 0 0 22px rgba(96,165,250,1.00), inset 0 0 10px rgba(147,197,253,0.65); }
+        }
+      `}</style>
     </div>
   )
 }
