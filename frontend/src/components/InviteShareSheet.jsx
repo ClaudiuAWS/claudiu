@@ -90,7 +90,7 @@ export default function InviteShareSheet({ open, onClose, inviterUserId, inviter
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-[60] flex items-end justify-center"
       onClick={onClose}
     >
       {/* Backdrop */}
