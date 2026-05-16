@@ -47,6 +47,8 @@ export const roomsApi = {
   draftPick:   (roomCode, pairIndex, playerId) => request(`/rooms/${roomCode}/draft-pick`, 'POST', { pairIndex, playerId }),
   directorTick: (roomCode, snapshot)        => request(`/rooms/${roomCode}/director-tick`, 'POST', { snapshot }),
   react:        (roomCode, eventId, reactionType) => request(`/rooms/${roomCode}/react`, 'POST', { eventId, reactionType }),
+  cheer:        (roomCode, emoji)                 => request(`/rooms/${roomCode}/cheer`, 'POST', { emoji }),
+  setCaptain:   (roomCode, playerId)              => request(`/rooms/${roomCode}/captain`, 'POST', { playerId }),
 }
 
 export const matchesApi = {
@@ -62,14 +64,20 @@ export const profileApi = {
 }
 
 export const friendsApi = {
-  list:   ()                   => request('/friends'),
-  add:    (email)              => request('/friends', 'POST', { email }),
-  accept: (friendId)           => request(`/friends/${friendId}/accept`, 'POST'),
-  invite: (friendId, roomCode) => request(`/friends/${friendId}/invite`, 'POST', { roomCode }),
-  remove: (friendId)           => request(`/friends/${friendId}`, 'DELETE'),
+  list:          ()                   => request('/friends'),
+  add:           (email)              => request('/friends', 'POST', { email }),
+  accept:        (friendId)           => request(`/friends/${friendId}/accept`, 'POST'),
+  invite:        (friendId, roomCode) => request(`/friends/${friendId}/invite`, 'POST', { roomCode }),
+  remove:        (friendId)           => request(`/friends/${friendId}`, 'DELETE'),
+  acceptInvite:  (inviterUserId)      => request('/friends/accept-invite', 'POST', { inviterUserId }),
 }
 
 export const badgesApi = {
   list:    () => request('/badges'),
   catalog: () => request('/badges/catalog'),
+}
+
+export const creditsApi = {
+  balance: () => request('/credits'),
+  friends: () => request('/credits/friends'),
 }

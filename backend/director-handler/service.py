@@ -168,11 +168,20 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                     'reasoning':        decision.get('reasoning') or '',
                 })
         elif action == 'commentate':
+                # Personal-commentary support: when the trigger event has an
+                # `ownerUserIds` list (a goal/save by a drafted player), tag
+                # the WS broadcast with `forUserIds`. The frontend filters
+                # on this and applies a gold-tinged styling so the owner
+                # feels the line is addressed to THEM specifically. Empty
+                # list = broadcast-to-all (default for ambient commentary).
+                ownership = snapshot.get('ownershipContext') or {}
+                for_user_ids = list(ownership.get('ownerUserIds') or [])
                 ws.push_to_channel(f"room#{room_code}", {
                     'type':           'commentary_update',
                     'text':           decision.get('text', ''),
                     'relatedEventId': related_event_id,
                     'createdAtMs':    int(time.time() * 1000),
                     'reasoning':      decision.get('reasoning') or '',
+                    'forUserIds':     for_user_ids,
                 })
         # 'wait' -> no-op

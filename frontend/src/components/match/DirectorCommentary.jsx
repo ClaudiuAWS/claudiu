@@ -49,43 +49,55 @@ export default function DirectorCommentary({ stack }) {
 
 function CommentaryCard({ entry }) {
   const [showReasoning, setShowReasoning] = useState(false)
+  // Personal commentary — the WS broadcast was tagged for this user
+  // specifically (their drafted player did something). Swap the violet
+  // ambient palette for a gold-tinged "this is about YOU" treatment.
+  const personal = !!entry.personal
+
+  const ring     = personal ? 'ring-amber-300/50 bg-amber-500/20' : 'ring-violet-400/40 bg-violet-500/20'
+  const border   = personal ? 'border-amber-300/40' : 'border-violet-400/30'
+  const overlay  = personal ? 'from-amber-500/20 via-amber-500/10' : 'from-violet-500/20 via-violet-500/10'
+  const labelText = personal ? 'For You · AI Director' : 'AI Director'
+  const labelClr  = personal ? 'text-amber-300/90' : 'text-violet-300/85'
+  const pillBg    = personal
+    ? 'border-amber-300/50 bg-amber-500/15 text-amber-100/90 hover:bg-amber-500/25 hover:text-amber-50'
+    : 'border-violet-400/40 bg-violet-500/15 text-violet-200/90 hover:bg-violet-500/25 hover:text-violet-100'
 
   return (
     <div
-      className="pointer-events-auto relative w-full max-w-md rounded-2xl border border-violet-400/30 overflow-hidden"
+      className={`pointer-events-auto relative w-full max-w-md rounded-2xl border overflow-hidden ${border}`}
       style={{
-        background:
-          'linear-gradient(180deg, #110a1f 0%, #060214 100%)',
+        background: personal
+          ? 'linear-gradient(180deg, #1f160a 0%, #140a02 100%)'
+          : 'linear-gradient(180deg, #110a1f 0%, #060214 100%)',
         boxShadow:
           '0 20px 40px -16px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.06)',
         animation: 'directorCommentaryIn 260ms cubic-bezier(.22,1.4,.36,1)',
         backdropFilter: 'blur(8px)',
       }}
     >
-      {/* Violet gradient overlay so the dark plate stays readable */}
       <span
-        className="absolute inset-0 pointer-events-none rounded-2xl bg-gradient-to-r from-violet-500/20 via-violet-500/10 to-transparent"
+        className={`absolute inset-0 pointer-events-none rounded-2xl bg-gradient-to-r to-transparent ${overlay}`}
         aria-hidden="true"
       />
 
       <div className="relative px-3 py-2.5 flex items-start gap-3">
-        {/* Avatar ring with mic emoji + pulse */}
         <div
-          className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center ring-2 ring-violet-400/40 bg-violet-500/20"
+          className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center ring-2 ${ring}`}
           style={{ animation: 'directorRingPulse 1.8s ease-out 1' }}
         >
-          <span className="text-lg leading-none" aria-hidden="true">🎙️</span>
+          <span className="text-lg leading-none" aria-hidden="true">{personal ? '⭐' : '🎙️'}</span>
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <p className="text-[9px] font-black tracking-widest uppercase text-violet-300/85">
-              AI Director
+            <p className={`text-[9px] font-black tracking-widest uppercase ${labelClr}`}>
+              {labelText}
             </p>
             {entry.reasoning && (
               <button
                 onClick={() => setShowReasoning(v => !v)}
-                className="text-[9.5px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border border-violet-400/40 bg-violet-500/15 text-violet-200/90 hover:bg-violet-500/25 hover:text-violet-100 transition"
+                className={`text-[9.5px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border transition ${pillBg}`}
                 aria-label="Show AI reasoning"
               >
                 {showReasoning ? 'Hide' : 'Why?'}

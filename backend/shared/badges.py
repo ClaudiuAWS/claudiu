@@ -62,20 +62,285 @@ _badges_table = _dynamodb.Table(_BADGES_TABLE_NAME)
 # has been fetched.
 
 BADGE_CATALOG = {
+    # ---- Scoring badges --------------------------------------------------
     'striker_1': {
         'id':          'striker_1',
         'title':       'First Strike',
         'description': 'A player from your squad scored their first goal.',
         'image':       '/badge-striker-1.png',
         'tier':        'bronze',
+        'discReward':  None,
     },
-    # Future: striker_10, striker_100 — same trigger, different threshold.
+    'hattrick': {
+        'id':          'hattrick',
+        'title':       'Hat Trick Hero',
+        'description': 'Three goals from your squad in a single match.',
+        'image':       '/badge-hattrick.png',
+        'tier':        'gold',
+        'discReward':  'pitbull-we-are-one',
+    },
+    'golden_boot': {
+        'id':          'golden_boot',
+        'title':       'Golden Boot',
+        'description': 'Top scorer across five consecutive matches.',
+        'image':       '/badge-golden-boot.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+    'goal_machine': {
+        'id':          'goal_machine',
+        'title':       'Goal Machine',
+        'description': 'Your squad has scored twenty total goals.',
+        'image':       '/badge-goal-machine.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+    'playmaker': {
+        'id':          'playmaker',
+        'title':       'Playmaker',
+        'description': 'Goals from five different squad players.',
+        'image':       '/badge-playmaker.png',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+    'comeback_goal': {
+        'id':          'comeback_goal',
+        'title':       'Comeback Strike',
+        'description': 'Squad scored after trailing by two goals.',
+        'image':       '/badge-comeback-goal.png',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+    'late_winner': {
+        'id':          'late_winner',
+        'title':       'Last-Gasp Hero',
+        'description': 'Squad scored in the 89th minute or later.',
+        'image':       '/badge-late-winner.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+    'penalty_king': {
+        'id':          'penalty_king',
+        'title':       'Spot-Kick King',
+        'description': 'Score from five penalties total.',
+        'image':       '/badge-penalty-king.png',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+    'defender_goal': {
+        'id':          'defender_goal',
+        'title':       "Defender's Dream",
+        'description': 'A defender from your squad found the net.',
+        'image':       '/badge-defender-goal.png',
+        'tier':        'bronze',
+        'discReward':  None,
+    },
+
+    # ---- Defensive badges ------------------------------------------------
+    'clean_sheet': {
+        'id':          'clean_sheet',
+        'title':       'Iron Defense',
+        'description': 'Match ended with zero goals conceded.',
+        'image':       '/badge-clean-sheet.png',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+    'clean_sheet_streak': {
+        'id':          'clean_sheet_streak',
+        'title':       'Fortress',
+        'description': 'Three consecutive clean sheets.',
+        'image':       '/badge-clean-sheet-streak.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+    'keeper_hero': {
+        'id':          'keeper_hero',
+        'title':       'Keeper Hero',
+        'description': 'Multiple decisive saves in a single match.',
+        'image':       '/badge-keeper-hero.png',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+
+    # ---- Win badges ------------------------------------------------------
+    'first_win': {
+        'id':          'first_win',
+        'title':       'Maiden Victory',
+        'description': 'Won your first match.',
+        'image':       '/badge-first-win.png',
+        'tier':        'bronze',
+        'discReward':  'shakira-waka-waka',
+    },
+    'comeback_win': {
+        'id':          'comeback_win',
+        'title':       'Phoenix',
+        'description': 'Won after trailing at halftime.',
+        'image':       '/badge-comeback-win.png',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+    'win_streak_3': {
+        'id':          'win_streak_3',
+        'title':       'Triple Crown',
+        'description': 'Three consecutive match wins.',
+        'image':       '/badge-win-streak-3.png',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+    'win_streak_5': {
+        'id':          'win_streak_5',
+        'title':       'Dynasty',
+        'description': 'Five consecutive match wins.',
+        'image':       '/badge-win-streak-5.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+    'derby_winner': {
+        'id':          'derby_winner',
+        'title':       'Derby Day',
+        'description': 'Won a derby match.',
+        'image':       '/badge-derby-winner.png',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+    'dominant_win': {
+        'id':          'dominant_win',
+        'title':       'Demolition',
+        'description': 'Won by a three-goal margin or more.',
+        'image':       '/badge-dominant-win.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+    'underdog_win': {
+        'id':          'underdog_win',
+        'title':       'Underdog',
+        'description': 'Won against a stronger opponent rating.',
+        'image':       '/badge-underdog-win.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+    'perfect_match': {
+        'id':          'perfect_match',
+        'title':       'Flawless',
+        'description': 'Won a match without conceding a single goal.',
+        'image':       '/badge-perfect-match.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+
+    # ---- Mini-game badges ------------------------------------------------
+    'quiz_master': {
+        'id':          'quiz_master',
+        'title':       'Quiz Master',
+        'description': 'Perfect score on a Halftime Quiz mini-game.',
+        'image':       '/badge-quiz-master.png',
+        'tier':        'silver',
+        'discReward':  'kwabs-walk',
+    },
+    'quiz_perfect_5': {
+        'id':          'quiz_perfect_5',
+        'title':       'Mind Champion',
+        'description': 'Perfect score on five quiz mini-games.',
+        'image':       '/badge-quiz-perfect-5.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+    'reflex_master': {
+        'id':          'reflex_master',
+        'title':       'Lightning Reflex',
+        'description': 'Top tier on a Reflex mini-game.',
+        'image':       '/badge-reflex-master.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+
+    # ---- Progression badges ----------------------------------------------
+    'first_match': {
+        'id':          'first_match',
+        'title':       'First Kick-Off',
+        'description': 'Played your very first match.',
+        'image':       '/badge-first-match.png',
+        'tier':        'bronze',
+        'discReward':  None,
+    },
+    'team_builder': {
+        'id':          'team_builder',
+        'title':       'Team Builder',
+        'description': 'Drafted your first full squad.',
+        'image':       '/badge-team-builder.png',
+        'tier':        'bronze',
+        'discReward':  None,
+    },
+    'weekend_warrior': {
+        'id':          'weekend_warrior',
+        'title':       'Weekend Warrior',
+        'description': 'Played a Saturday or Sunday match.',
+        'image':       '/badge-weekend-warrior.png',
+        'tier':        'silver',
+        'discReward':  None,
+    },
+    'veteran_10': {
+        'id':          'veteran_10',
+        'title':       'Veteran X',
+        'description': 'Played ten matches.',
+        'image':       '/badge-veteran-10.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+    'veteran_50': {
+        'id':          'veteran_50',
+        'title':       'Living Legend',
+        'description': 'Played fifty matches.',
+        'image':       '/badge-veteran-50.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+    'centurion': {
+        'id':          'centurion',
+        'title':       'Centurion',
+        'description': 'Played one hundred matches.',
+        'image':       '/badge-centurion.png',
+        'tier':        'gold',
+        'discReward':  None,
+    },
+
+    # ---- Social badges ---------------------------------------------------
+    'social_butterfly': {
+        'id':          'social_butterfly',
+        'title':       'Connected',
+        'description': 'Added three friends to your network.',
+        'image':       '/badge-social-butterfly.png',
+        'tier':        'bronze',
+        'discReward':  None,
+    },
 }
 
 
+# Purchase price (credits) per badge tier. Mirror of frontend
+# `TIER_PRICES` in utils/badges.js — kept in sync by convention.
+# Earning in-match is always free; this is the credit-grind path.
+TIER_PRICES = {
+    'bronze': 200,
+    'silver': 500,
+    'gold':   1500,
+}
+
+
+def get_price(badge_id: str) -> int:
+    entry = BADGE_CATALOG.get(badge_id) or {}
+    return TIER_PRICES.get(entry.get('tier'), 0)
+
+
 def get_catalog():
-    """Public catalog — list form, ordered by insertion."""
-    return list(BADGE_CATALOG.values())
+    """Public catalog — list form, ordered by insertion. Each row gets
+    the tier price stamped on it so the frontend doesn't have to keep
+    a parallel copy of the price table."""
+    out = []
+    for entry in BADGE_CATALOG.values():
+        row = dict(entry)
+        row['creditPrice'] = TIER_PRICES.get(entry.get('tier'), 0)
+        out.append(row)
+    return out
 
 
 # --------------------------------------------------------------------------

@@ -4,6 +4,10 @@ import { useAuth } from '../hooks/useAuth'
 import { profileApi } from '../services/api'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import { useAppAudio } from '../hooks/useAppAudio'
+import { useCredits } from '../hooks/useCredits'
+import DiscArtwork from '../components/ui/DiscArtwork'
+import PretzelCoin from '../components/ui/PretzelCoin'
+import BadgesShowcase from '../components/profile/BadgesShowcase'
 
 const AVATAR_COLORS = [
   'from-violet-500 to-fuchsia-600',
@@ -185,6 +189,12 @@ export default function ProfilePage() {
         <p className="text-gray-500 text-sm mt-1 truncate max-w-full">{user.email}</p>
       </div>
 
+      {/* Portfolio: earned crests above the wallet — trophies first. */}
+      <BadgesShowcase />
+
+      {/* Wallet */}
+      <CreditsCard />
+
       {/* Account details */}
       <div
         className="mt-4 rounded-2xl overflow-hidden"
@@ -239,11 +249,13 @@ export default function ProfilePage() {
  * All preferences persist via localStorage (handled in useAppAudio).
  */
 function MusicCard() {
+  const navigate = useNavigate()
   const {
-    appEnabled, toggleApp, appTrackId, setAppTrack,
-    introEnabled, toggleIntro,
-    tracks,
+    appEnabled, toggleApp, appVolume, setAppVolume,
+    appTrack,
   } = useAppAudio()
+
+  const volPct = Math.round(appVolume * 100)
 
   return (
     <div
@@ -261,42 +273,62 @@ function MusicCard() {
       <MusicToggleRow
         icon="🎵"
         title="App music"
-        sub="Background track while you watch matches"
         enabled={appEnabled}
         onToggle={toggleApp}
       />
 
-      {/* Intro music toggle row */}
-      <MusicToggleRow
-        icon="🎬"
-        title="Intro music"
-        sub="Plays during the splash screen"
-        enabled={introEnabled}
-        onToggle={toggleIntro}
-      />
-
-      {/* Track picker for the App-music slot only. The intro
-          always uses the splash video's bundled audio — its track
-          isn't user-pickable; only the on/off toggle above is. */}
-      <div className="mt-4 pt-4 border-t border-white/5">
-        <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-500 mb-2">
-          App tracks ({tracks.length} unlocked)
-        </p>
-        <div className="space-y-2">
-          {tracks.map(t => (
-            <TrackRow
-              key={t.id}
-              track={t}
-              isApp={appTrackId === t.id}
-              onSetApp={() => setAppTrack(t.id)}
-            />
-          ))}
+      {/* Volume slider — visible only when app music is enabled. */}
+      {appEnabled && (
+        <div className="mt-1 mb-2 pl-[52px]">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-bold tracking-widest uppercase text-gray-400">
+              Volume
+            </span>
+            <span className="text-[10px] font-bold tracking-widest text-red-300 tabular-nums">
+              {volPct}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={volPct}
+            onChange={e => setAppVolume(Number(e.target.value) / 100)}
+            className="claudiu-slider w-full"
+            style={{ '--v': `${volPct}%` }}
+          />
         </div>
-      </div>
+      )}
 
-      <p className="text-gray-500 text-[11px] mt-3 leading-snug">
-        Earn song discs as badges to unlock more tracks.
-      </p>
+      {/* "Now playing" link to the full TracksPage. */}
+      <button
+        type="button"
+        onClick={() => navigate('/tracks')}
+        className="w-full mt-4 pt-4 border-t border-white/5 group text-left"
+      >
+        <p className="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-2">
+          Now playing
+        </p>
+        <div
+          className="flex items-center gap-3 rounded-xl p-2.5 transition-colors group-hover:bg-white/[0.04]"
+          style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.06)',
+          }}
+        >
+          <DiscArtwork track={appTrack} size={40} />
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-semibold truncate leading-tight">
+              {appTrack?.title || '—'}
+            </p>
+            <p className="text-gray-500 text-[11px] truncate leading-tight">
+              {appTrack?.artist || '—'}
+            </p>
+          </div>
+          <span className="text-gray-500 text-lg leading-none flex-shrink-0">›</span>
+        </div>
+      </button>
     </div>
   )
 }
@@ -320,7 +352,9 @@ function MusicToggleRow({ icon, title, sub, enabled, onToggle }) {
         </div>
         <div className="min-w-0">
           <p className="text-white text-sm font-semibold leading-tight">{title}</p>
-          <p className="text-gray-500 text-[11px] truncate leading-tight">{sub}</p>
+          {sub && (
+            <p className="text-gray-500 text-[11px] truncate leading-tight">{sub}</p>
+          )}
         </div>
       </div>
 
@@ -347,58 +381,44 @@ function MusicToggleRow({ icon, title, sub, enabled, onToggle }) {
   )
 }
 
-function TrackRow({ track, isApp, onSetApp }) {
+/**
+ * Wallet card — current Brezn balance + lifetime earned/spent.
+ * Balance ticks up via event-processor awards during live matches.
+ */
+function CreditsCard() {
+  const { balance, totalEarned, totalSpent, loading } = useCredits()
   return (
     <div
-      className="flex items-center gap-3 rounded-xl p-2.5"
+      className="mt-4 rounded-2xl px-5 py-4"
       style={{
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'linear-gradient(145deg, #1a1410 0%, #0d0806 100%)',
+        border: '1px solid rgba(250,204,21,0.20)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px -16px rgba(250,204,21,0.35)',
       }}
     >
-      {/* Disc icon */}
-      <div
-        className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-        style={{
-          background: 'linear-gradient(135deg, rgba(220,38,38,0.25) 0%, rgba(0,0,0,0.4) 100%)',
-          border: '1px solid rgba(248,113,113,0.30)',
-        }}
-      >
-        <span className="text-base leading-none">💿</span>
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-white text-sm font-semibold truncate leading-tight">
-          {track.title}
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-[10px] font-semibold tracking-widest uppercase text-gray-500">
+          Wallet
         </p>
-        <p className="text-gray-500 text-[11px] truncate leading-tight">
-          {track.artist || '—'}
+        <span className="inline-flex items-center gap-1 text-[10px] text-amber-300/80 tracking-widest uppercase">
+          <PretzelCoin size={12} color="#fcd34d" />
+          Brezn
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        <PretzelCoin size={24} color="#fcd34d" />
+        <p
+          className="text-white font-stadium text-3xl leading-none tabular-nums"
+          style={{ letterSpacing: '0.05em', textShadow: '0 2px 0 rgba(0,0,0,0.6)' }}
+        >
+          {loading ? '—' : Number(balance).toLocaleString()}
         </p>
       </div>
-      <div className="flex-shrink-0">
-        <AssignPill label="App" active={isApp} onClick={onSetApp} />
+      <div className="mt-3 flex items-center gap-4 text-[10px] tracking-wider uppercase text-gray-500">
+        <span>Earned <span className="text-gray-300 tabular-nums">{Number(totalEarned).toLocaleString()}</span></span>
+        <span>Spent  <span className="text-gray-300 tabular-nums">{Number(totalSpent).toLocaleString()}</span></span>
       </div>
     </div>
-  )
-}
-
-function AssignPill({ label, active, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full transition-all active:scale-95"
-      style={{
-        background: active
-          ? 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)'
-          : 'rgba(255,255,255,0.06)',
-        color: active ? '#fff' : '#9ca3af',
-        border: `1px solid ${active ? 'rgba(248,113,113,0.55)' : 'rgba(255,255,255,0.10)'}`,
-        boxShadow: active ? '0 4px 12px -4px rgba(220,38,38,0.45)' : 'none',
-        minWidth: 60,
-      }}
-    >
-      {label}{active ? ' ✓' : ''}
-    </button>
   )
 }
 

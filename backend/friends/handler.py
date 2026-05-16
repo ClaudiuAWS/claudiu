@@ -194,6 +194,38 @@ def remove_friend(user_id, friend_id):
     return resp(200, {"ok": True})
 
 
+def accept_invite(user_id, inviter_user_id):
+    """Auto-friend via a shared invite link.
+
+    Skips the request/accept dance entirely — when a user opens
+    `/invite/<inviterUserId>` we trust the URL token (it's just their
+    Cognito sub; not secret in a meaningful way), look the inviter up
+    in Cognito, and write both rows as `accepted` straight away.
+
+    If a row already exists in any state (outgoing/incoming/accepted),
+    upgrade it to accepted. Idempotent — opening the same link twice is
+    a no-op the second time.
+    """
+    if not inviter_user_id:
+        return resp(400, {"error": "inviterUserId required"})
+    if inviter_user_id == user_id:
+        return resp(400, {"error": "You can't invite yourself"})
+
+    inviter = cognito_user_by_sub(inviter_user_id)
+    if not inviter:
+        return resp(404, {"error": "Invite link is invalid"})
+
+    me = cognito_user_by_sub(user_id)
+    if not me:
+        return resp(500, {"error": "Could not load your profile"})
+
+    # Bidirectional put — overwrites whatever state was there before.
+    TABLE.put_item(Item=make_item(user_id,     inviter, STATUS_ACCEPTED))
+    TABLE.put_item(Item=make_item(inviter_user_id, me,  STATUS_ACCEPTED))
+
+    return resp(200, {"friend": to_friend_dto(make_item(user_id, inviter, STATUS_ACCEPTED))})
+
+
 def invite_to_room(user_id, friend_id, room_code):
     """Invite an accepted friend to a room.
 
@@ -250,6 +282,11 @@ def handler(event, context):
     if method == "POST" and path.endswith("/friends"):
         body = json.loads(event.get("body") or "{}")
         return add_friend(user_id, body.get("email"))
+
+    if method == "POST" and path.endswith("/accept-invite"):
+        # /friends/accept-invite — auto-friend via shared link
+        body = json.loads(event.get("body") or "{}")
+        return accept_invite(user_id, body.get("inviterUserId"))
 
     if method == "POST" and path.endswith("/accept"):
         # /friends/{friendId}/accept

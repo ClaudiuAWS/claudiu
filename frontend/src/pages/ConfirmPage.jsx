@@ -47,7 +47,7 @@ export default function ConfirmPage() {
           style={{ width: 88, height: 70 }}
         >
           <img
-            src="/logo.png"
+            src="/logo-bf.png"
             alt=""
             className="block drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
             style={{ width: 88, height: 88 }}
@@ -109,19 +109,41 @@ export default function ConfirmPage() {
           />
         </div>
 
-        {/* Spam-folder hint — until the SES email config ships,
-            verification mail lands in spam for most providers. */}
-        <div
-          className="flex items-start gap-2 rounded-xl px-3 py-2.5"
-          style={{
-            background: 'rgba(245, 158, 11, 0.10)',
-            border: '1px solid rgba(245, 158, 11, 0.30)',
-          }}
-        >
-          <span className="text-amber-300 text-sm leading-none mt-0.5">⚠️</span>
-          <p className="text-amber-200/90 text-[11px] leading-snug">
-            Don't see it? Check your <span className="font-semibold">spam</span> or promotions folder — the code sometimes lands there.
-          </p>
+        {/* Spam-folder hint — glossy red panel matching the brand. */}
+        <div className="relative overflow-hidden rounded-xl">
+          {/* Top sheen */}
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.06] to-transparent pointer-events-none" />
+          <div
+            className="relative flex items-start gap-3 px-3.5 py-3"
+            style={{
+              background: 'linear-gradient(180deg, rgba(40,12,12,0.65) 0%, rgba(20,6,6,0.7) 100%)',
+              border: '1px solid rgba(220,38,38,0.30)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 4px 16px -8px rgba(220,38,38,0.45)',
+            }}
+          >
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, rgba(220,38,38,0.45) 0%, rgba(127,29,29,0.35) 100%)',
+                border: '1px solid rgba(248,113,113,0.45)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10)',
+              }}
+            >
+              <span className="text-base leading-none">✉</span>
+            </div>
+            <div className="min-w-0">
+              <p
+                className="text-red-100 text-[11px] font-bold tracking-widest uppercase"
+                style={{ textShadow: '0 1px 0 rgba(0,0,0,0.6)' }}
+              >
+                Don't see it?
+              </p>
+              <p className="text-white/70 text-[11px] leading-snug mt-0.5">
+                Check your <span className="text-red-300 font-semibold">spam</span> or promotions folder. Gmail occasionally routes verification codes there. Marking the email as <span className="text-red-300 font-semibold">"Not spam"</span> fixes it for next time.
+              </p>
+            </div>
+          </div>
         </div>
 
         {error && (

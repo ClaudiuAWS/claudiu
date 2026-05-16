@@ -162,6 +162,81 @@ def send_message(room_code: str, user_id: str, display_name: str, text: str) -> 
     })
 
 
+# Free-form floating reactions. Allow-list keeps the floater overlay
+# focused, prevents arbitrary user-controlled strings from being broadcast
+# to the whole party, and gives the design a defined palette.
+CHEER_EMOJI_ALLOWLIST = {'⚽', '🔥', '🤣', '😱', '🙌', '💀'}
+
+
+def set_captain(room_code: str, user_id: str, player_id: str) -> dict:
+    """Designate `player_id` as `user_id`'s captain for this room.
+
+    The captain's delta is doubled on scoring events in
+    `event-processor/_calculate_member_changes`. Validates the player
+    is actually in the user's `teamSelection` (can't captain someone
+    you didn't draft). Idempotent — calling again with the same
+    player_id is a no-op; with a different player_id, swaps. Pass an
+    empty string to clear.
+
+    Returns the updated room snapshot.
+    """
+    room = rooms_table.get_item(Key={'roomCode': room_code}, ConsistentRead=True).get('Item')
+    if not room:
+        raise ValueError('Room not found')
+
+    members = room.get('members', [])
+    me = next((m for m in members if m.get('userId') == user_id), None)
+    if not me:
+        raise ValueError('You are not in this room')
+
+    if player_id and player_id not in (me.get('teamSelection') or []):
+        raise ValueError('Player not in your squad')
+
+    me['captainPlayerId'] = player_id or ''
+
+    rooms_table.update_item(
+        Key={'roomCode': room_code},
+        UpdateExpression='SET members = :m',
+        ExpressionAttributeValues={':m': members},
+    )
+
+    ws.push_to_channel(f"room#{room_code}", {
+        'type':       'captain_update',
+        'userId':     user_id,
+        'playerId':   player_id or '',
+    })
+
+    return room
+
+
+def cheer(room_code: str, user_id: str, display_name: str, avatar_url: str, emoji: str) -> dict:
+    """Broadcast a floating-reaction emoji to everyone in the room.
+
+    Separate from `claim_reaction` (the event-tied +2 scoring bonus).
+    Pure pub/sub — no DDB write, no scoring effect, just a WS push that
+    the ReactionsOverlay on each client animates as a floater. Caller
+    must be a member of the room; emoji must be in the allow-list.
+    """
+    if emoji not in CHEER_EMOJI_ALLOWLIST:
+        raise ValueError('Unsupported emoji')
+
+    room = rooms_table.get_item(Key={'roomCode': room_code}).get('Item')
+    if not room:
+        raise ValueError('Room not found')
+    if not any(m['userId'] == user_id for m in room.get('members', [])):
+        raise ValueError('You are not in this room')
+
+    ws.push_to_channel(f"room#{room_code}", {
+        'type':        'cheer',
+        'userId':      user_id,
+        'displayName': display_name,
+        'avatarUrl':   avatar_url or '',
+        'emoji':       emoji,
+        'ts':          int(time.time() * 1000),
+    })
+    return {'ok': True}
+
+
 def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, game_type: str, deltas: list, result: dict, phase: str = 'final') -> dict:
     """Resolve a mini-game's score deltas onto the room's leaderboard.
 

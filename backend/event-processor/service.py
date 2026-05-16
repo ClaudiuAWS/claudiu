@@ -15,6 +15,16 @@ except Exception as _e:  # pragma: no cover
     _badges = None
     print(f"[badges] module import skipped: {_e}")
 
+# Credits integration — same pattern as badges. Bundled from
+# `backend/shared/credits.py` by the deploy workflow. Awarding credits
+# on scoring events is purely additive; a failure here can never break
+# the underlying fantasy scoring or room broadcast.
+try:
+    import credits as _credits  # type: ignore
+except Exception as _e:  # pragma: no cover
+    _credits = None
+    print(f"[credits] module import skipped: {_e}")
+
 dynamodb = boto3.resource('dynamodb')
 
 matches_table       = dynamodb.Table(os.environ['MATCHES_TABLE'])
@@ -330,6 +340,27 @@ def _score_rooms_for_event(match_id: str, event_type: str, data: dict) -> None:
                 except Exception as _e:  # pragma: no cover
                     print(f"[badges] evaluate_score_changes failed: {_e}")
 
+            # Credits layer (also additive). Awards in-game credits for
+            # positive fantasy-points deltas. Same try/except discipline
+            # as badges — a failure here cannot break match flow.
+            if _credits is not None:
+                try:
+                    _credits.award_for_score_changes(
+                        [
+                            {
+                                'userId':     c['userId'],
+                                'delta':      c['delta'],
+                                'eventType':  event_type,
+                                'reason':     c.get('reason') or '',
+                                'playerName': c.get('playerName') or '',
+                            }
+                            for c in member_changes if c.get('delta')
+                        ],
+                        match_id=match_id,
+                    )
+                except Exception as _e:  # pragma: no cover
+                    print(f"[credits] award_for_score_changes failed: {_e}")
+
 
 def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
     """Return per-member point changes for this event.
@@ -352,21 +383,30 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
         goal_value = _GOAL_VALUE[_bucket(scoring_pos)]
 
         for m in members:
-            uid     = m['userId']
-            details = {d['playerId']: d for d in m.get('teamSelectionDetails', [])}
+            uid       = m['userId']
+            details   = {d['playerId']: d for d in m.get('teamSelectionDetails', [])}
+            captain   = m.get('captainPlayerId') or ''
             delta, reason, name = 0, '', ''
+            captained = False  # any captain-multiplied component fired?
 
             # Owners stack: scorer bonus + assist bonus + GK conceded penalty.
-            # We pick a single (reason, playerName) for the toast — scorer
-            # wins over assist wins over conceded, since a goal owner cares
-            # most about who scored for them.
+            # Captain multiplier (×2) applies per-component — if the captain
+            # is the scorer, the scorer portion doubles; if the captain is
+            # the assister, the assister portion doubles. Conceded penalty
+            # is doubled too when the captain IS the conceding keeper, since
+            # captain-doubling-applies-to-negatives matches Bundesliga
+            # Fantasy convention (the price of a bold pick).
             if scoring_pid and scoring_pid in details:
-                delta += goal_value
+                gain = goal_value * (2 if captain == scoring_pid else 1)
+                if captain == scoring_pid: captained = True
+                delta += gain
                 reason = 'scored for your squad'
                 name   = scoring_display
 
             if assist_pid and assist_pid in details:
-                delta += 3
+                gain = 3 * (2 if captain == assist_pid else 1)
+                if captain == assist_pid: captained = True
+                delta += gain
                 if not reason:
                     reason = 'assisted for your squad'
                     name   = assist_display
@@ -379,16 +419,18 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
                     None,
                 )
                 if conceding_gk:
-                    delta -= 1
+                    gk_pid = conceding_gk.get('playerId') or ''
+                    loss = -1 * (2 if captain and captain == gk_pid else 1)
+                    if captain and captain == gk_pid: captained = True
+                    delta += loss
                     if not reason:
                         reason = 'conceded'
-                        # select_team now persists displayName on each
-                        # teamSelectionDetails entry. Fall back to the old
-                        # generic label only for rooms that pre-date that
-                        # change (still in flight when this rolled out).
                         name   = conceding_gk.get('displayName') or 'your keeper'
 
-            out.append({'userId': uid, 'delta': delta, 'reason': reason, 'playerName': name})
+            entry = {'userId': uid, 'delta': delta, 'reason': reason, 'playerName': name}
+            if captained:
+                entry['captained'] = True
+            out.append(entry)
 
     elif event_type == 'card':
         player_id     = data.get('playerId')
@@ -401,8 +443,17 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
         for m in members:
             uid       = m['userId']
             selection = set(m.get('teamSelection', []))
+            captain   = m.get('captainPlayerId') or ''
             if player_id and player_id in selection:
-                out.append({'userId': uid, 'delta': magnitude, 'reason': verb, 'playerName': player_display})
+                is_captain = (captain == player_id)
+                entry = {
+                    'userId':     uid,
+                    'delta':      magnitude * (2 if is_captain else 1),
+                    'reason':     verb,
+                    'playerName': player_display,
+                }
+                if is_captain: entry['captained'] = True
+                out.append(entry)
             else:
                 out.append({'userId': uid, 'delta': 0, 'reason': '', 'playerName': ''})
 
@@ -412,8 +463,17 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
         for m in members:
             uid     = m['userId']
             details = {d['playerId']: d for d in m.get('teamSelectionDetails', [])}
+            captain = m.get('captainPlayerId') or ''
             if gk_id and gk_id in details:
-                out.append({'userId': uid, 'delta': 2, 'reason': 'made a save', 'playerName': gk_display})
+                is_captain = (captain == gk_id)
+                entry = {
+                    'userId':     uid,
+                    'delta':      2 * (2 if is_captain else 1),
+                    'reason':     'made a save',
+                    'playerName': gk_display,
+                }
+                if is_captain: entry['captained'] = True
+                out.append(entry)
             else:
                 out.append({'userId': uid, 'delta': 0, 'reason': '', 'playerName': ''})
 
@@ -443,6 +503,7 @@ def _apply_member_changes(
             'eventType':     event_type,
             'reason':        c.get('reason') or '',
             'playerName':    c.get('playerName') or '',
+            'captained':     bool(c.get('captained')),
             # Stable id used by the frontend score_update handler to
             # dedup the optimistic append against this WS broadcast.
             'sourceEventId': source_event_id or '',
