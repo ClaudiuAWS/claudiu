@@ -20,6 +20,7 @@ import DirectorCommentary from '../components/match/DirectorCommentary'
 import LeaderboardPanel from '../components/match/LeaderboardPanel'
 import ReactionsOverlay, { pushCheer } from '../components/match/ReactionsOverlay'
 import ReactionsButton from '../components/match/ReactionsButton'
+import MatchEndCelebration from '../components/match/MatchEndCelebration'
 import { useMiniGame } from '../hooks/useMiniGame'
 import { useDirector } from '../hooks/useDirector'
 import { useHighlights, buildHighlightFromEvent } from '../hooks/useHighlights'
@@ -49,7 +50,7 @@ export default function MatchPage() {
     if (msg?.userId === user?.userId) return  // skip own echo to avoid duplicate
     pushCheer(msg)
   }, [user?.userId])
-  const { room, loading: roomLoading, scoreEvents, applyOptimisticDeltas, applyAuthoritativeScoreChange } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler, null, onCheerHandler)
+  const { room, loading: roomLoading, scoreEvents, matchJustEnded, applyOptimisticDeltas, applyAuthoritativeScoreChange } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler, null, onCheerHandler)
 
   // Highlight overlay queue — broadcast-style fullscreen card for goals
   // and red cards. Driven entirely client-side from the same reveal
@@ -315,6 +316,11 @@ export default function MatchPage() {
           edge of the screen. Purely cosmetic, no scoring side-effects. */}
       <ReactionsOverlay />
       <ReactionsButton roomCode={room?.roomCode} />
+
+      {/* Full-time celebration: red confetti rain + TikTok-sourced match-end
+          sound. Driven by useRoom's one-shot matchJustEnded flag, which the
+          hook auto-resets after 5s. */}
+      <MatchEndCelebration shown={matchJustEnded} />
     </div>
   )
 }

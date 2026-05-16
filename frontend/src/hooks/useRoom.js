@@ -40,6 +40,12 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
   const onCheerRef = useRef(onCheer)
   onCheerRef.current = onCheer
   const [scoreEvents, setScoreEvents] = useState([])
+  // One-shot "match just ended" flag. Flipped true when the backend pushes
+  // a `match_ended` WS message; auto-resets to false 5s later. MatchPage
+  // consumes this to trigger the <MatchEndCelebration> overlay (sound + red
+  // confetti). Kept in this hook because the WS handler lives here and a
+  // sibling-component event-bus would be over-engineering for a single signal.
+  const [matchJustEnded, setMatchJustEnded] = useState(false)
   // Held in a ref so handleMessage stays stable even when the callback
   // identity changes between renders — same pattern as _resolveBoth in
   // useMiniGame.
@@ -117,6 +123,8 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     } else if (msg.type === 'match_ended') {
       toast('Full time! 🏁')
       logger.info('useRoom', 'WS match_ended', msg.finalResult)
+      setMatchJustEnded(true)
+      setTimeout(() => setMatchJustEnded(false), 5000)
     } else if (msg.type === 'match_started') {
       // Host's `start_match_for_room` pushes this once the replay-emitter
       // confirms the match is live. Non-host clients use it to navigate to
@@ -488,6 +496,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     room,
     loading,
     scoreEvents,
+    matchJustEnded,
     createRoom,
     joinRoom,
     leaveRoom,

@@ -9,9 +9,10 @@ const CROSSFADE_DURATION  = 1.0    // intro-loop cross-fade between buffers (sec
 const CROSSFADE_LEAD      = 1.1    // seconds before duration to start the fade
 
 function pickSrc() {
-  if (typeof window === 'undefined') return '/intro-mobile.mp4'
-  const isHighDpr = (window.devicePixelRatio || 1) >= 2
-  return isHighDpr ? '/intro-mobile-4k.mp4' : '/intro-mobile.mp4'
+  // Always use the 4K asset for both standard and HiDPI displays — the SD
+  // version is no longer referenced. Function kept (rather than inlining the
+  // string) so any future per-device-tier branching has a single home.
+  return '/intro-mobile-4k.mp4'
 }
 
 /**
@@ -355,33 +356,19 @@ export default function IntroSplash({ onFinish }) {
           />
 
           <div
-            className="mx-auto overflow-hidden mb-3"
-            style={{ width: 132, height: 106 }}
+            className="mx-auto mb-3"
+            style={{
+              width: 220,
+              animation: logoAnim,
+              transformStyle: 'preserve-3d',
+            }}
           >
             <img
-              src="/logo-bf.png"
-              alt=""
-              style={{
-                width: 132,
-                height: 132,
-                display: 'block',
-                animation: logoAnim,
-                transformStyle: 'preserve-3d',
-              }}
+              src="/logo-brezn-bf.png"
+              alt="Bundesliga Brezn"
+              style={{ width: 220, height: 'auto', display: 'block' }}
             />
           </div>
-          <p
-            className="font-stadium text-white leading-[0.92]"
-            style={{ fontSize: '2.2rem', letterSpacing: '0.14em' }}
-          >
-            BUNDESLIGA
-          </p>
-          <p
-            className="font-stadium text-white leading-[0.92]"
-            style={{ fontSize: '2.2rem', letterSpacing: '0.14em' }}
-          >
-            FANTASY
-          </p>
 
           <div
             className="mx-auto mt-5 mb-4"

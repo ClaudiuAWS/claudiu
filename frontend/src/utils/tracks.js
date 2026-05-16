@@ -52,6 +52,7 @@ export const TRACKS = [
   { id: 'avicii-waiting-for-love', title: 'Waiting For Love', artist: 'Avicii', file: '/songs/avicii-waiting-for-love.mp3', artwork: '/songs/avicii-waiting-for-love.jpg', requiredBadge: null },
   { id: 'avicii-levels', title: 'Levels', artist: 'Avicii', file: '/songs/avicii-levels-radio-edit.mp3', artwork: '/songs/avicii-levels-radio-edit.jpg', requiredBadge: null },
   { id: 'avicii-hey-brother', title: 'Hey Brother', artist: 'Avicii', file: '/songs/avicii-hey-brother.mp3', artwork: '/songs/avicii-hey-brother.jpg', requiredBadge: null },
+  { id: 'gala-freed-from-desire', title: 'Freed From Desire', artist: 'Gala, Molella, Phil Jay', file: '/songs/gala-freed-from-desire.mp3', artwork: '/songs/gala-freed-from-desire.jpg', requiredBadge: null },
 
   // ---- Badge-locked rewards: real songs gated by achievements. ----
   // Pitbull's FIFA 2014 anthem — earned by scoring a hat trick.

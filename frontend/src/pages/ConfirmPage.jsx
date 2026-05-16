@@ -42,29 +42,12 @@ export default function ConfirmPage() {
     <>
       {/* Logo / Brand */}
       <div className="text-center mb-8">
-        <div
-          className="mx-auto overflow-hidden"
-          style={{ width: 88, height: 70 }}
-        >
-          <img
-            src="/logo-bf.png"
-            alt=""
-            className="block drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
-            style={{ width: 88, height: 88 }}
-          />
-        </div>
-        <p
-          className="font-stadium text-white leading-[0.95] mt-1.5 [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]"
-          style={{ fontSize: '1.5rem', letterSpacing: '0.14em' }}
-        >
-          BUNDESLIGA
-        </p>
-        <p
-          className="font-stadium text-white leading-[0.95] [text-shadow:_0_2px_8px_rgba(0,0,0,0.7)]"
-          style={{ fontSize: '1.5rem', letterSpacing: '0.14em' }}
-        >
-          FANTASY
-        </p>
+        <img
+          src="/logo-brezn-bf.png"
+          alt="Bundesliga Brezn"
+          className="mx-auto block drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
+          style={{ width: 160, height: 'auto' }}
+        />
         <p className="text-white/80 text-sm mt-3 [text-shadow:_0_1px_4px_rgba(0,0,0,0.6)]">
           Verify your email
         </p>
