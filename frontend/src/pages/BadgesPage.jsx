@@ -11,6 +11,18 @@ export default function BadgesPage() {
 
   const earnedIds = new Set(badges.map(b => b.badgeId))
 
+  // When the user has at least one earned badge, surface earned ones
+  // first while preserving each group's original catalog order. This is
+  // a stable partition: earned in catalog order → unearned in catalog
+  // order. No-op when nothing is earned (avoids visual churn for a
+  // brand-new account).
+  const orderedCatalog = earnedIds.size > 0
+    ? [
+        ...BADGE_CATALOG.filter(b => earnedIds.has(b.id)),
+        ...BADGE_CATALOG.filter(b => !earnedIds.has(b.id)),
+      ]
+    : BADGE_CATALOG
+
   return (
     <div className="px-6 pt-8 pb-12 max-w-md mx-auto">
       {/* Glossy header bar — same component shape as TracksPage. */}
@@ -41,7 +53,7 @@ export default function BadgesPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {BADGE_CATALOG.map(badge => {
+        {orderedCatalog.map(badge => {
           const earned = earnedIds.has(badge.id)
           const earnedData = badges.find(b => b.badgeId === badge.id)
           return (
