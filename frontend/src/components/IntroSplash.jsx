@@ -59,6 +59,12 @@ export default function IntroSplash({ onFinish }) {
   const [pressing, setPressing] = useState(false)
   const [showBumper, setShowBumper] = useState(false)
   const [fadingOut, setFadingOut] = useState(false)
+  // True when mobile autoplay policy forced the catch-path silent
+  // re-mute (Samsung S24 + some Android Chrome builds reject the first
+  // gesture-bound play() even though spec says they shouldn't). UI
+  // shows a "tap for sound" pill; next tap unmutes instead of
+  // advancing the splash.
+  const [audioBlocked, setAudioBlocked] = useState(false)
 
   useEffect(() => { activeRef.current = activeKey }, [activeKey])
 
@@ -120,7 +126,11 @@ export default function IntroSplash({ onFinish }) {
     const pa = a.play()
     if (pa && typeof pa.catch === 'function') {
       pa.catch(() => {
+        // Browser rejected gesture-bound play() with sound (Android
+        // Chrome on Samsung S24, etc.). Fall back to muted playback
+        // BUT raise a flag so the UI can offer a tap-to-unmute.
         try { a.muted = true } catch {}
+        if (prefs.enabled) setAudioBlocked(true)
         a.play().catch(() => {})
       })
     }
@@ -149,6 +159,21 @@ export default function IntroSplash({ onFinish }) {
   const handleTap = () => {
     if (!started) {
       handleStart()
+      return
+    }
+    // Audio was suppressed by autoplay policy — first post-start tap
+    // un-mutes instead of advancing. The pill informs the user; once
+    // dismissed (cleared flag), subsequent taps run the normal finish
+    // path.
+    if (audioBlocked) {
+      const activeV = activeRef.current === 'a' ? videoARef.current : videoBRef.current
+      try {
+        if (activeV) {
+          activeV.muted = false
+          activeV.volume = 1
+        }
+      } catch {}
+      setAudioBlocked(false)
       return
     }
     finish()
@@ -322,6 +347,36 @@ export default function IntroSplash({ onFinish }) {
         className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         style={videoStyle('b')}
       />
+
+      {/* Tap-to-unmute pill — only shows when the browser silently
+          re-muted the video despite our gesture-bound play() attempt.
+          Position low so the brand panel + bumper text stay primary. */}
+      {audioBlocked && !fadingOut && (
+        <div
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 rounded-full"
+          style={{
+            bottom: '6.5rem',
+            background: 'rgba(8,8,12,0.78)',
+            border: '1px solid rgba(255,255,255,0.18)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            boxShadow: '0 8px 24px -8px rgba(0,0,0,0.6)',
+            animation: 'introUnmutePulse 1.8s ease-in-out infinite',
+          }}
+          aria-hidden="true"
+        >
+          <span className="text-base">🔇</span>
+          <span className="text-white text-[10px] font-bold tracking-widest uppercase">
+            Tap for sound
+          </span>
+          <style>{`
+            @keyframes introUnmutePulse {
+              0%, 100% { opacity: 0.80; }
+              50%      { opacity: 1; }
+            }
+          `}</style>
+        </div>
+      )}
 
       {/* Shared brand panel — pre-roll AND bumper. */}
       <div
