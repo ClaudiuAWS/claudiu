@@ -45,6 +45,7 @@ export const roomsApi = {
   postMinigameScore: (roomCode, payload) => request(`/rooms/${roomCode}/minigame-score`, 'POST', payload),
   draftReady:  (roomCode)                   => request(`/rooms/${roomCode}/draft-ready`, 'POST'),
   draftPick:   (roomCode, pairIndex, playerId) => request(`/rooms/${roomCode}/draft-pick`, 'POST', { pairIndex, playerId }),
+  draftReroll: (roomCode)                   => request(`/rooms/${roomCode}/draft-reroll`, 'POST'),
   directorTick: (roomCode, snapshot)        => request(`/rooms/${roomCode}/director-tick`, 'POST', { snapshot }),
   react:        (roomCode, eventId, reactionType) => request(`/rooms/${roomCode}/react`, 'POST', { eventId, reactionType }),
   cheer:        (roomCode, emoji)                 => request(`/rooms/${roomCode}/cheer`, 'POST', { emoji }),

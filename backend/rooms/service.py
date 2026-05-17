@@ -603,7 +603,29 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
         return {'ok': True, 'alreadyReady': True}
     ready.add(user_id)
 
+    # Arm consumable perks at the ready-up moment. Draft-time perks
+    # (pick-reroll) need to be available during the draft phase — by
+    # the time select_team fires it's already too late. The same call
+    # at select_team is idempotent for the same match, so match-time
+    # perks (captain-triple, free-hit, reaction-pack) still get
+    # stamped on the final member entry there too.
+    match_id = room.get('matchId') or ''
+    armed_perks = _arm_user_perks(user_id, match_id)
+    if armed_perks:
+        new_members = []
+        for m in room.get('members', []):
+            if m.get('userId') == user_id:
+                existing = set(m.get('armedPerks') or [])
+                existing.update(armed_perks)
+                new_members.append({**m, 'armedPerks': sorted(existing)})
+            else:
+                new_members.append(m)
+        room['members'] = new_members
+
     members = room.get('members', [])
+    # Persist any armedPerks we just stamped above — written below in
+    # the same update so the draft transition is single-write.
+    members_changed = bool(armed_perks)
     if len(ready) >= 2 and len(members) >= 2:
         # Both users ready — generate pairs and start the draft.
         pairs, auto_picks = _generate_draft_pairs(room['matchId'])
@@ -632,11 +654,18 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
             'tiebreakWinsByUser': {mid: 0 for mid in member_ids},
             'startedAt':         int(time.time() * 1000),
         }
-        rooms_table.update_item(
-            Key={'roomCode': room_code},
-            UpdateExpression='SET draft = :d',
-            ExpressionAttributeValues={':d': draft},
-        )
+        if members_changed:
+            rooms_table.update_item(
+                Key={'roomCode': room_code},
+                UpdateExpression='SET draft = :d, members = :m',
+                ExpressionAttributeValues={':d': draft, ':m': members},
+            )
+        else:
+            rooms_table.update_item(
+                Key={'roomCode': room_code},
+                UpdateExpression='SET draft = :d',
+                ExpressionAttributeValues={':d': draft},
+            )
         ws.push_to_channel(f"room#{room_code}", {
             'type':  'draft_started',
             'draft': _normalize_draft(draft),
@@ -649,11 +678,18 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
         'status':       'waiting',
         'readyUserIds': list(ready),
     }
-    rooms_table.update_item(
-        Key={'roomCode': room_code},
-        UpdateExpression='SET draft = :d',
-        ExpressionAttributeValues={':d': draft},
-    )
+    if members_changed:
+        rooms_table.update_item(
+            Key={'roomCode': room_code},
+            UpdateExpression='SET draft = :d, members = :m',
+            ExpressionAttributeValues={':d': draft, ':m': members},
+        )
+    else:
+        rooms_table.update_item(
+            Key={'roomCode': room_code},
+            UpdateExpression='SET draft = :d',
+            ExpressionAttributeValues={':d': draft},
+        )
     ws.push_to_channel(f"room#{room_code}", {
         'type':  'draft_state_update',
         'draft': _normalize_draft(draft),
@@ -838,6 +874,92 @@ def submit_draft_pick(room_code: str, user_id: str, pair_index: int, player_id: 
     return {'ok': True, 'resolved': resolved, 'tiebreak': tiebreak}
 
 
+def reroll_draft_pair(room_code: str, user_id: str) -> dict:
+    """Consume the 'pick-reroll' perk for this user, swap the current
+    draft pair with a randomly-picked upcoming pair, clear any pending
+    choices for the now-stale pair, and broadcast the new state.
+
+    Validation:
+      • User must be in the room.
+      • Draft must be active.
+      • User must have 'pick-reroll' in their member.armedPerks
+        AND not have used it yet (member.usedDraftReroll falsy).
+      • At least one upcoming pair must exist (otherwise nothing to
+        swap with).
+    """
+    for attempt in range(5):
+        room = rooms_table.get_item(
+            Key={'roomCode': room_code},
+            ConsistentRead=True,
+        ).get('Item')
+        if not room:
+            raise ValueError('Room not found')
+
+        member = next((m for m in room.get('members', []) if m.get('userId') == user_id), None)
+        if not member:
+            raise ValueError('You are not in this room')
+        if 'pick-reroll' not in (member.get('armedPerks') or []):
+            raise ValueError('Re-roll perk not armed for this match')
+        if member.get('usedDraftReroll'):
+            raise ValueError('Re-roll already used this match')
+
+        draft = room.get('draft') or {}
+        if draft.get('status') != 'active':
+            raise ValueError('Draft is not active')
+
+        cur_idx = int(draft.get('currentPairIndex', 0))
+        pairs = list(draft.get('pairs') or [])
+        upcoming = list(range(cur_idx + 1, len(pairs)))
+        if not upcoming:
+            raise ValueError('No upcoming pair to swap with')
+
+        # Pick a random upcoming pair, swap it with the current one.
+        # The "skipped" pair now sits at the chosen index — it'll come
+        # back later. The fresh pair becomes the current one.
+        swap_idx = random.choice(upcoming)
+        pairs[cur_idx], pairs[swap_idx] = pairs[swap_idx], pairs[cur_idx]
+
+        new_draft = {
+            **draft,
+            'pairs':          pairs,
+            'pendingChoices': {},
+        }
+        new_members = []
+        for m in room.get('members', []):
+            if m.get('userId') == user_id:
+                new_members.append({**m, 'usedDraftReroll': True})
+            else:
+                new_members.append(m)
+
+        try:
+            rooms_table.update_item(
+                Key={'roomCode': room_code},
+                UpdateExpression='SET draft = :d, members = :m',
+                ConditionExpression='draft.currentPairIndex = :cur_idx AND draft.#status = :active',
+                ExpressionAttributeNames={'#status': 'status'},
+                ExpressionAttributeValues={
+                    ':d':       new_draft,
+                    ':m':       new_members,
+                    ':cur_idx': cur_idx,
+                    ':active':  'active',
+                },
+            )
+            break
+        except ClientError as e:
+            if e.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
+                time.sleep(0.04 * (attempt + 1) + random.random() * 0.02)
+                continue
+            raise
+    else:
+        raise ValueError('Re-roll failed: too much contention')
+
+    ws.push_to_channel(f"room#{room_code}", {
+        'type':  'draft_state_update',
+        'draft': _normalize_draft(new_draft),
+    })
+    return {'ok': True, 'currentPairIndex': cur_idx}
+
+
 def select_team(room_code: str, user_id: str, player_ids: list) -> dict:
     if len(player_ids) != 11:
         raise ValueError('You must select exactly 11 players')
@@ -886,10 +1008,12 @@ def select_team(room_code: str, user_id: str, player_ids: list) -> dict:
             m['teamSelection'] = player_ids
             m['teamSelectionDetails'] = selection_details
             if armed_perks:
-                # Snapshot armed perk ids onto the member entry so the
-                # event-processor can read them at match time without a
-                # second credits-table fetch.
-                m['armedPerks'] = armed_perks
+                # Merge with any perks already stamped at draft-ready
+                # time (e.g. pick-reroll). The new perks list is the
+                # union so nothing armed earlier gets dropped.
+                existing = set(m.get('armedPerks') or [])
+                existing.update(armed_perks)
+                m['armedPerks'] = sorted(existing)
             updated = True
             break
     if not updated:
@@ -920,16 +1044,15 @@ _CONSUMABLE_PERK_IDS = {
 
 
 def _arm_user_perks(user_id: str, match_id: str) -> list:
-    """Read the user's inventory; for each owned consumable perk that
-    isn't already armed/consumed, mark it `consumedForMatch = match_id`
-    via a conditional UpdateItem (one DDB call per perk so we can
-    detect races individually).
+    """Read the user's inventory; for each owned consumable perk, mark
+    it `consumedForMatch = match_id` via a conditional UpdateItem.
+    Idempotent for the SAME match (called from both mark_draft_ready and
+    select_team; the second call sees already-armed entries and includes
+    them in the result without rewriting).
 
-    Returns: list of perk ids that successfully armed for THIS match.
+    Returns: list of perk ids armed for THIS match.
 
     Never raises — armed perks are additive (no perk = baseline gameplay).
-    On any error returns the empty list and the user just plays without
-    perks.
     """
     if not user_id or not match_id or _credits is None:
         return []
@@ -949,8 +1072,13 @@ def _arm_user_perks(user_id: str, match_id: str) -> list:
         entry = inventory.get(item_id)
         if not entry:
             continue
-        # Already consumed for a previous match — skip.
-        if entry.get('consumedForMatch'):
+        consumed = entry.get('consumedForMatch')
+        if consumed == match_id:
+            # Already armed for THIS match — return it but skip the write.
+            armed.append(item_id)
+            continue
+        if consumed:
+            # Bound to a DIFFERENT match — skip entirely.
             continue
         try:
             _credits._table.update_item(
@@ -963,8 +1091,6 @@ def _arm_user_perks(user_id: str, match_id: str) -> list:
             armed.append(item_id)
         except ClientError as e:
             if e.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
-                # Concurrent arm landed first — this match isn't getting
-                # the perk. Skip silently.
                 continue
             print(f"[perks] arm failed for {user_id}/{item_id}: {e}")
         except Exception as e:

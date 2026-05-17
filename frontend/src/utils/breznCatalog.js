@@ -108,8 +108,8 @@ export const SPEND_CATALOG = {
         id:     'pick-reroll',
         label:  'Pick re-roll',
         cost:   400,
-        detail: 'Re-roll one pair in the draft — get a fresh pair of players to choose from.',
-        status: 'soon',
+        detail: 'Auto-armed at draft-ready. Re-roll one pair in the draft to get a different pair of players. One use per match.',
+        status: 'live',
       },
       {
         id:     'free-hit',
