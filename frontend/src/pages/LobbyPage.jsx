@@ -13,6 +13,7 @@ import JoinRoom from '../components/lobby/JoinRoom'
 import TeamSelectionModal from '../components/lobby/TeamSelectionModal'
 import InviteFriendsModal from '../components/lobby/InviteFriendsModal'
 import DraftRevealShow from '../components/lobby/DraftRevealShow'
+import FreeHitModal from '../components/lobby/FreeHitModal'
 
 export default function LobbyPage() {
   const { matchId } = useParams()
@@ -25,6 +26,7 @@ export default function LobbyPage() {
   const [starting, setStarting] = useState(false)
   const [speedMultiplier, setSpeedMultiplier] = useState(5)
   const [revealOpen, setRevealOpen] = useState(false)
+  const [freeHitOpen, setFreeHitOpen] = useState(false)
   const navigate = useNavigate()
 
   const handleMatchStarted = (mid) => {
@@ -202,6 +204,22 @@ export default function LobbyPage() {
             </button>
           )}
 
+          {/* Free Hit perk — visible once squad is locked, gated on the
+              armed perk + not yet used. One-tap opens the swap modal. */}
+          {hasTeam && myMember?.armedPerks?.includes?.('free-hit') && !myMember?.usedFreeHit && !isLive && (
+            <button
+              onClick={() => setFreeHitOpen(true)}
+              className="w-full mt-2 py-3 rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.99]"
+              style={{
+                background: 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(217,119,6,0.10) 100%)',
+                border: '1px solid rgba(245,158,11,0.40)',
+                color: '#fcd34d',
+              }}
+            >
+              ⚡ Use Free Hit · swap one player
+            </button>
+          )}
+
           {/* Start / Watch live */}
           {isLive ? (
             <button
@@ -301,6 +319,14 @@ export default function LobbyPage() {
           onClose={() => setInviteModalOpen(false)}
         />
       )}
+
+      <FreeHitModal
+        open={freeHitOpen}
+        onClose={() => setFreeHitOpen(false)}
+        room={room}
+        matchId={matchId}
+        currentUserId={user?.userId}
+      />
 
       <DraftRevealShow
         open={revealOpen}

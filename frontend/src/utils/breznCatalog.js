@@ -115,8 +115,8 @@ export const SPEND_CATALOG = {
         id:     'free-hit',
         label:  'Free hit',
         cost:   800,
-        detail: 'Swap one drafted player for any other in their position bucket, just for this match.',
-        status: 'soon',
+        detail: 'After your squad is locked, swap one drafted player for any other in the same position bucket. One use per match.',
+        status: 'live',
       },
       {
         id:     'reaction-pack',

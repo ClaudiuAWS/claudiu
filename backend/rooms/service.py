@@ -874,6 +874,111 @@ def submit_draft_pick(room_code: str, user_id: str, pair_index: int, player_id: 
     return {'ok': True, 'resolved': resolved, 'tiebreak': tiebreak}
 
 
+# German-code → bucket mapping. Mirrors POS_TO_GROUP on the frontend
+# (utils/formationPositions). Used by the free-hit swap to confirm the
+# in-coming player is in the same bucket as the out-going one.
+_POS_BUCKET = {
+    'TW':  'GK',
+    'IVL': 'DEF', 'IVR': 'DEF', 'IVZ': 'DEF', 'IV': 'DEF',
+    'LV':  'DEF', 'RV':  'DEF',
+    'DMZ': 'MID', 'DML': 'MID', 'DMR': 'MID', 'DLM': 'MID', 'DRM': 'MID',
+    'ZO':  'MID', 'OLM': 'MID', 'ORM': 'MID',
+    'LA':  'FWD', 'RA':  'FWD', 'STZ': 'FWD', 'STL': 'FWD', 'STR': 'FWD',
+}
+
+
+def free_hit_swap(room_code: str, user_id: str, out_player_id: str, in_player_id: str) -> dict:
+    """Consume the 'free-hit' perk: replace out_player_id with
+    in_player_id on the user's teamSelection, provided both are in
+    the same position bucket and the incoming player isn't already
+    drafted by another user.
+    """
+    room = rooms_table.get_item(Key={'roomCode': room_code}, ConsistentRead=True).get('Item')
+    if not room:
+        raise ValueError('Room not found')
+
+    member = next((m for m in room.get('members', []) if m.get('userId') == user_id), None)
+    if not member:
+        raise ValueError('You are not in this room')
+    if 'free-hit' not in (member.get('armedPerks') or []):
+        raise ValueError('Free-hit perk not armed for this match')
+    if member.get('usedFreeHit'):
+        raise ValueError('Free-hit already used this match')
+
+    selection = list(member.get('teamSelection') or [])
+    if out_player_id not in selection:
+        raise ValueError('The player you want to swap out is not in your squad')
+    if in_player_id in selection:
+        raise ValueError('Incoming player is already in your squad')
+
+    # Other members' rosters can't contain the incoming player either.
+    for m in room.get('members', []):
+        if m.get('userId') == user_id:
+            continue
+        if in_player_id in (m.get('teamSelection') or []):
+            raise ValueError('That player is already on another squad')
+
+    # Look up both players + confirm same bucket.
+    match_id = room.get('matchId') or ''
+    keys = [
+        {'matchId': match_id, 'playerId': out_player_id},
+        {'matchId': match_id, 'playerId': in_player_id},
+    ]
+    resp = dynamodb.batch_get_item(
+        RequestItems={os.environ['PLAYER_LOOKUP_TABLE']: {'Keys': keys}}
+    )
+    fetched = {p['playerId']: p for p in resp['Responses'].get(os.environ['PLAYER_LOOKUP_TABLE'], [])}
+    out_player = fetched.get(out_player_id)
+    in_player  = fetched.get(in_player_id)
+    if not out_player or not in_player:
+        raise ValueError('Player not found in this match')
+    out_bucket = _POS_BUCKET.get(out_player.get('position'), 'MID')
+    in_bucket  = _POS_BUCKET.get(in_player.get('position'),  'MID')
+    if out_bucket != in_bucket:
+        raise ValueError(f"Bucket mismatch — {out_bucket} cannot be swapped for {in_bucket}")
+
+    # Apply the swap.
+    new_selection = [in_player_id if pid == out_player_id else pid for pid in selection]
+    new_details = []
+    for d in (member.get('teamSelectionDetails') or []):
+        if d.get('playerId') == out_player_id:
+            new_details.append({
+                'playerId':    in_player_id,
+                'position':    in_player.get('position', ''),
+                'teamRole':    in_player.get('teamRole', ''),
+                'shirtNumber': in_player.get('shirtNumber', ''),
+                'displayName': in_player.get('displayName', ''),
+            })
+        else:
+            new_details.append(d)
+
+    new_members = []
+    for m in room.get('members', []):
+        if m.get('userId') == user_id:
+            captain_now = member.get('captainPlayerId') or ''
+            # If the captain was the swapped-out player, clear it — the
+            # client will re-pick a captain on the new squad.
+            new_captain = '' if captain_now == out_player_id else captain_now
+            new_members.append({
+                **m,
+                'teamSelection':        new_selection,
+                'teamSelectionDetails': new_details,
+                'captainPlayerId':      new_captain,
+                'usedFreeHit':          True,
+            })
+        else:
+            new_members.append(m)
+
+    rooms_table.update_item(
+        Key={'roomCode': room_code},
+        UpdateExpression='SET members = :m',
+        ExpressionAttributeValues={':m': new_members},
+    )
+    room['members'] = new_members
+    _push_room_update(room)
+    return {'ok': True, 'swapped': {'out': out_player_id, 'in': in_player_id}}
+
+
 def reroll_draft_pair(room_code: str, user_id: str) -> dict:
     """Consume the 'pick-reroll' perk for this user, swap the current
     draft pair with a randomly-picked upcoming pair, clear any pending
