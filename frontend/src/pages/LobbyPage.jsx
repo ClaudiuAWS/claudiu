@@ -140,15 +140,26 @@ export default function LobbyPage() {
   return (
     <div className="min-h-screen flex flex-col px-5 pt-10 pb-8">
 
-      {/* Match fixture */}
+      {/* Match fixture — same dark-gradient vocabulary as everywhere else
+          in the app, with a faint red top-line accent to tie it to the
+          page header below. */}
       {match && (
-        <div className="rounded-2xl p-4 mb-8 flex items-center justify-between"
-          style={{ background: 'linear-gradient(145deg,#111827,#0d1117)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div
+          className="relative rounded-2xl p-4 mb-6 flex items-center justify-between overflow-hidden"
+          style={{
+            background: 'linear-gradient(145deg,#111827,#0d1117)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 20px -12px rgba(0,0,0,0.65)',
+          }}
+        >
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/35 to-transparent pointer-events-none" />
           <span className="text-white font-semibold text-sm flex-1">{match.homeTeamName}</span>
           <div className="px-4 text-center">
             {match.status === 'upcoming'
-              ? <span className="text-gray-600 text-xs font-medium tracking-widest uppercase">Upcoming</span>
-              : <span className="text-white font-bold text-xl tabular-nums">{match.homeScore ?? 0} : {match.awayScore ?? 0}</span>
+              ? <span className="text-gray-600 text-[10px] font-bold tracking-widest uppercase">Upcoming</span>
+              : <span className="text-white font-stadium text-2xl leading-none tabular-nums" style={{ letterSpacing: '0.05em' }}>
+                  {match.homeScore ?? 0} : {match.awayScore ?? 0}
+                </span>
             }
           </div>
           <span className="text-white font-semibold text-sm flex-1 text-right">{match.awayTeamName}</span>
@@ -157,17 +168,39 @@ export default function LobbyPage() {
 
       {room ? (
         <div className="flex flex-col flex-1 gap-5">
-          <div>
-            <h1 className="text-white text-2xl font-bold tracking-tight">Your Party</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              {isLive
-                ? 'Match is live!'
-                : isHost
-                  ? memberCount >= 2
-                    ? 'Ready to start — press the button when everyone is set'
-                    : 'Invite friends or share the code below'
-                  : 'Waiting for the host to start the match…'}
-            </p>
+          {/* Glossy branded header — same shape as BadgesPage / TracksPage
+              so the lobby reads as a "real" page in the app, not a
+              loose collection of buttons. */}
+          <div className="relative overflow-hidden rounded-2xl">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/60 to-transparent" />
+            <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.07] to-transparent pointer-events-none" />
+            <div
+              className="relative px-5 py-4"
+              style={{
+                background: 'linear-gradient(180deg, #1a0a0a 0%, #0d0606 100%)',
+                border: '1px solid rgba(220,38,38,0.25)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px -12px rgba(220,38,38,0.50)',
+              }}
+            >
+              <h1
+                className="text-white font-stadium text-2xl leading-none"
+                style={{
+                  letterSpacing: '0.10em',
+                  textShadow: '0 2px 0 rgba(0,0,0,0.6), 0 -1px 0 rgba(255,255,255,0.05)',
+                }}
+              >
+                YOUR PARTY
+              </h1>
+              <p className="text-gray-400 text-[11px] mt-1.5 tracking-wider">
+                {isLive
+                  ? 'Match is live!'
+                  : isHost
+                    ? memberCount >= 2
+                      ? 'Ready up to start the draft'
+                      : 'Invite friends or share the code below'
+                    : 'Waiting for everyone to lock in…'}
+              </p>
+            </div>
           </div>
 
           <RoomCodeDisplay code={room.roomCode} />
@@ -286,8 +319,18 @@ export default function LobbyPage() {
           <div className="mt-auto pt-4">
             <button
               onClick={leaveRoom}
-              className="w-full py-3 text-gray-600 text-sm hover:text-gray-400 transition-colors"
+              className="w-full py-3 rounded-2xl text-sm font-semibold tracking-wide transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+              style={{
+                background: 'linear-gradient(135deg, rgba(220,38,38,0.10) 0%, rgba(127,29,29,0.05) 100%)',
+                border: '1px solid rgba(248,113,113,0.28)',
+                color: '#fca5a5',
+              }}
             >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
               Leave party
             </button>
           </div>
