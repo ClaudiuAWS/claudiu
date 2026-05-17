@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
+import { PitchView } from '../match/PitchView'
 
-// Reveal needs longer dwell now that we actually show the squads — the
-// member tile + 11-avatar strip needs time to read.
+// Reveal needs longer dwell now that we actually show the squads on a
+// pitch — readers need time to scan formations + spot captain rings.
 const COUNTDOWN_S = 3
 const REVEAL_MS   = 5500
 const KICKOFF_MS  = 1500
 const TOTAL_MS    = COUNTDOWN_S * 1000 + REVEAL_MS + KICKOFF_MS
 
-// Position-bucket map — keep in sync with formationPositions but inlined
-// so DraftRevealShow stays self-contained.
+// Position groups, used only for deriving the formation label string
+// (e.g. "4-3-3"). The actual on-pitch placement is owned by PitchView's
+// assignPlayersToFormation helper.
 const POS_GROUP = {
   TW:  'GK',
   IVZ: 'DEF', IVL: 'DEF', IVR: 'DEF', IV: 'DEF', LV: 'DEF', RV: 'DEF',
@@ -16,27 +18,14 @@ const POS_GROUP = {
   ZO:  'MID', OLM: 'MID', ORM: 'MID',
   LA:  'FWD', RA: 'FWD', STZ: 'FWD', STL: 'FWD', STR: 'FWD',
 }
-const GROUP_ORDER = ['GK', 'DEF', 'MID', 'FWD']
-const GROUP_TINT = {
-  GK:  'rgba(234,179,8,0.20)',   // yellow
-  DEF: 'rgba(59,130,246,0.20)',  // blue
-  MID: 'rgba(16,185,129,0.20)',  // emerald
-  FWD: 'rgba(239,68,68,0.20)',   // red
-}
-
-function groupPlayers(details = []) {
-  const out = { GK: [], DEF: [], MID: [], FWD: [] }
-  for (const p of details) {
-    const g = POS_GROUP[p.position] || 'MID'
-    out[g].push(p)
-  }
-  return out
-}
 
 function formationString(details = []) {
-  const g = groupPlayers(details)
+  const counts = { GK: 0, DEF: 0, MID: 0, FWD: 0 }
+  for (const p of details) {
+    counts[POS_GROUP[p.position] || 'MID']++
+  }
   // Skip GK in the conventional formation label (e.g. "4-3-3" = 4 DEF + 3 MID + 3 FWD).
-  return `${g.DEF.length}-${g.MID.length}-${g.FWD.length}`
+  return `${counts.DEF}-${counts.MID}-${counts.FWD}`
 }
 
 /**
@@ -130,18 +119,17 @@ export default function DraftRevealShow({ open, room, onClose }) {
           </p>
           <div className="flex flex-col gap-3 max-w-md mx-auto">
             {members.map((m, i) => {
-              const details  = m.teamSelectionDetails || []
-              const grouped  = groupPlayers(details)
-              const captain  = m.captainPlayerId || ''
-              const formation = details.length === 11 ? formationString(details) : ''
+              const details   = m.teamSelectionDetails || []
+              const captain   = m.captainPlayerId || null
+              const formation = details.length === 11 ? formationString(details) : '4-2-3-1'
               return (
                 <div
                   key={m.userId}
-                  className="rounded-2xl px-4 py-3"
+                  className="rounded-2xl px-3 py-3"
                   style={{
                     background: 'linear-gradient(145deg, rgba(40,12,12,0.85) 0%, rgba(20,6,6,0.95) 100%)',
                     border: '1px solid rgba(248,113,113,0.40)',
-                    animation: `slideIn 350ms ${i * 150}ms ease-out backwards`,
+                    animation: `slideIn 350ms ${i * 180}ms ease-out backwards`,
                   }}
                 >
                   {/* Header row */}
@@ -149,7 +137,7 @@ export default function DraftRevealShow({ open, room, onClose }) {
                     <span className="text-white text-sm font-bold tracking-wide truncate text-left flex-1">
                       {m.displayName}
                     </span>
-                    {formation && (
+                    {details.length === 11 && (
                       <span className="text-gray-400 text-[10px] font-bold tracking-widest tabular-nums">
                         {formation}
                       </span>
@@ -165,75 +153,18 @@ export default function DraftRevealShow({ open, room, onClose }) {
                     </span>
                   </div>
 
-                  {/* Position-grouped player rows */}
-                  <div className="flex flex-col gap-1.5">
-                    {GROUP_ORDER.map(group => {
-                      const players = grouped[group] || []
-                      if (!players.length) return null
-                      return (
-                        <div key={group} className="flex items-center gap-1.5">
-                          <span
-                            className="text-[8px] font-black tracking-widest text-white/70 w-7 text-center py-0.5 rounded flex-shrink-0"
-                            style={{ background: GROUP_TINT[group] }}
-                          >
-                            {group}
-                          </span>
-                          <div className="flex gap-1 flex-wrap flex-1 justify-start">
-                            {players.map(p => {
-                              const isCaptain = p.playerId && captain === p.playerId
-                              return (
-                                <div
-                                  key={p.playerId || p.shirtNumber}
-                                  className="relative w-7 h-7 rounded-full overflow-hidden flex-shrink-0"
-                                  style={{
-                                    border: `1.5px solid ${isCaptain ? '#60a5fa' : 'rgba(255,255,255,0.20)'}`,
-                                    boxShadow: isCaptain
-                                      ? '0 0 8px rgba(96,165,250,0.85)'
-                                      : '0 2px 6px rgba(0,0,0,0.5)',
-                                  }}
-                                  title={p.displayName || p.shirtNumber}
-                                >
-                                  {p.imageUrl ? (
-                                    <img
-                                      src={p.imageUrl}
-                                      alt=""
-                                      referrerPolicy="no-referrer"
-                                      className="w-full h-full object-cover object-top"
-                                    />
-                                  ) : (
-                                    <div
-                                      className="w-full h-full flex items-center justify-center text-[9px] font-black text-white"
-                                      style={{ background: 'rgba(8,12,26,0.92)' }}
-                                    >
-                                      {p.shirtNumber || '?'}
-                                    </div>
-                                  )}
-                                  {isCaptain && (
-                                    <span
-                                      className="absolute -top-1 left-1/2 -translate-x-1/2 text-[7px] font-black"
-                                      style={{
-                                        color: '#0b1330',
-                                        background: 'linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)',
-                                        border: '1px solid #bfdbfe',
-                                        width: 11,
-                                        height: 11,
-                                        borderRadius: '50%',
-                                        lineHeight: '9px',
-                                        textAlign: 'center',
-                                      }}
-                                      aria-hidden="true"
-                                    >
-                                      C
-                                    </span>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                  {/* Full pitch with the locked XI in formation. PitchView
+                      handles position assignment + captain highlight; we
+                      hide its built-in header since the member name above
+                      already serves that role. */}
+                  <PitchView
+                    teamPlayers={details}
+                    teamRole="home"
+                    formation={formation}
+                    captainPlayerId={captain}
+                    maxHeight="260px"
+                    showHeader={false}
+                  />
                 </div>
               )
             })}

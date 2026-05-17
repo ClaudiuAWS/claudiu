@@ -35,7 +35,11 @@ export default function LobbyPage() {
     const flagKey = `lobby_auto_redirected_${mid}`
     if (sessionStorage.getItem(flagKey)) return
     sessionStorage.setItem(flagKey, '1')
-    navigate(`/match/${mid}`)
+    // Pass state.initialRoom so the non-host's MatchPage skips its
+    // loading-spinner gate (same pattern as handleStart and the isLive
+    // auto-redirect useEffect). Without this, the friend's tab flashed
+    // a blank spinner between WS arrival and useRoom's API restore.
+    navigate(`/match/${mid}`, { state: { initialRoom: room } })
   }
   // Pass nav-state initialRoom (e.g. from InviteListener accepting an
   // invite) to useRoom so the loading-spinner gate doesn't fire while
@@ -259,19 +263,26 @@ export default function LobbyPage() {
             </button>
           )}
 
-          {/* Start / Watch live. Manual Start button removed — the match
-              auto-starts on the host's tab when the Draft Reveal Show
-              closes (handleRevealClose -> handleStart), and non-host tabs
-              redirect themselves via the match_started WS broadcast.
-              The speed selector stays so the host can tune the replay
-              pace before everyone locks their XI. */}
+          {/* Start / Watch live. Both the manual Start button and the
+              Watch Live blue button are removed — the sequence is now
+              fully continuous:
+                Ready Up -> coordinated draft -> Draft Reveal Show ->
+                handleRevealClose (host fires startMatch) -> match_started
+                WS broadcast OR isLive flip -> auto-redirect both tabs to
+                /match. No taps in between.
+              While isLive is true but the redirect hasn't yet flushed,
+              show a status pill so the user sees the handoff happening. */}
           {isLive ? (
-            <button
-              onClick={() => navigate(`/match/${matchId}`, { state: { initialRoom: room } })}
-              className="w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white transition-all"
+            <div
+              className="w-full py-3 rounded-2xl text-center text-sm font-semibold tracking-wide"
+              style={{
+                background: 'linear-gradient(135deg, rgba(220,38,38,0.20) 0%, rgba(127,29,29,0.10) 100%)',
+                border: '1px solid rgba(248,113,113,0.45)',
+                color: '#fca5a5',
+              }}
             >
-              Watch Live →
-            </button>
+              Kicking off — taking you to the match…
+            </div>
           ) : isHost ? (
             <>
               <div className="flex items-center justify-between px-1">
