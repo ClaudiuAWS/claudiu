@@ -1,9 +1,21 @@
-# claudiu
+# Brezn — A Real Time Social Match Experience
 
-Our project in the AWS World Cup Sports Innovation hackathon — a multiplayer
-football match watching app where users draft squads against each other,
-play live reaction-based mini-games, and chase a leaderboard while the match
-unfolds.
+Our submission for the **AWS World Sports Innovation Cup 2026**, track:
+**DFL × Adidas — Beyond the 90 minutes**.
+
+A Bundesliga-themed second-screen app where you draft squads with a friend,
+watch matches together in real time with WebSocket-synced state, play AI-
+driven mini-games triggered by what's happening on the pitch, and chase a
+brezn-credit economy that keeps the loop running between matches.
+
+📄 [**Submission cover sheet → `docs/submission.md`**](docs/submission.md)
+🏗️ [**Architecture deep-dive → `docs/architecture.md`**](docs/architecture.md)
+♿ [**Accessibility audit → `docs/accessibility.md`**](docs/accessibility.md)
+
+> _Live URL + demo video link land here before submission._
+
+The rest of this README is a feature-by-feature tour. For the AWS stack +
+service map, see [`docs/architecture.md`](docs/architecture.md).
 
 ---
 

@@ -20,9 +20,15 @@ export default function DirectorCommentary({ stack }) {
   if (!stack || !stack.length) return null
 
   return (
+    // aria-live="polite" so screen readers announce each new commentary
+    // line as it arrives (e.g. "Olise doubles Bayern's lead — clinical!").
+    // 'polite' politeness level waits for the user's current speech to
+    // finish before reading — no rude interruptions mid-action.
     <div
       className="fixed inset-x-0 top-20 z-[45] flex flex-col items-center gap-2 px-3 pointer-events-none"
       aria-live="polite"
+      aria-atomic="false"
+      role="status"
     >
       {stack.map(entry => (
         <CommentaryCard key={entry.id} entry={entry} />
