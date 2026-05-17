@@ -269,7 +269,7 @@ export const BADGE_CATALOG = [
     id: 'striker_5',
     title: 'Sharp Shooter',
     description: 'Your squad scored 5 goals total.',
-    image: '/badge-striker-5.jpg',
+    image: '/badge-striker-5.png',
     tier: 'silver',
     discReward: null,
   },
@@ -277,7 +277,7 @@ export const BADGE_CATALOG = [
     id: 'goalkeeper_1',
     title: 'Safe Hands',
     description: 'Your goalkeeper made their first save.',
-    image: '/badge-goalkeeper-1.jpg',
+    image: '/badge-goalkeeper-1.png',
     tier: 'bronze',
     discReward: null,
   },
@@ -285,7 +285,7 @@ export const BADGE_CATALOG = [
     id: 'goalkeeper_5',
     title: 'The Wall',
     description: 'Your goalkeeper made 5 saves.',
-    image: '/badge-goalkeeper-5.jpg',
+    image: '/badge-goalkeeper-5.png',
     tier: 'silver',
     discReward: null,
   },
@@ -293,7 +293,7 @@ export const BADGE_CATALOG = [
     id: 'penalty_1',
     title: 'From the Spot',
     description: 'Your squad scored their first penalty.',
-    image: '/badge-penalty-1.jpg',
+    image: '/badge-penalty-1.png',
     tier: 'bronze',
     discReward: null,
   },
@@ -301,7 +301,7 @@ export const BADGE_CATALOG = [
     id: 'penalty_5',
     title: 'Penalty Expert',
     description: 'Your squad scored 5 penalties.',
-    image: '/badge-penalty-5.jpg',
+    image: '/badge-penalty-5.png',
     tier: 'silver',
     discReward: null,
   },
@@ -322,10 +322,15 @@ export const TIER_COLORS = {
 // (positive fantasy delta × 2). A bronze badge ≈ 10 goals of scoring;
 // gold ≈ 75 goals. Earning the badge in-match is always free; this is
 // the alternative path for users who want to grind credits instead.
+// Retail prices for buying a badge of the given tier. Kept in sync
+// with the BreznShop catalog (utils/breznCatalog.js → SPEND_CATALOG.badges)
+// AND the backend earn payouts in shared/credits.py (BADGE_EARN_PAYOUT):
+// earn payouts are ~50% of retail so earning is always cheaper than
+// buying. Bumped in the thirtieth pass economy rebalance.
 export const TIER_PRICES = {
-  bronze: 200,
-  silver: 500,
-  gold:   1500,
+  bronze: 300,
+  silver: 800,
+  gold:   2000,
 }
 
 export function getBadgePrice(badge) {

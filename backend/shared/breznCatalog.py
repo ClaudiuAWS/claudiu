@@ -18,13 +18,13 @@ CATALOG = {
     # ─── Cosmetics — permanent visual upgrades ────────────────────────────
     'name-red': {
         'id':       'name-red',
-        'cost':     1000,
+        'cost':     800,            # was 1000 — entry cosmetic
         'kind':     'cosmetic',
         'category': 'name-color',
     },
     'name-rainbow': {
         'id':       'name-rainbow',
-        'cost':     3000,
+        'cost':     2500,           # was 3000 — premium cosmetic
         'kind':     'cosmetic',
         'category': 'name-color',
     },
@@ -36,7 +36,7 @@ CATALOG = {
     },
     'frame-pretzel': {
         'id':       'frame-pretzel',
-        'cost':     2000,
+        'cost':     2200,           # was 2000 — slightly more premium
         'kind':     'cosmetic',
         'category': 'avatar-frame',
     },
@@ -66,27 +66,31 @@ CATALOG = {
     },
 
     # ─── Match perks — consumables, armed for the next match ──────────────
+    # Pricing reflects in-match power. captain-triple and free-hit
+    # influence the leaderboard heavily — they cost more so users have
+    # to commit. reaction-pack is cosmetic only, dropped to impulse-buy
+    # pricing.
     'captain-triple': {
         'id':       'captain-triple',
-        'cost':     500,
+        'cost':     800,            # was 500 — 1.5× captain multiplier is heavy
         'kind':     'consumable',
         'category': 'match-perk',
     },
     'pick-reroll': {
         'id':       'pick-reroll',
-        'cost':     400,
+        'cost':     400,            # unchanged — modest in-draft influence
         'kind':     'consumable',
         'category': 'match-perk',
     },
     'free-hit': {
         'id':       'free-hit',
-        'cost':     800,
+        'cost':     1500,           # was 800 — single most powerful perk
         'kind':     'consumable',
         'category': 'match-perk',
     },
     'reaction-pack': {
         'id':       'reaction-pack',
-        'cost':     300,
+        'cost':     200,            # was 300 — pure cosmetic, impulse-buy tier
         'kind':     'consumable',
         'category': 'match-perk',
     },

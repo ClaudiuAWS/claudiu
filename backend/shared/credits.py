@@ -180,20 +180,24 @@ def award_for_score_changes(score_changes: list, match_id: str = '') -> None:
 # both backend awards AND the frontend's "rumored payout" hints.
 
 # Match-end bonuses, paid once per user per match at fulltime.
-MATCH_PARTICIPATION_BONUS = 50
-WINNER_BONUS_BASE         = 50    # everyone who wins gets at least this
+# Rebalanced in the thirtieth pass: bumped to make each match feel
+# rewarding now that the market is live. A peak win pays ~700 brezn,
+# enough to afford a single light perk or chip away at a cosmetic.
+MATCH_PARTICIPATION_BONUS = 75    # bumped 50→75
+WINNER_BONUS_BASE         = 75    # bumped 50→75 — winning is the main earner
 WINNER_BONUS_PER_PT_LEAD  = 5     # +5 brezn per fantasy-point lead over runner-up
-WINNER_BONUS_CAP          = 300   # cap on the runaway-winner case
+WINNER_BONUS_CAP          = 350   # bumped 300→350
 CLEAN_SHEET_BONUS         = 100   # match where YOUR keeper conceded 0
-CAPTAIN_DELIVERED_BONUS   = 75    # captain produced at least one positive event
+CAPTAIN_DELIVERED_BONUS   = 100   # bumped 75→100 — rewards strategic captain pick
+DAILY_FIRST_MATCH_BONUS   = 100   # bumped 50→100 — habit hook
 
 # Badge unlock — paid once at the moment an earned (not bought) badge
-# fires. Mirrors the tier-priced retail cost in frontend/utils/badges.js,
-# scaled down so earning is cheaper than buying (the right incentive).
+# fires. Earn payouts are always cheaper than the retail buy prices in
+# `backend/shared/breznCatalog.py` so users always prefer earning.
 BADGE_EARN_PAYOUT = {
-    'bronze': 100,
-    'silver': 300,
-    'gold':   750,
+    'bronze': 150,    # bumped 100→150 (buy: 300)
+    'silver': 400,    # bumped 300→400 (buy: 800)
+    'gold':   1000,   # bumped 750→1000 (buy: 2000)
 }
 
 # Mini-game payouts, fired by the mini-game scoring path.
@@ -204,9 +208,8 @@ MINIGAME_PAYOUT = {
     'PENALTY_SHOOTOUT_WIN':   40,
 }
 
-# Habit + growth loops.
-DAILY_FIRST_MATCH_BONUS = 50      # once per UTC day, first finished match
-INVITE_ACCEPTED_BONUS   = 100     # both inviter + invitee get this on accept
+# Growth loop: paying both ends of an invite acceptance.
+INVITE_ACCEPTED_BONUS = 150       # bumped 100→150
 
 
 def award_match_end_bonuses(room: dict, final_result: str = '') -> None:
