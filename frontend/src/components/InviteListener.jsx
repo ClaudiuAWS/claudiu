@@ -77,21 +77,48 @@ export default function InviteListener() {
       return
     }
 
-    // Happy path — instant navigate, join in the background. We don't
-    // have the room's full member list yet (that arrives via WS
-    // room_update once the background join completes), so pass a STUB
-    // initialRoom so LobbyPage's useRoom skips its loading-spinner gate.
-    // The WS handler then fills in members + hostUserId in the background.
-    // Mirrors the LobbyPage→MatchPage navigation pattern at LobbyPage.jsx:87.
+    // Happy path — instant navigate, join in the background. Build a
+    // RICH initialRoom stub: we know enough to pre-populate the members
+    // list with both the inviter (host) and the accepter (self), so the
+    // friend's lobby looks fully populated on the first frame instead of
+    // an empty members list that feels like "nothing happened".
+    //
+    // Field shape matches what backend room.members[] uses (consumed by
+    // MembersList.jsx: userId, displayName, avatarUrl, score,
+    // teamSelection). The WS room_update that arrives ~300-500 ms later
+    // overwrites this stub with the authoritative server state — but
+    // since the data matches what's already on screen, there's no
+    // visible flicker.
+    const inviterMember = pending.inviter?.userId ? {
+      userId:        pending.inviter.userId,
+      displayName:   pending.inviter.displayName || 'Friend',
+      avatarUrl:     pending.inviter.avatarUrl || '',
+      score:         0,
+      teamSelection: [],
+    } : null
+    const selfMember = user?.userId ? {
+      userId:        user.userId,
+      displayName:   user.displayName || 'You',
+      avatarUrl:     user.avatarUrl || '',
+      score:         0,
+      teamSelection: [],
+    } : null
+    const stubMembers = [inviterMember, selfMember].filter(Boolean)
+
     sessionStorage.setItem('fan_squad_room_code', roomCode)
     setPending(null)
     navigate(`/lobby/${payloadMatchId}`, {
       state: {
         initialRoom: {
           roomCode,
-          matchId: payloadMatchId,
-          members:    [],
-          hostUserId: null,
+          matchId:    payloadMatchId,
+          members:    stubMembers,
+          // The inviter is the host of the room they're inviting from.
+          // (Backend guards this in invite_to_room — only members can invite,
+          // and the room creator is always a member; here we assume the
+          // inviter created the party, which is the common case. If they
+          // didn't, the WS room_update will correct the hostUserId.)
+          hostUserId: pending.inviter?.userId || null,
           status:     'lobby',
         },
       },
