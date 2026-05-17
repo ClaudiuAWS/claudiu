@@ -1,0 +1,45 @@
+name: Deploy CICD IAM (backend)
+
+# Keeps the GitHub-Actions OIDC role's policy in sync with
+# `infra/cicd/cicd-oidc-iam-backend.yml`. Without this, any permission
+# added to the YAML never reaches AWS until an admin runs the CFN
+# deploy manually — which is how the credits-table deploy got stuck
+# at "AccessDenied on cloudformation:DescribeStacks": the YAML had
+# the action, the live policy didn't.
+#
+# Chicken-and-egg note: the FIRST run of this workflow requires the
+# role to already have the actions this workflow's own
+# `aws cloudformation deploy` call needs. The current source covers
+# them (CloudFormationDeploy + IAMRoleManage Sids), but the live
+# policy might not — see the README for the one-time manual seed an
+# admin runs from their AWS-authed terminal.
+
+on:
+        push:
+                branches: [main]
+                paths:
+                        - "infra/cicd/cicd-oidc-iam-backend.yml"
+
+permissions:
+        id-token: write
+        contents: read
+
+jobs:
+        deploy:
+                runs-on: ubuntu-latest
+                steps:
+                        - uses: actions/checkout@v4
+
+                        - name: Configure AWS credentials
+                          uses: aws-actions/configure-aws-credentials@v4
+                          with:
+                                  role-to-assume: ${{ secrets.AWS_BACKEND_GITHUB_ACTIONS_ROLE_ARN }}
+                                  aws-region: eu-central-1
+
+                        - name: Deploy CICD IAM stack
+                          run: |
+                                  aws cloudformation deploy \
+                                    --template-file infra/cicd/cicd-oidc-iam-backend.yml \
+                                    --stack-name claudiu-github-actions-iam \
+                                    --capabilities CAPABILITY_NAMED_IAM \
+                                    --no-fail-on-empty-changeset
