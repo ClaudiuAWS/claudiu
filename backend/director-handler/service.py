@@ -20,7 +20,12 @@ import time
 import boto3
 
 import ws  # bundled into the Lambda package by the deploy workflow
-from prompts import SYSTEM_PROMPT, build_user_message
+from prompts import (
+    SYSTEM_PROMPT,
+    build_user_message,
+    CAPTAIN_PROMPT,
+    build_captain_message,
+)
 
 
 bedrock = boto3.client('bedrock-runtime', region_name=os.environ.get('BEDROCK_REGION', 'eu-central-1'))
@@ -137,22 +142,56 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                 if game_type_dec == 'OFFSIDE_REFLEX':
                         config.setdefault('offsideMomentMs', config['durationMs'] // 2)
                 if game_type_dec == 'HALFTIME_QUIZ':
-                        # AI's `questions` should be a list of {q, choices[4],
-                        # correctIdx, category}. Drop the whole action if it
-                        # doesn't validate; we want quality questions or none.
+                        # Schema gate: each q must have non-empty question text,
+                        # 4 distinct non-empty answer strings, a valid correctIdx,
+                        # and a category. Drop the whole quiz on any schema failure
+                        # so users never see malformed questions.
                         qs = config.get('questions')
-                        valid = isinstance(qs, list) and 1 <= len(qs) <= 5 and all(
+                        valid_schema = isinstance(qs, list) and 1 <= len(qs) <= 5 and all(
                                 isinstance(q, dict)
-                                and isinstance(q.get('q'), str)
+                                and isinstance(q.get('q'), str) and len(q['q'].strip()) > 5
                                 and isinstance(q.get('choices'), list)
                                 and len(q['choices']) == 4
+                                and all(isinstance(c, str) and len(c.strip()) > 0 for c in q['choices'])
+                                and len({c.strip().lower() for c in q['choices']}) == 4  # no duplicates
                                 and isinstance(q.get('correctIdx'), int)
                                 and 0 <= q['correctIdx'] < 4
                                 for q in qs
                         )
-                        if not valid:
-                                print(f"director: HALFTIME_QUIZ questions failed validation, dropping -> wait")
+                        if not valid_schema:
+                                print("director: HALFTIME_QUIZ schema failed, dropping -> wait")
                                 return
+
+                        # Anti-hallucination gate (post-schema):
+                        #   1. Drop questions with confidence < 0.7. Unmarked
+                        #      questions default to 0.0 so they get dropped — the
+                        #      model is expected to self-rate.
+                        #   2. For type='player-bio', the question text must
+                        #      contain a name from playerDirectory. This prevents
+                        #      the model from asking about a famous player who
+                        #      isn't actually in this match.
+                        #   3. After filtering, at least one survivor must be
+                        #      type='match-event' (or unmarked, which we treat
+                        #      as event-based). If only risky bio questions
+                        #      survive, drop the whole quiz so the static
+                        #      fallback fires instead.
+                        directory_names = set((snapshot.get('playerDirectory') or {}).keys())
+                        confident_qs = [q for q in qs if float(q.get('confidence', 0.0)) >= 0.7]
+                        grounded_qs = []
+                        for q in confident_qs:
+                                qtype = q.get('type', 'match-event')
+                                if qtype == 'player-bio':
+                                        q_text_lower = q['q'].lower()
+                                        if not any(name.lower() in q_text_lower for name in directory_names):
+                                                # Player-bio about someone not in this match — drop.
+                                                continue
+                                grounded_qs.append(q)
+
+                        has_safe = any(q.get('type', 'match-event') == 'match-event' for q in grounded_qs)
+                        if len(grounded_qs) == 0 or not has_safe:
+                                print("director: HALFTIME_QUIZ confidence/grounding failed, dropping -> wait")
+                                return
+                        config['questions'] = grounded_qs[:3]
                 ws.push_to_channel(f"room#{room_code}", {
                     'type':             'minigame_start',
                     'gameId':           f"director-{related_event_id}-{room_code}",
@@ -167,6 +206,8 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                     'source':           'ai-director',
                     'reasoning':        decision.get('reasoning') or '',
                 })
+                # End of HALFTIME_QUIZ-specific validation. Fall through to the
+                # ws.push_to_channel below.
         elif action == 'commentate':
                 # Personal-commentary support: when the trigger event has an
                 # `ownerUserIds` list (a goal/save by a drafted player), tag
@@ -185,3 +226,101 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                     'forUserIds':     for_user_ids,
                 })
         # 'wait' -> no-op
+
+
+# ─── Captain-suggestion mode ─────────────────────────────────────────────
+
+# Position priority for the rule-based fallback when the model's
+# recommendedPlayerId isn't in the starters whitelist. Goalkeepers are
+# excluded outright — they're never a useful captain pick.
+_CAPTAIN_POSITION_RANK = {
+    'ST': 0, 'MS': 0,                # Strikers — top priority
+    'OM': 1,                          # Attacking mid
+    'LM': 2, 'RM': 2,                 # Wingers
+    'ZM': 3,                          # Central mid
+    'DM': 4,                          # Defensive mid
+    'IV': 5, 'LV': 5, 'RV': 5,        # Defenders
+    # TW (goalkeeper) intentionally absent — filtered out before ranking
+}
+
+
+def _fallback_captain(starters: list) -> str | None:
+    """Pick the highest-priority non-keeper starter. Returns playerId or None."""
+    eligible = [s for s in starters if s.get('positionCode') != 'TW']
+    if not eligible:
+        return None
+    eligible.sort(key=lambda s: _CAPTAIN_POSITION_RANK.get(s.get('positionCode'), 99))
+    return eligible[0].get('playerId')
+
+
+def run_captain_suggestion(room_code: str, user_id: str, body: dict) -> dict:
+    """One-shot captain recommendation for the preview phase of a draft.
+
+    Reads `starters` (11-player XI) from the body, asks Nova Micro via the
+    CAPTAIN_PROMPT, validates the recommended playerId against the
+    starters whitelist. Falls back to a deterministic position-priority
+    pick on validation failure.
+    """
+    starters = body.get('starters') or []
+    if not isinstance(starters, list) or not starters:
+        return {'recommendedPlayerId': None, 'reasoning': '', 'confidence': 0.0}
+
+    starter_ids = {s.get('playerId') for s in starters if s.get('playerId')}
+    if not starter_ids:
+        return {'recommendedPlayerId': None, 'reasoning': '', 'confidence': 0.0}
+
+    try:
+        decision = _ask_captain_model(body)
+    except Exception as e:
+        print(f"captain-suggestion: model call failed: {e}")
+        decision = {}
+
+    rec_id = decision.get('recommendedPlayerId')
+    if rec_id not in starter_ids:
+        # Model returned a hallucinated id (or no id at all). Fall back to
+        # the position-priority pick so the user still gets a suggestion.
+        rec_id = _fallback_captain(starters)
+        if not rec_id:
+            return {'recommendedPlayerId': None, 'reasoning': '', 'confidence': 0.0}
+        rec_player = next((s for s in starters if s.get('playerId') == rec_id), {})
+        return {
+            'recommendedPlayerId': rec_id,
+            'reasoning': f"Brezn defaulted to {rec_player.get('displayName', 'your top attacker')} ({rec_player.get('positionCode', '?')}).",
+            'confidence': 0.5,
+        }
+
+    return {
+        'recommendedPlayerId': rec_id,
+        'reasoning': decision.get('reasoning') or '',
+        'confidence': float(decision.get('confidence') or 0.7),
+    }
+
+
+def _ask_captain_model(payload: dict) -> dict:
+    """Invoke Bedrock with the CAPTAIN_PROMPT and return the parsed JSON."""
+    t0 = time.time()
+    response = bedrock.converse(
+        modelId=MODEL_ID,
+        system=[{'text': CAPTAIN_PROMPT}],
+        messages=[{
+            'role': 'user',
+            'content': [{'text': build_captain_message(payload)}],
+        }],
+        inferenceConfig={
+            'maxTokens': 200,    # Output is small — recommendedPlayerId + 1 sentence
+            'temperature': 0.3,  # Slightly lower than tick — favors consistent picks
+        },
+    )
+    elapsed_ms = (time.time() - t0) * 1000
+    text = response['output']['message']['content'][0]['text'].strip()
+
+    # Strip code fences if the model added them.
+    if text.startswith('```'):
+        text = text.strip('`')
+        if text.lower().startswith('json'):
+            text = text[4:]
+        text = text.strip()
+
+    decision = json.loads(text)
+    print(f"captain-suggestion latency={elapsed_ms:.0f}ms rec={decision.get('recommendedPlayerId')!r} reasoning={decision.get('reasoning')!r}")
+    return decision

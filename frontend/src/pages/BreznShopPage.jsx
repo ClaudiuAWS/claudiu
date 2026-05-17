@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { SPEND_CATALOG } from '../utils/breznCatalog'
+import { getBadgeForShopItem } from '../utils/badges'
 import { useCredits } from '../hooks/useCredits'
 import { useInventory } from '../hooks/useInventory'
+import { useBadges } from '../hooks/useBadges'
 import PretzelCoin from '../components/ui/PretzelCoin'
 import ItemPreviewModal from '../components/ItemPreviewModal'
 
@@ -23,7 +25,17 @@ export default function BreznShopPage() {
   const navigate = useNavigate()
   const { balance } = useCredits()
   const { owns } = useInventory()
+  const { badges } = useBadges()
   const [previewItem, setPreviewItem] = useState(null)
+
+  // Set of badge IDs the user has earned. Discs unlocked via these
+  // badges show as "Via badge" in the shop instead of "Preview" — the
+  // user already has the disc, no need to spend brezn on it.
+  const earnedBadgeIds = useMemo(() => new Set((badges || []).map(b => b.badgeId)), [badges])
+  const isBadgeUnlocked = (itemId) => {
+    const bid = getBadgeForShopItem(itemId)
+    return !!bid && earnedBadgeIds.has(bid)
+  }
 
   return (
     <div className="px-4 pt-6 pb-12 max-w-md mx-auto">
@@ -62,10 +74,16 @@ export default function BreznShopPage() {
             <div className="space-y-2">
               {section.items.map(item => {
                 const isOwned = owns(item.id)
+                const viaBadge = !isOwned && isBadgeUnlocked(item.id)
+                // Both purchase-owned and badge-unlocked render the same
+                // green "you already have this" treatment — just different
+                // labels so users see WHY they have it.
+                const effectiveOwned = isOwned || viaBadge
                 const isLive  = item.status === 'live'
                 const canAfford = balance >= item.cost
-                const stateLabel = isOwned ? 'Owned'
-                                 : !isLive ? 'Soon'
+                const stateLabel = isOwned   ? 'Owned'
+                                 : viaBadge  ? 'Via badge'
+                                 : !isLive   ? 'Soon'
                                  : canAfford ? 'Preview'
                                  : 'Need more'
                 return (
@@ -75,7 +93,7 @@ export default function BreznShopPage() {
                     className="w-full rounded-2xl px-4 py-3 flex items-center gap-3 transition-all active:scale-[0.99] hover:bg-white/[0.02] text-left"
                     style={{
                       background: 'linear-gradient(145deg, #111827 0%, #0d1117 100%)',
-                      border:    `1px solid ${isOwned ? 'rgba(34,197,94,0.30)' : 'rgba(255,255,255,0.06)'}`,
+                      border:    `1px solid ${effectiveOwned ? 'rgba(34,197,94,0.30)' : 'rgba(255,255,255,0.06)'}`,
                     }}
                   >
                     <div className="flex-1 min-w-0">
@@ -93,21 +111,21 @@ export default function BreznShopPage() {
                     <span
                       className="text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full flex-shrink-0"
                       style={{
-                        background: isOwned
+                        background: effectiveOwned
                           ? 'rgba(34,197,94,0.20)'
                           : !isLive
                             ? 'rgba(255,255,255,0.05)'
                             : canAfford
                               ? 'rgba(248,113,113,0.18)'
                               : 'rgba(255,255,255,0.05)',
-                        border: `1px solid ${isOwned
+                        border: `1px solid ${effectiveOwned
                           ? 'rgba(34,197,94,0.40)'
                           : !isLive
                             ? 'rgba(255,255,255,0.10)'
                             : canAfford
                               ? 'rgba(248,113,113,0.40)'
                               : 'rgba(255,255,255,0.10)'}`,
-                        color: isOwned
+                        color: effectiveOwned
                           ? '#86efac'
                           : !isLive
                             ? '#6b7280'

@@ -422,6 +422,12 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
   // shirt over the course of the match.
   const [captainPlayerId, setCaptainPlayerId] = useState(null)
 
+  // Brezn Agent's captain recommendation. Populated by a one-shot call to
+  // the director Lambda (mode='captain-suggestion') when the preview phase
+  // is entered with a complete 11-player XI. The banner renders only when
+  // the user hasn't picked a captain yet.
+  const [captainSuggestion, setCaptainSuggestion] = useState(null)
+
   // Total number of pair-decisions in this draft (set once on load)
   const [totalPairs, setTotalPairs] = useState(0)
 
@@ -639,6 +645,30 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
   const starters     = effectiveMyPicks.filter(p =>  starterIds.has(p.playerId))
   const benchPlayers = effectiveMyPicks.filter(p => !starterIds.has(p.playerId))
   const starterCount = starterIds.size
+
+  // Fire the Brezn Agent's captain recommendation once, when the user
+  // enters the preview phase with a full 11. Reuses the existing director
+  // Lambda via the body-mode multiplexer. Silent failure — the user can
+  // still pick a captain manually, so we don't toast on error.
+  useEffect(() => {
+    if (phase !== 'preview' || captainSuggestion || starters.length !== 11) return
+    const payload = {
+      mode: 'captain-suggestion',
+      starters: starters.map(p => ({
+        playerId:     p.playerId,
+        displayName:  p.displayName,
+        positionCode: p.position,
+        teamRole:     p.teamRole,
+        shirtNumber:  p.shirtNumber,
+      })),
+    }
+    roomsApi.directorTick(roomCode, payload)
+      .then(res => {
+        const dec = res?.decision
+        if (dec?.recommendedPlayerId) setCaptainSuggestion(dec)
+      })
+      .catch(() => { /* silent — user picks manually */ })
+  }, [phase, captainSuggestion, starters.length, roomCode])
 
   // ── Swap mechanic ──────────────────────────────────────────────────────────
   // Any player (starter or bench) can be selected.
@@ -1080,6 +1110,45 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
 
       ) : phase === 'preview' ? (
         <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Brezn Agent's captain recommendation. Only renders while the
+              user hasn't picked yet — once they tap a starter or apply the
+              suggestion the banner disappears. */}
+          {captainSuggestion?.recommendedPlayerId && !captainPlayerId && (() => {
+            const recPlayer = starters.find(p => p.playerId === captainSuggestion.recommendedPlayerId)
+            if (!recPlayer) return null
+            return (
+              <div
+                className="flex-shrink-0 mx-4 mt-2 mb-1 rounded-xl px-3 py-2.5 flex items-center gap-3"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(220,38,38,0.18) 0%, rgba(127,29,29,0.08) 100%)',
+                  border: '1px solid rgba(248,113,113,0.40)',
+                  boxShadow: '0 4px 16px -8px rgba(220,38,38,0.45)',
+                }}
+              >
+                <img src="/brezn-agent.png" alt="" className="w-9 h-9 flex-shrink-0 object-contain" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[9px] font-black tracking-widest uppercase text-amber-300/80 mb-0.5">
+                    Brezn suggests
+                  </p>
+                  <p className="text-white text-xs font-semibold leading-snug truncate">
+                    <span className="text-amber-200">{recPlayer.displayName}</span>
+                    {recPlayer.position ? <span className="text-gray-500"> ({recPlayer.position})</span> : null}
+                    {captainSuggestion.reasoning
+                      ? <span className="text-gray-400"> — {captainSuggestion.reasoning}</span>
+                      : null}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCaptainPlayerId(captainSuggestion.recommendedPlayerId)}
+                  className="flex-shrink-0 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest bg-red-600 hover:bg-red-500 active:bg-red-700 text-white transition-all active:scale-95"
+                >
+                  Apply
+                </button>
+              </div>
+            )
+          })()}
+
           {/* Captain hint — sits above the pitch so the prompt is the first
               thing the user reads when entering preview. */}
           <p className="flex-shrink-0 px-4 pt-2 text-[10px] font-bold tracking-widest uppercase text-amber-300/80 text-center">

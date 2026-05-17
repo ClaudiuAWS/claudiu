@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TIER_COLORS } from '../utils/badges'
 import { TRACKS } from '../utils/tracks'
+import { markSeen } from '../utils/badgesUnseen'
 
 /**
  * BadgePreviewModal — tap-to-preview for any badge on the BadgesPage.
@@ -20,6 +22,16 @@ import { TRACKS } from '../utils/tracks'
  */
 export default function BadgePreviewModal({ preview, onClose }) {
   const navigate = useNavigate()
+
+  // When an EARNED badge is previewed, mark it seen so the glow + "NEW"
+  // pill on the BadgesPage card retire. Idempotent + safe to fire for
+  // unearned badges too (markSeen is no-op-friendly on unowned ids).
+  useEffect(() => {
+    if (preview?.earned && preview?.badge?.id) {
+      markSeen(preview.badge.id)
+    }
+  }, [preview?.earned, preview?.badge?.id])
+
   if (!preview) return null
 
   const { badge, earned, earnedAt } = preview
