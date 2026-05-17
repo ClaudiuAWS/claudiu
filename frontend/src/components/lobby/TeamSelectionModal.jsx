@@ -605,6 +605,15 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
       // pair isn't resolved yet (see render).
       setChosen(chosen_player.playerId)
       draft.pick(draft.currentPairIndex, chosen_player.playerId)
+        .then(out => {
+          // Stale-pair race: the opponent's pick + auto-advance resolved
+          // this pair before our request landed. Backend returns
+          // {ok:true, stale:true} instead of erroring; clear our
+          // optimistic lock so the next pair's UI doesn't keep showing
+          // "you picked X". The WS room_update is the source of truth
+          // for what pair we're on now.
+          if (out?.stale) setChosen(null)
+        })
         .catch(err => {
           toast.error(err.message || 'Pick failed')
           setChosen(null)

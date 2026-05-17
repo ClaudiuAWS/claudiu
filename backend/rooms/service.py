@@ -735,7 +735,18 @@ def submit_draft_pick(room_code: str, user_id: str, pair_index: int, player_id: 
 
         cur_idx = int(draft.get('currentPairIndex', 0))
         if int(pair_index) != cur_idx:
-            raise ValueError('Pick is for a stale pair')
+            # Benign two-user race: the opponent's pick + auto-advance
+            # resolved this pair before our request landed. The next
+            # room_update WS broadcast will sync this user's UI to the
+            # new currentPairIndex. Return a soft acknowledgement with a
+            # `stale` flag so the FE clears its optimistic `chosen` lock
+            # — NOT an exception, which the FE would render as a red
+            # error toast even though the user did nothing wrong.
+            print(
+                f"draft pick: stale pair {pair_index} (current {cur_idx}) "
+                f"for user {user_id} in room {room_code} — acknowledging silently"
+            )
+            return {'ok': True, 'stale': True, 'currentPairIndex': cur_idx}
 
         pairs = draft.get('pairs') or []
         if cur_idx >= len(pairs):
