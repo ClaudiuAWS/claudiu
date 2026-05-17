@@ -7,6 +7,7 @@ import { useAppAudio } from '../hooks/useAppAudio'
 import { useCredits } from '../hooks/useCredits'
 import DiscArtwork from '../components/ui/DiscArtwork'
 import PretzelCoin from '../components/ui/PretzelCoin'
+import DisplayName from '../components/ui/DisplayName'
 import BadgesShowcase from '../components/profile/BadgesShowcase'
 
 const AVATAR_COLORS = [
@@ -183,9 +184,12 @@ export default function ProfilePage() {
           )}
         </div>
 
-        <p className="text-white font-bold text-xl mt-2 truncate max-w-full">
-          {user.displayName || 'Anonymous'}
-        </p>
+        <DisplayName
+          name={user.displayName || 'Anonymous'}
+          userId={user.userId}
+          className="text-white font-bold text-xl mt-2 truncate max-w-full"
+          style={{ display: 'block' }}
+        />
         <p className="text-gray-500 text-sm mt-1 truncate max-w-full">{user.email}</p>
       </div>
 

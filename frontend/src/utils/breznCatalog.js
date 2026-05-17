@@ -152,8 +152,8 @@ export const SPEND_CATALOG = {
         id:     'name-red',
         label:  'Bundesliga red name',
         cost:   1000,
-        detail: 'Your display name shows in #f87171 instead of plain white.',
-        status: 'soon',
+        detail: 'Your display name shows in Bundesliga red wherever you appear.',
+        status: 'live',
       },
       {
         id:     'name-rainbow',
