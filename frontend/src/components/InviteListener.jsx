@@ -31,32 +31,60 @@ export default function InviteListener() {
 
   useWebSocket(user?.userId ? `user#${user.userId}` : null, handleMessage)
 
-  const handleAccept = async () => {
+  const handleAccept = () => {
     if (!pending) return
-    setAccepting(true)
-    try {
-      // roomsApi.join returns the freshly-joined room — use its matchId
-      // as the canonical source. The WS payload may carry a stale or
-      // missing matchId (older rooms, race against room-create), and a
-      // null landing on /lobby/null renders a broken lobby page.
-      const joined = await roomsApi.join(pending.roomCode)
-      const matchId = joined?.room?.matchId || joined?.matchId || pending.matchId
-      if (!matchId) {
-        toast.error("Couldn't find that party — try again from the friend's profile.")
-        setPending(null)
-        return
-      }
-      sessionStorage.setItem('fan_squad_room_code', pending.roomCode)
-      toast.success('Joined the party!')
-      // Tear down the popup BEFORE the route transition so it doesn't
-      // flash visible on the destination page.
+    // Optimistic navigation: the WS payload already carries roomCode +
+    // matchId, so we can flip routes BEFORE the join API resolves. This
+    // makes the perceived experience instant regardless of whatever
+    // screen the user was on (album editor, tracks page, mid-modal —
+    // doesn't matter, the route change unmounts everything).
+    //
+    // The join request fires in parallel; the lobby's useRoom hook
+    // picks up the room state via WS `room_update` once the server
+    // acknowledges, so a slow join just delays "you're in the
+    // members list" — the user never waits to navigate.
+    const { roomCode, matchId: payloadMatchId } = pending
+    if (!roomCode) {
+      toast.error("Invite is missing a room code — ask your friend to resend.")
       setPending(null)
-      navigate(`/lobby/${matchId}`)
-    } catch (err) {
-      toast.error(err.message || 'Failed to join')
-    } finally {
-      setAccepting(false)
+      return
     }
+    if (!payloadMatchId) {
+      // Payload had no matchId (legacy backend / race). Fall back to
+      // the slower-but-safe path: await join, derive matchId from the
+      // response, then navigate.
+      setAccepting(true)
+      ;(async () => {
+        try {
+          const joined = await roomsApi.join(roomCode)
+          const mid = joined?.room?.matchId || joined?.matchId
+          if (!mid) {
+            toast.error("Couldn't find that party — try again from the friend's profile.")
+            return
+          }
+          sessionStorage.setItem('fan_squad_room_code', roomCode)
+          setPending(null)
+          navigate(`/lobby/${mid}`)
+        } catch (err) {
+          toast.error(err.message || 'Failed to join')
+        } finally {
+          setAccepting(false)
+        }
+      })()
+      return
+    }
+
+    // Happy path — instant navigate, join in the background.
+    sessionStorage.setItem('fan_squad_room_code', roomCode)
+    setPending(null)
+    navigate(`/lobby/${payloadMatchId}`)
+
+    roomsApi.join(roomCode).catch(err => {
+      // If the background join fails, surface a toast + bounce back
+      // home so the user isn't stranded on a lobby they're not in.
+      toast.error(err?.message || 'Failed to join — sent you back home.')
+      navigate('/')
+    })
   }
 
   const handleDecline = () => setPending(null)
