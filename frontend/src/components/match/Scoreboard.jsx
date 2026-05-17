@@ -1,10 +1,6 @@
 import { useState } from 'react'
 import { useMatchClock } from '../../hooks/useMatchClock'
-
-const TEAM_LOGOS = {
-  'Bayern Munich': 'https://img.sofascore.com/api/v1/team/2672/image',
-  'Hamburger SV':  'https://img.sofascore.com/api/v1/team/2676/image',
-}
+import { getTeamLogoUrl } from '../../utils/clubLogos'
 
 const STATUS = {
   live:     { label: 'LIVE',      dot: true,  clockColor: 'text-red-400' },
@@ -14,7 +10,7 @@ const STATUS = {
 
 function TeamLogo({ name, size = 36 }) {
   const [failed, setFailed] = useState(false)
-  const url = TEAM_LOGOS[name]
+  const url = getTeamLogoUrl(name)
   const initials = (name || '').split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase()
 
   if (!url || failed) {
