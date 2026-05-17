@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useRoom } from '../hooks/useRoom'
 import { useMatch } from '../hooks/useMatch'
 import { useAuth } from '../hooks/useAuth'
@@ -19,6 +19,7 @@ export default function LobbyPage() {
   const { matchId } = useParams()
   const { user } = useAuth()
   const { match } = useMatch(matchId)
+  const location = useLocation()
   const [mode, setMode] = useState('create')
   const [error, setError] = useState('')
   const [teamModalOpen, setTeamModalOpen] = useState(false)
@@ -36,10 +37,13 @@ export default function LobbyPage() {
     sessionStorage.setItem(flagKey, '1')
     navigate(`/match/${mid}`)
   }
+  // Pass nav-state initialRoom (e.g. from InviteListener accepting an
+  // invite) to useRoom so the loading-spinner gate doesn't fire while
+  // the API restore round-trips. Mirrors MatchPage.jsx:60.
   const { room, loading, createRoom, joinRoom, leaveRoom } = useRoom(
     null,
     user?.userId,
-    null,
+    location.state?.initialRoom || null,
     null,
     handleMatchStarted,
   )
@@ -52,7 +56,9 @@ export default function LobbyPage() {
 
   const isHost   = room?.hostUserId === user?.userId
   const isLive   = match?.status === 'live'
-  const canStart = isHost && (room?.members?.length ?? 0) >= 1 && !starting && !isLive
+  // canStart is no longer surfaced in UI (manual Start button removed),
+  // but the same conditions still gate the auto-start fired from
+  // handleRevealClose, so we leave the predicate inline there.
 
   const draft = useDraft(room, user?.userId)
   const memberCount = room?.members?.length ?? 0
@@ -220,7 +226,12 @@ export default function LobbyPage() {
             </button>
           )}
 
-          {/* Start / Watch live */}
+          {/* Start / Watch live. Manual Start button removed — the match
+              auto-starts on the host's tab when the Draft Reveal Show
+              closes (handleRevealClose -> handleStart), and non-host tabs
+              redirect themselves via the match_started WS broadcast.
+              The speed selector stays so the host can tune the replay
+              pace before everyone locks their XI. */}
           {isLive ? (
             <button
               onClick={() => navigate(`/match/${matchId}`, { state: { initialRoom: room } })}
@@ -248,16 +259,20 @@ export default function LobbyPage() {
                   <option value={30}>30× (~3 min) — stress test</option>
                 </select>
               </div>
-              <button
-                onClick={handleStart}
-                disabled={!canStart}
-                className={`w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
-                  ${canStart
-                    ? 'bg-white text-black hover:bg-gray-100 active:bg-gray-200'
-                    : 'bg-white/10 text-white/30 cursor-not-allowed'}`}
+              <div
+                className="w-full py-3 rounded-2xl text-center text-sm font-semibold tracking-wide"
+                style={{
+                  background: starting
+                    ? 'linear-gradient(135deg, rgba(34,197,94,0.18) 0%, rgba(21,128,61,0.10) 100%)'
+                    : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${starting ? 'rgba(74,222,128,0.45)' : 'rgba(255,255,255,0.08)'}`,
+                  color: starting ? '#86efac' : '#9ca3af',
+                }}
               >
-                {starting ? 'Starting…' : 'Start Match'}
-              </button>
+                {starting
+                  ? 'Kicking off…'
+                  : 'Match auto-starts once both squads lock in'}
+              </div>
             </>
           ) : null}
 
