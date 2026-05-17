@@ -122,7 +122,7 @@ export const SPEND_CATALOG = {
         id:     'reaction-pack',
         label:  'Premium reactions pack',
         cost:   200,
-        detail: 'Six extra reactions (🎉 👑 🤡 🥵 🥶 💯) prepended to your reaction picker.',
+        detail: 'Six extra Bundesliga reactions (🍺 🌭 👑 🐐 🎺 🏆) prepended to your reaction picker.',
         status: 'live',
       },
     ],

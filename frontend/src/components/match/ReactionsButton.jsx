@@ -11,10 +11,11 @@ import { pushCheer } from './ReactionsOverlay'
 const BASE_EMOJIS = ['💀', '🙌', '😱', '🤣', '🔥', '⚽', '🥨']
 
 // Premium 6-emoji pack unlocked by the 'reaction-pack' perk
-// (catalog item 300 brezn). Stacks ABOVE the base column so the
+// (catalog item 200 brezn). Stacks ABOVE the base column so the
 // extras are visible at the top of the open picker — a clear visual
-// "you have the pack" signal.
-const PREMIUM_EMOJIS = ['🎉', '👑', '🤡', '🥵', '🥶', '💯']
+// "you have the pack" signal. Themed around Bundesliga / Bavarian
+// football: beer, wurst, Kaiser crown, GOAT, vuvuzela/trumpet, Pokal.
+const PREMIUM_EMOJIS = ['🍺', '🌭', '👑', '🐐', '🎺', '🏆']
 
 /**
  * Floating reactions button (bottom-right of the match view).

@@ -318,15 +318,250 @@ function DiscPreview({ item }) {
   )
 }
 
-const PERK_GLYPH = {
-  'captain-triple': '🅒',
-  'pick-reroll':    '🔄',
-  'free-hit':       '⇄',
-  'reaction-pack':  '🎉',
+// PerkPreview dispatcher — each match-perk gets its own in-app diagram
+// rather than a generic glyph, so the visual reads consistent with the
+// rest of the app (Bundesliga red, stadium font, position pills).
+function PerkPreview({ item }) {
+  switch (item.id) {
+    case 'captain-triple': return <CaptainTriplePreview />
+    case 'pick-reroll':    return <PickRerollPreview />
+    case 'free-hit':       return <FreeHitPreview />
+    case 'reaction-pack':  return <ReactionsPackPreview />
+    default:               return <GenericPerkPreview />
+  }
 }
 
-function PerkPreview({ item }) {
-  const glyph = PERK_GLYPH[item.id] || '⚡'
+// Inline silhouette icon reused by every player-card mock.
+function PlayerSilhouette({ size = 24, opacity = 0.85 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={`rgba(156,163,175,${opacity})`} aria-hidden="true">
+      <path d="M12 2a5 5 0 110 10 5 5 0 010-10zm0 12c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6z" />
+    </svg>
+  )
+}
+
+function CaptainTriplePreview() {
+  return (
+    <div className="flex flex-col items-center gap-4 py-2">
+      <div className="flex items-center justify-center gap-5">
+        {/* Player card mock — same vocabulary as the lobby PitchView */}
+        <div className="relative" style={{ width: 88, height: 110 }}>
+          <div
+            className="absolute inset-0 rounded-xl"
+            style={{
+              background: 'linear-gradient(160deg, #1a0a0a 0%, #0d0606 100%)',
+              border: '1px solid rgba(220,38,38,0.35)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 16px -8px rgba(220,38,38,0.55)',
+            }}
+          />
+          {/* Position pill */}
+          <div
+            className="absolute top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full font-bold tracking-widest uppercase"
+            style={{
+              fontSize: 8,
+              background: 'rgba(220,38,38,0.30)',
+              color: '#fca5a5',
+              border: '1px solid rgba(248,113,113,0.50)',
+            }}
+          >
+            FWD
+          </div>
+          {/* Avatar silhouette */}
+          <div
+            className="absolute left-1/2 top-7 -translate-x-1/2 w-12 h-12 rounded-full flex items-center justify-center overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, #14181f 0%, #0a0d12 100%)',
+              border: '1px solid rgba(255,255,255,0.10)',
+            }}
+          >
+            <PlayerSilhouette size={26} />
+          </div>
+          {/* CAPTAIN label */}
+          <div
+            className="absolute bottom-1.5 left-1/2 -translate-x-1/2 font-stadium text-white"
+            style={{ fontSize: 9, letterSpacing: '0.18em' }}
+          >
+            CAPTAIN
+          </div>
+          {/* Yellow C disc badge */}
+          <div
+            className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center font-black"
+            style={{
+              fontSize: 12,
+              background: 'linear-gradient(135deg, #fcd34d 0%, #d97706 100%)',
+              border: '1.5px solid #fbbf24',
+              boxShadow: '0 0 8px rgba(252,211,77,0.65)',
+              color: '#1a0606',
+            }}
+          >
+            C
+          </div>
+        </div>
+        {/* ×3 multiplier in stadium font */}
+        <div
+          className="font-stadium leading-none"
+          style={{
+            fontSize: 56,
+            backgroundImage: 'linear-gradient(180deg, #ef4444 0%, #991b1b 100%)',
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            color: 'transparent',
+            WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 8px rgba(220,38,38,0.55)) drop-shadow(0 2px 0 rgba(0,0,0,0.4))',
+            letterSpacing: '0.02em',
+          }}
+        >
+          ×3
+        </div>
+      </div>
+      <p className="text-gray-500 text-[10px] tracking-widest uppercase">Auto-armed next match</p>
+    </div>
+  )
+}
+
+function DraftMiniCard({ ringColor, label, dim }) {
+  return (
+    <div className="relative" style={{ width: 60, height: 76, opacity: dim ? 0.45 : 1 }}>
+      <div
+        className="absolute inset-0 rounded-lg"
+        style={{
+          background: 'linear-gradient(160deg, #14181f 0%, #0a0d12 100%)',
+          border: `1.5px solid ${ringColor}aa`,
+          boxShadow: `0 0 10px -2px ${ringColor}55`,
+        }}
+      />
+      <div
+        className="absolute left-1/2 top-2 -translate-x-1/2 w-8 h-8 rounded-full flex items-center justify-center"
+        style={{
+          background: 'linear-gradient(135deg, #14181f 0%, #0a0d12 100%)',
+          border: '1px solid rgba(255,255,255,0.10)',
+        }}
+      >
+        <PlayerSilhouette size={16} />
+      </div>
+      <div
+        className="absolute bottom-1.5 left-1/2 -translate-x-1/2 font-semibold text-white whitespace-nowrap"
+        style={{ fontSize: 8 }}
+      >
+        {label}
+      </div>
+    </div>
+  )
+}
+
+function PickRerollPreview() {
+  return (
+    <div className="flex flex-col items-center gap-4 py-2">
+      <div className="flex items-center justify-center gap-3">
+        <DraftMiniCard ringColor="#60a5fa" label="Player A" dim />
+        <div
+          className="text-amber-300 leading-none"
+          style={{ fontSize: 26, filter: 'drop-shadow(0 0 6px rgba(252,211,77,0.6))' }}
+        >
+          ⟲
+        </div>
+        <DraftMiniCard ringColor="#60a5fa" label="Player B" />
+      </div>
+      <p className="text-gray-500 text-[10px] tracking-widest uppercase text-center">
+        Re-roll one draft pair
+      </p>
+    </div>
+  )
+}
+
+function PlayerSwapTile({ label, pos, state }) {
+  const isIn = state === 'in'
+  return (
+    <div
+      className="flex items-center gap-3 px-3 py-2 rounded-xl"
+      style={{
+        width: 220,
+        background: isIn
+          ? 'linear-gradient(135deg, rgba(34,197,94,0.18) 0%, rgba(21,128,61,0.10) 100%)'
+          : 'linear-gradient(135deg, rgba(220,38,38,0.12) 0%, rgba(127,29,29,0.06) 100%)',
+        border: `1px solid ${isIn ? 'rgba(74,222,128,0.45)' : 'rgba(248,113,113,0.30)'}`,
+        opacity: isIn ? 1 : 0.7,
+      }}
+    >
+      <div
+        className="px-2 py-0.5 rounded-full font-bold tracking-widest uppercase"
+        style={{
+          fontSize: 8,
+          background: 'rgba(220,38,38,0.30)',
+          color: '#fca5a5',
+          border: '1px solid rgba(248,113,113,0.50)',
+        }}
+      >
+        {pos}
+      </div>
+      <div className="flex-1 text-white text-xs font-semibold truncate">{label}</div>
+      <div
+        className="font-bold tracking-widest"
+        style={{ fontSize: 9, color: isIn ? '#86efac' : '#fca5a5' }}
+      >
+        {isIn ? 'IN' : 'OUT'}
+      </div>
+    </div>
+  )
+}
+
+function FreeHitPreview() {
+  return (
+    <div className="flex flex-col items-center gap-2 py-2">
+      <PlayerSwapTile label="Lewandowski" pos="FWD" state="out" />
+      <div
+        className="text-amber-300 leading-none"
+        style={{ fontSize: 24, filter: 'drop-shadow(0 0 6px rgba(252,211,77,0.6))' }}
+      >
+        ⇅
+      </div>
+      <PlayerSwapTile label="Müller" pos="FWD" state="in" />
+      <p className="text-gray-500 text-[10px] tracking-widest uppercase text-center mt-2">
+        Swap one player after squad lock
+      </p>
+    </div>
+  )
+}
+
+function ReactionsPackPreview() {
+  const emojis = ['🍺', '🌭', '👑', '🐐', '🎺', '🏆']
+  return (
+    <div className="flex flex-col items-center gap-1.5 py-2">
+      <div className="flex flex-col gap-1.5">
+        {emojis.map(e => (
+          <div
+            key={e}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-xl"
+            style={{
+              background: 'linear-gradient(145deg, #14181f 0%, #0a0d12 100%)',
+              border: '1px solid rgba(255,255,255,0.10)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 4px 12px -4px rgba(0,0,0,0.5)',
+            }}
+            aria-hidden="true"
+          >
+            {e}
+          </div>
+        ))}
+      </div>
+      <div
+        className="w-12 h-12 rounded-full flex items-center justify-center text-xl mt-1"
+        style={{
+          background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+          border: '1px solid rgba(248,113,113,0.55)',
+          boxShadow: '0 8px 24px -8px rgba(220,38,38,0.55), inset 0 1px 0 rgba(255,255,255,0.20)',
+        }}
+        aria-hidden="true"
+      >
+        🥨
+      </div>
+      <p className="text-gray-500 text-[10px] tracking-widest uppercase text-center mt-1">
+        Stacked above the base set
+      </p>
+    </div>
+  )
+}
+
+function GenericPerkPreview() {
   return (
     <div className="flex flex-col items-center gap-4 py-2">
       <div
@@ -338,11 +573,9 @@ function PerkPreview({ item }) {
         }}
         aria-hidden="true"
       >
-        {glyph}
+        ⚡
       </div>
-      <p className="text-gray-500 text-[10px] tracking-widest uppercase">
-        Auto-armed next match
-      </p>
+      <p className="text-gray-500 text-[10px] tracking-widest uppercase">Auto-armed next match</p>
     </div>
   )
 }
