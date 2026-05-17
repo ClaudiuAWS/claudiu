@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDraft } from '../hooks/useDraft'
 import { roomsApi } from '../services/api'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
+import ClubBadge from '../components/match/ClubBadge'
 import RoomCodeDisplay from '../components/lobby/RoomCodeDisplay'
 import MembersList from '../components/lobby/MembersList'
 import CreateRoom from '../components/lobby/CreateRoom'
@@ -157,8 +158,11 @@ export default function LobbyPage() {
           }}
         >
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/35 to-transparent pointer-events-none" />
-          <span className="text-white font-semibold text-sm flex-1">{match.homeTeamName}</span>
-          <div className="px-4 text-center">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <ClubBadge teamName={match.homeTeamName} size={36} />
+            <span className="text-white font-semibold text-sm truncate">{match.homeTeamName || 'Home'}</span>
+          </div>
+          <div className="px-4 text-center flex-shrink-0">
             {match.status === 'upcoming'
               ? <span className="text-gray-600 text-[10px] font-bold tracking-widest uppercase">Upcoming</span>
               : <span className="text-white font-stadium text-2xl leading-none tabular-nums" style={{ letterSpacing: '0.05em' }}>
@@ -166,7 +170,10 @@ export default function LobbyPage() {
                 </span>
             }
           </div>
-          <span className="text-white font-semibold text-sm flex-1 text-right">{match.awayTeamName}</span>
+          <div className="flex items-center gap-2 flex-1 min-w-0 flex-row-reverse">
+            <ClubBadge teamName={match.awayTeamName} size={36} />
+            <span className="text-white font-semibold text-sm truncate text-right">{match.awayTeamName || 'Away'}</span>
+          </div>
         </div>
       )}
 
