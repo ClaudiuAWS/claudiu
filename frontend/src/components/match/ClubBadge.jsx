@@ -1,10 +1,13 @@
+import { useState } from 'react'
+import { getTeamLogoUrl } from '../../utils/clubLogos'
+
 /**
- * ClubBadge — stylized inline-SVG crest for a Bundesliga club.
+ * ClubBadge — real Bundesliga club crest with a stylized SVG fallback.
  *
- * Avoids external assets (no copyright risk, no broken <img> fallbacks)
- * and renders consistently at any size. Matches the brand vocabulary of
- * the rest of the app: stadium font abbreviation, club's primary color
- * as the outer ring, white inner field, subtle metallic highlight.
+ * Primary path: render an <img> of the real club crest from the
+ * shared `clubLogos` map (SofaScore CDN URLs). Falls back to a
+ * stylized inline-SVG crest (per-club color + abbreviation) when the
+ * team isn't in the logo map OR the CDN request fails.
  *
  * Lookup is by case-insensitive substring on `teamName`, so loader-side
  * variations like "FC Bayern München", "Bayern Munich", or
@@ -64,11 +67,38 @@ function lookup(teamName) {
 }
 
 export default function ClubBadge({ teamName, size = 48, className = '' }) {
+  const [imgFailed, setImgFailed] = useState(false)
   const club      = lookup(teamName)
   const abbr      = club?.abbr ?? (teamName || '?').replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase()
   const primary   = club?.primary   ?? '#6b7280'  // neutral grey-500 fallback
   const secondary = club?.secondary ?? '#1f2937'  // gray-800 fallback
   const safeName  = teamName || 'Unknown club'
+  const logoUrl   = getTeamLogoUrl(teamName)
+
+  // Primary path: real club crest from SofaScore CDN. On CDN failure
+  // (network error, blocked region, deprecated team ID) the <img>'s
+  // onError flips imgFailed and we drop down to the stylized SVG.
+  if (logoUrl && !imgFailed) {
+    return (
+      <img
+        src={logoUrl}
+        alt={`${safeName} crest`}
+        referrerPolicy="no-referrer"
+        className={className}
+        width={size}
+        height={size}
+        onError={() => setImgFailed(true)}
+        style={{
+          flexShrink: 0,
+          objectFit: 'contain',
+          // Subtle drop shadow so the crest doesn't blend into the
+          // dark card background. Matches the live-match Scoreboard's
+          // <TeamLogo> visual weight.
+          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))',
+        }}
+      />
+    )
+  }
 
   return (
     <svg
