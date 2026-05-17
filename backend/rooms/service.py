@@ -174,7 +174,18 @@ def send_message(room_code: str, user_id: str, display_name: str, text: str) -> 
 # Free-form floating reactions. Allow-list keeps the floater overlay
 # focused, prevents arbitrary user-controlled strings from being broadcast
 # to the whole party, and gives the design a defined palette.
-CHEER_EMOJI_ALLOWLIST = {'⚽', '🔥', '🤣', '😱', '🙌', '💀'}
+# Base 7 + premium German football pack (unlocked via the reaction-pack
+# shop perk). Keep in lockstep with BASE_EMOJIS + PREMIUM_EMOJIS in
+# frontend/src/components/match/ReactionsButton.jsx — sender's optimistic
+# floater fires regardless, but cross-user fanout requires backend
+# accept here (else broadcast raises "Unsupported emoji" and the WS
+# payload never goes out).
+CHEER_EMOJI_ALLOWLIST = {
+    # Base — everyone has these
+    '⚽', '🔥', '🤣', '😱', '🙌', '💀', '🥨',
+    # Premium reactions pack (German football themed)
+    '🍺', '🌭', '👑', '🐐', '🎺', '🏆',
+}
 
 
 def set_captain(room_code: str, user_id: str, player_id: str) -> dict:

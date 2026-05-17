@@ -270,18 +270,27 @@ export function PlayerStatsPopup({ player, isOpen, onClose, events = [], htStore
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 flex flex-col rounded-2xl overflow-hidden shadow-2xl"
-        style={{
-          background: 'linear-gradient(180deg, #0f1622 0%, #0a0f1a 100%)',
-          border: `1px solid ${teamColor}55`,
-          boxShadow: `0 30px 80px -20px rgba(0,0,0,0.75), 0 0 0 1px ${teamRing}`,
-          maxWidth: 440,
-          width: 'calc(100% - 32px)',
-          maxHeight: 'calc(100dvh - 160px)',
-          animation: 'playerPopupIn 320ms cubic-bezier(.22,1.4,.36,1)',
-        }}
+      {/* Modal — wrapped in a fixed flexbox so centering is owned by the
+          parent layout and NOT by a transform that fights the enter
+          animation. Previously the popup used `left-1/2 top-1/2
+          -translate-x-1/2 -translate-y-1/2` AND an animation that
+          re-set `transform` — the first paint flashed the popup
+          slightly off-center on the left before snapping into place. */}
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none px-4"
       >
+        <div
+          className="flex flex-col rounded-2xl overflow-hidden shadow-2xl pointer-events-auto"
+          style={{
+            background: 'linear-gradient(180deg, #0f1622 0%, #0a0f1a 100%)',
+            border: `1px solid ${teamColor}55`,
+            boxShadow: `0 30px 80px -20px rgba(0,0,0,0.75), 0 0 0 1px ${teamRing}`,
+            maxWidth: 440,
+            width: '100%',
+            maxHeight: 'calc(100dvh - 160px)',
+            animation: 'playerPopupIn 320ms cubic-bezier(.22,1.4,.36,1) forwards',
+          }}
+        >
         {/* ── FIFA-style header ── */}
         <div
           className="flex-shrink-0 relative overflow-hidden"
@@ -434,14 +443,18 @@ export function PlayerStatsPopup({ player, isOpen, onClose, events = [], htStore
             <ScoreChip label="RED"   sub="−3" tone="rose" />
           </div>
         </div>
+        </div>  {/* /flexbox center wrapper */}
       </div>
 
       {/* Inline keyframes — keeps the component self-contained, matches
-          the convention used by ScoreToast / MatchEndCelebration. */}
+          the convention used by ScoreToast / MatchEndCelebration.
+          The popup's enter transform is JUST a small Y nudge + scale —
+          centering is owned by the flexbox parent above, so this no
+          longer fights the layout. */}
       <style>{`
         @keyframes playerPopupIn {
-          0%   { opacity: 0; transform: translate(-50%, calc(-50% + 14px)) scale(0.95); }
-          100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+          0%   { opacity: 0; transform: translateY(14px) scale(0.95); }
+          100% { opacity: 1; transform: translateY(0)    scale(1); }
         }
         @keyframes playerHeaderSweep {
           0%   { transform: translateX(-30%); }

@@ -28,19 +28,23 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT_PATH = ROOT / "frontend" / "public" / "brezn-agent.png"
 
 PROMPT = (
-    "Cartoon mascot character of a friendly golden-brown Bavarian pretzel "
-    "come to life: the pretzel rope forms the body, with two large round "
-    "expressive cartoon eyes peeking out of the upper pretzel loops, a small "
-    "smiling mouth at the bottom curve, two small white-gloved cartoon hands "
-    "sticking out from the sides waving hello. Funny, kid-cartoon sticker "
-    "style, NOT photorealistic. Bold dark-brown outline around the entire "
-    "rope. Warm orange-brown bread color with darker shadow patches and "
-    "lighter golden highlights, small white salt crystals sprinkled across "
-    "the body. Pure white background with generous margin. Centered, "
-    "full-body, looking forward, square image, the character clearly visible."
+    "A classic Bavarian pretzel mascot, shaped EXACTLY like a traditional "
+    "pretzel knot: two upper loops curving inward to form a heart-shaped "
+    "silhouette, with the rope twisting once at the bottom and tucking under "
+    "itself in the middle, creating three visible loop openings (top-left, "
+    "top-right, bottom-center). The overall silhouette must read as an "
+    "unmistakable pretzel. Warm orange-brown baked-bread color with bold "
+    "dark-brown outline around the rope, darker shadow tones inside the "
+    "rope curves, lighter golden highlights on the upper surface. White "
+    "salt crystals sprinkled across the body. Two large round cartoon "
+    "eyes peeking out of the two upper loops (one eye per loop). A small "
+    "smiling mouth at the bottom curve of the pretzel rope. Pure white "
+    "background, generous margin around the pretzel, square image, "
+    "centered, looking forward, funny kid-cartoon sticker style, NOT "
+    "photorealistic."
 )
 
-SEEDS = [42, 91, 137, 211, 303]  # try multiple seeds if the first attempts fail
+SEEDS = [501, 514, 527, 543, 561]  # new seeds (501-561) so reruns don't collide with prior batches
 MIN_BYTES = 5000
 COLOUR_DISTANCE_THRESHOLD = 80
 LOW_SAT_MAX_DELTA = 30
