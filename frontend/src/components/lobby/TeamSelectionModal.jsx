@@ -1188,7 +1188,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
                   boxShadow: '0 4px 16px -8px rgba(220,38,38,0.45)',
                 }}
               >
-                <img src="/brezn-agent.png" alt="" className="w-9 h-9 flex-shrink-0 object-contain" />
+                <img src="/brezn-agent.png?v=2" alt="" className="w-9 h-9 flex-shrink-0 object-contain" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[9px] font-black tracking-widest uppercase text-amber-300/80 mb-0.5">
                     Brezn suggests

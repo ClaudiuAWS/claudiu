@@ -1,21 +1,49 @@
-# Brezn — A Real Time Social Match Experience
+# Brezn — Fan Squad: A Real-Time Social Match Experience
 
-Our submission for the **AWS World Sports Innovation Cup 2026**, track:
-**DFL × Adidas — Beyond the 90 minutes**.
+Our submission for the **AWS World Sports Innovation Cup 2026 — Challenge: Fan Squad** (Level 300).
 
-A Bundesliga-themed second-screen app where you draft squads with a friend,
-watch matches together in real time with WebSocket-synced state, play AI-
-driven mini-games triggered by what's happening on the pitch, and chase a
-brezn-credit economy that keeps the loop running between matches.
+A Bundesliga-themed second-screen app where 2+ fans draft squads against each
+other, watch matches together with WebSocket-synced state, react with
+German football emojis, and play AI-driven mini-games triggered by what's
+happening on the pitch — all with a brezn-credit economy that keeps the
+loop running between matches.
 
 📄 [**Submission cover sheet → `docs/submission.md`**](docs/submission.md)
+📦 [**How to package the zip → `submission/README.md`**](submission/README.md)
 🏗️ [**Architecture deep-dive → `docs/architecture.md`**](docs/architecture.md)
 ♿ [**Accessibility audit → `docs/accessibility.md`**](docs/accessibility.md)
+📰 [**PRFAQ → `submission/prfaq.md`**](submission/prfaq.md)
+🎬 [**Executive summary (5 slides) → `submission/executive_summary.md`**](submission/executive_summary.md)
 
-> _Live URL + demo video link land here before submission._
+> _Live CloudFront URL + demo video link land here before final submission._
 
-The rest of this README is a feature-by-feature tour. For the AWS stack +
-service map, see [`docs/architecture.md`](docs/architecture.md).
+---
+
+## Quick Start (for judges)
+
+The fastest path to seeing Brezn in action:
+
+1. **Open the live app:** *(CloudFront URL — fill in before submission)*
+2. **Sign up** with any email — Cognito sends a verification code, enter it on the confirm page.
+3. **Open a second browser tab** (or incognito window) and sign up as a second user.
+4. **Add each other as friends:** Friends tab → enter the other user's email → send invite → accept.
+5. **Create a party:** From the Home / Lobby tab → "Create a Party" → choose a match → invite your friend.
+6. **Run a match:** Once both members are in the lobby, both Ready Up → coordinated draft begins → pick your squad pair-by-pair (15s timer) → confirm your captain on the preview screen → "Lock In Squad" → match auto-starts when both squads are locked.
+7. **Enjoy the second-screen experience:** AI commentary fires on every event, mini-games trigger on offsides / shots / penalties / halftime, reactions overlay synced across all members, badges + credits awarded on match end.
+
+### Local dev (optional)
+
+```bash
+git clone https://github.com/ClaudiuAWS/claudiu
+git checkout claude/inspiring-solomon-4e2a0e   # or main after merge
+cd frontend
+npm install
+npm run dev   # http://localhost:5173
+```
+
+Frontend points at the deployed AWS backend by default (CloudFront-served `index.html` has the API + WebSocket URLs baked in via Vite env vars). For full local backend, see `docs/architecture.md` — each Lambda has its own CloudFormation template under `infra/compute/` and deploys via the matching `.github/workflows/deploy-*.yml`.
+
+The rest of this README is a feature-by-feature tour. For the AWS stack + service map, see [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
