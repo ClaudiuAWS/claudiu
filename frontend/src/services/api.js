@@ -87,6 +87,8 @@ export const leaderboardApi = {
 }
 
 export const creditsApi = {
-  balance: () => request('/credits'),
-  friends: () => request('/credits/friends'),
+  balance:   ()       => request('/credits'),
+  friends:   ()       => request('/credits/friends'),
+  inventory: ()       => request('/credits/inventory'),
+  purchase:  (itemId) => request('/credits/purchase', { method: 'POST', body: { itemId } }),
 }

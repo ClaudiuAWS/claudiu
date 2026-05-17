@@ -6,6 +6,7 @@ on:
                 paths:
                         - "backend/credits/**"
                         - "backend/shared/credits.py"
+                        - "backend/shared/breznCatalog.py"
                         - "infra/storage/dynamodb-credits.yml"
                         - "infra/compute/lambdas-credits.yml"
 
@@ -58,7 +59,8 @@ jobs:
                                   # colliding with the local handler module (mirrors what the
                                   # badges Lambda does).
                                   cp ../shared/credits.py ./credits_shared.py
-                                  zip function.zip handler.py credits_shared.py
+                                  cp ../shared/breznCatalog.py ./breznCatalog.py
+                                  zip function.zip handler.py credits_shared.py breznCatalog.py
                                   aws lambda update-function-code \
                                     --function-name claudiu-credits \
                                     --zip-file fileb://function.zip

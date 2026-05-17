@@ -77,14 +77,17 @@ export const EARNING_HINTS = [
 // TIER_PRICES in utils/badges.js. Listed here so the shop can group it
 // alongside cosmetics + perks in one place.
 export const SPEND_CATALOG = {
-  // Already-shipped sink: pay to claim a badge you didn't earn through play.
+  // Pay to claim a badge you didn't earn through play. The legacy
+  // TIER_PRICES path on BadgesPage is informational only; the actual
+  // purchase flow that funnels through useInventory.purchase() is
+  // wired item-by-item in subsequent commits.
   badges: {
     title:   'Badges',
     summary: "Skip the grind — buy a badge you didn't earn.",
     items:   [
-      { id: 'badge-bronze', label: 'Any bronze badge', cost: 200,  status: 'live' },
-      { id: 'badge-silver', label: 'Any silver badge', cost: 500,  status: 'live' },
-      { id: 'badge-gold',   label: 'Any gold badge',   cost: 1500, status: 'live' },
+      { id: 'badge-bronze', label: 'Any bronze badge', cost: 200,  status: 'soon' },
+      { id: 'badge-silver', label: 'Any silver badge', cost: 500,  status: 'soon' },
+      { id: 'badge-gold',   label: 'Any gold badge',   cost: 1500, status: 'soon' },
     ],
   },
 

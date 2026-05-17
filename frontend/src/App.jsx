@@ -20,10 +20,12 @@ import BadgesPage from './pages/BadgesPage'
 import HistoryPage from './pages/HistoryPage'
 import LeaderboardPage from './pages/LeaderboardPage'
 import TracksPage from './pages/TracksPage'
+import BreznShopPage from './pages/BreznShopPage'
 import InvitePage from './pages/InvitePage'
 import InviteListener from './components/InviteListener'
 import BadgeListener from './components/BadgeListener'
 import PendingInviteConsumer from './components/PendingInviteConsumer'
+import { InventoryProvider } from './hooks/useInventory'
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null } }
@@ -57,13 +59,19 @@ const Layout = ({ children }) => (
   // post-auth area. The login/register screens have their own ambient
   // audio via `useBgAmbientAudio` and are outside Layout, so the two
   // sources never play simultaneously.
+  //
+  // InventoryProvider sits inside Layout (post-auth only) so the shop +
+  // cosmetic consumers (frame around avatars, name colour, premium
+  // disc gating) all share one fetch.
   <AppAudioProvider>
-    <PendingInviteConsumer />
-    <TopNav />
-    <div className="pt-16 pb-24">
-      {children}
-    </div>
-    <BottomNav />
+    <InventoryProvider>
+      <PendingInviteConsumer />
+      <TopNav />
+      <div className="pt-16 pb-24">
+        {children}
+      </div>
+      <BottomNav />
+    </InventoryProvider>
   </AppAudioProvider>
 )
 
@@ -116,6 +124,9 @@ export default function App() {
           }/>
           <Route path="/tracks" element={
             <ProtectedRoute><Layout><TracksPage /></Layout></ProtectedRoute>
+          }/>
+          <Route path="/shop" element={
+            <ProtectedRoute><Layout><BreznShopPage /></Layout></ProtectedRoute>
           }/>
 
           {/* Invite link — public route. Decides whether to auto-friend
