@@ -22,29 +22,39 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_PATH = ROOT / "frontend" / "public" / "brezn-agent.png"
 
 PROMPT = (
-    "A classic Bavarian pretzel mascot, shaped EXACTLY like a traditional "
-    "pretzel knot: two upper loops curving inward to form a heart-shaped "
-    "silhouette, with the rope twisting once at the bottom and tucking under "
-    "itself in the middle, creating three visible loop openings (top-left, "
-    "top-right, bottom-center). The overall silhouette must read as an "
-    "unmistakable pretzel. Warm orange-brown baked-bread color with bold "
-    "dark-brown outline around the rope, darker shadow tones inside the "
-    "rope curves, lighter golden highlights on the upper surface. White "
-    "salt crystals sprinkled across the body. Two large round cartoon "
-    "eyes peeking out of the two upper loops (one eye per loop). A small "
-    "smiling mouth at the bottom curve of the pretzel rope. Pure white "
-    "background, generous margin around the pretzel, square image, "
-    "centered, looking forward, funny kid-cartoon sticker style, NOT "
-    "photorealistic."
+    "A friendly cartoon mascot of a traditional Bavarian pretzel, drawn with "
+    "the EXACT anatomy of a classic German pretzel knot. SHAPE: the pretzel "
+    "rope forms a HEART-SHAPED silhouette with TWO LARGE UPPER LOOPS — one "
+    "on the LEFT, one on the RIGHT — each curving outward from the top, "
+    "then inward toward the centre. The two rope ends come down from the "
+    "upper loops, CROSS OVER EACH OTHER TWICE in the centre to form a small "
+    "X-shaped knot. After the double crossing, the two rope ends angle "
+    "OUTWARD AND DOWN, terminating in TWO SLIGHTLY ROUNDED TAIL TIPS at the "
+    "bottom-left and bottom-right of the figure. OPENINGS: there must be "
+    "THREE clearly visible openings in the silhouette — a large upper-LEFT "
+    "loop, a large upper-RIGHT loop, and a SMALL DIAMOND-SHAPED opening in "
+    "the very centre where the rope crosses itself. COLOR: warm orange-brown "
+    "baked-bread body, bold DARK-BROWN comic-book outline around every edge "
+    "of the rope, darker brown shadow tones along the bottom of each rope "
+    "segment, lighter golden highlights along the top. TEXTURE: WHITE SALT "
+    "CRYSTALS shaped like small white teardrops or seeds, sprinkled "
+    "generously across the surface. CHARACTER: two large round cartoon eyes "
+    "peeking out from the two UPPER LOOPS — one eye centered inside the "
+    "LEFT upper loop's opening, one eye centered inside the RIGHT upper "
+    "loop's opening. A small smiling mouth at the bottom centre of the "
+    "figure, between the two tail tips. STYLE: pure white background, "
+    "generous margin around the pretzel, square 1:1 image, centred, facing "
+    "forward, funny kid-cartoon sticker style, NOT photorealistic, NOT "
+    "abstract."
 )
 
-SEEDS = [501, 514, 527, 543, 561]  # new seeds (501-561) so reruns don't collide with prior batches
+SEEDS = [635, 642, 651, 663, 670]  # second retry — first batch missed the X-knot + eyes
 MIN_BYTES = 5000
 COLOUR_DISTANCE_THRESHOLD = 80
 LOW_SAT_MAX_DELTA = 30
@@ -151,10 +161,65 @@ def main() -> int:
     img = Image.open(io.BytesIO(data))
     keyed = chromakey(img)
 
+    print("Painting eyes ...")
+    keyed = draw_eyes(keyed)
+
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     keyed.save(OUT_PATH, "PNG", optimize=True)
     print(f"Saved: {OUT_PATH}  ({OUT_PATH.stat().st_size} B)")
     return 0
+
+
+# ─── Eye-painting step ───────────────────────────────────────────────────
+# Pollinations FLUX traded "eyes" for "shape accuracy" when given an
+# anatomy-heavy prompt — it skipped the cartoon-eye instructions. So we
+# paint the eyes deterministically via PIL AFTER chroma-key (which turns
+# the white bg + interior of the upper loops transparent). The eyes
+# survive because they're drawn at alpha=255 over the transparent
+# regions and no second chroma-key pass runs.
+#
+# Coordinates are tuned for the current seed-635 pretzel (768x768). If
+# we regen with a different seed, the loop positions shift and these
+# need re-tuning. The alpha-channel analysis snippet that found these
+# values lives in the commit history.
+
+EYE_RADIUS       = 38
+EYE_OUTLINE_W    = 3
+EYE_OUTLINE      = (26, 10, 5, 255)    # dark brown matching the pretzel edge
+SCLERA           = (255, 255, 255, 255)
+PUPIL_RADIUS     = 16
+PUPIL            = (26, 10, 5, 255)
+HIGHLIGHT_RADIUS = 6
+HIGHLIGHT        = (255, 255, 255, 255)
+
+LEFT_EYE_CENTER  = (277, 274)
+RIGHT_EYE_CENTER = (500, 228)
+
+
+def draw_eyes(img: Image.Image) -> Image.Image:
+    """Paint two cartoon eyes inside the upper loops of the pretzel."""
+    out = img.convert("RGBA").copy()
+    draw = ImageDraw.Draw(out)
+    for cx, cy in (LEFT_EYE_CENTER, RIGHT_EYE_CENTER):
+        # Sclera (white round with dark outline)
+        draw.ellipse(
+            [(cx - EYE_RADIUS, cy - EYE_RADIUS), (cx + EYE_RADIUS, cy + EYE_RADIUS)],
+            fill=SCLERA, outline=EYE_OUTLINE, width=EYE_OUTLINE_W,
+        )
+        # Pupil slightly down-right of centre for a "looking forward" feel
+        pcx, pcy = cx + 5, cy + 6
+        draw.ellipse(
+            [(pcx - PUPIL_RADIUS, pcy - PUPIL_RADIUS), (pcx + PUPIL_RADIUS, pcy + PUPIL_RADIUS)],
+            fill=PUPIL,
+        )
+        # Highlight dot upper-left of pupil — cartoon polish
+        hcx, hcy = pcx - 5, pcy - 5
+        draw.ellipse(
+            [(hcx - HIGHLIGHT_RADIUS, hcy - HIGHLIGHT_RADIUS),
+             (hcx + HIGHLIGHT_RADIUS, hcy + HIGHLIGHT_RADIUS)],
+            fill=HIGHLIGHT,
+        )
+    return out
 
 
 if __name__ == "__main__":

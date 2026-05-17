@@ -93,7 +93,7 @@ function CommentaryCard({ entry }) {
           style={{ animation: 'directorRingPulse 1.8s ease-out 1' }}
         >
           <img
-            src="/brezn-agent.png?v=2"
+            src="/brezn-agent.png?v=4"
             alt=""
             aria-hidden="true"
             className="w-7 h-7 object-contain"
