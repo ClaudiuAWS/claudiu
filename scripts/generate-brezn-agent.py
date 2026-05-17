@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_PATH = ROOT / "frontend" / "public" / "brezn-agent.png"
@@ -161,10 +161,65 @@ def main() -> int:
     img = Image.open(io.BytesIO(data))
     keyed = chromakey(img)
 
+    print("Painting eyes ...")
+    keyed = draw_eyes(keyed)
+
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     keyed.save(OUT_PATH, "PNG", optimize=True)
     print(f"Saved: {OUT_PATH}  ({OUT_PATH.stat().st_size} B)")
     return 0
+
+
+# ─── Eye-painting step ───────────────────────────────────────────────────
+# Pollinations FLUX traded "eyes" for "shape accuracy" when given an
+# anatomy-heavy prompt — it skipped the cartoon-eye instructions. So we
+# paint the eyes deterministically via PIL AFTER chroma-key (which turns
+# the white bg + interior of the upper loops transparent). The eyes
+# survive because they're drawn at alpha=255 over the transparent
+# regions and no second chroma-key pass runs.
+#
+# Coordinates are tuned for the current seed-635 pretzel (768x768). If
+# we regen with a different seed, the loop positions shift and these
+# need re-tuning. The alpha-channel analysis snippet that found these
+# values lives in the commit history.
+
+EYE_RADIUS       = 38
+EYE_OUTLINE_W    = 3
+EYE_OUTLINE      = (26, 10, 5, 255)    # dark brown matching the pretzel edge
+SCLERA           = (255, 255, 255, 255)
+PUPIL_RADIUS     = 16
+PUPIL            = (26, 10, 5, 255)
+HIGHLIGHT_RADIUS = 6
+HIGHLIGHT        = (255, 255, 255, 255)
+
+LEFT_EYE_CENTER  = (277, 274)
+RIGHT_EYE_CENTER = (500, 228)
+
+
+def draw_eyes(img: Image.Image) -> Image.Image:
+    """Paint two cartoon eyes inside the upper loops of the pretzel."""
+    out = img.convert("RGBA").copy()
+    draw = ImageDraw.Draw(out)
+    for cx, cy in (LEFT_EYE_CENTER, RIGHT_EYE_CENTER):
+        # Sclera (white round with dark outline)
+        draw.ellipse(
+            [(cx - EYE_RADIUS, cy - EYE_RADIUS), (cx + EYE_RADIUS, cy + EYE_RADIUS)],
+            fill=SCLERA, outline=EYE_OUTLINE, width=EYE_OUTLINE_W,
+        )
+        # Pupil slightly down-right of centre for a "looking forward" feel
+        pcx, pcy = cx + 5, cy + 6
+        draw.ellipse(
+            [(pcx - PUPIL_RADIUS, pcy - PUPIL_RADIUS), (pcx + PUPIL_RADIUS, pcy + PUPIL_RADIUS)],
+            fill=PUPIL,
+        )
+        # Highlight dot upper-left of pupil — cartoon polish
+        hcx, hcy = pcx - 5, pcy - 5
+        draw.ellipse(
+            [(hcx - HIGHLIGHT_RADIUS, hcy - HIGHLIGHT_RADIUS),
+             (hcx + HIGHLIGHT_RADIUS, hcy + HIGHLIGHT_RADIUS)],
+            fill=HIGHLIGHT,
+        )
+    return out
 
 
 if __name__ == "__main__":
