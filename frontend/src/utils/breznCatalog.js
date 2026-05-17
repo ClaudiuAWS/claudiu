@@ -145,8 +145,8 @@ export const SPEND_CATALOG = {
         id:     'frame-pretzel',
         label:  'Pretzel avatar frame',
         cost:   2000,
-        detail: 'The signature brezn ring — same shape that wraps the captain badge.',
-        status: 'soon',
+        detail: 'The signature brezn ring — pulsing amber/gold around your avatar.',
+        status: 'live',
       },
       {
         id:     'name-red',
