@@ -653,6 +653,14 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
             'totalPairs':        len(pairs),
             'tiebreakWinsByUser': {mid: 0 for mid in member_ids},
             'startedAt':         int(time.time() * 1000),
+            # Per-pick timer: clients render a countdown from pairStartedAtMs,
+            # and auto-pick a random card from the current pair when the
+            # deadline passes. pickTimerMs lives on the draft state so we can
+            # bump the value server-side without touching the FE. The stamp
+            # is refreshed every time currentPairIndex advances (see the
+            # resolve branch in submit_draft_pick).
+            'pairStartedAtMs':   int(time.time() * 1000),
+            'pickTimerMs':       15000,
         }
         if members_changed:
             rooms_table.update_item(
@@ -825,6 +833,11 @@ def submit_draft_pick(room_code: str, user_id: str, pair_index: int, player_id: 
                 'pendingChoices':   {},
                 'picks':            picks_per_user,
                 'status':           new_status,
+                # Reset the per-pick deadline so the NEXT pair's countdown
+                # starts from "now" on every client. (No-op cosmetically
+                # when this is the last pair — the FE doesn't render the
+                # countdown after draft_complete.)
+                'pairStartedAtMs':  int(time.time() * 1000),
                 **({'completedAt': int(time.time() * 1000)} if is_last else {}),
             }
             is_waiting = False
