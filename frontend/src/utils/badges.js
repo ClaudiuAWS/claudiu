@@ -322,10 +322,15 @@ export const TIER_COLORS = {
 // (positive fantasy delta × 2). A bronze badge ≈ 10 goals of scoring;
 // gold ≈ 75 goals. Earning the badge in-match is always free; this is
 // the alternative path for users who want to grind credits instead.
+// Retail prices for buying a badge of the given tier. Kept in sync
+// with the BreznShop catalog (utils/breznCatalog.js → SPEND_CATALOG.badges)
+// AND the backend earn payouts in shared/credits.py (BADGE_EARN_PAYOUT):
+// earn payouts are ~50% of retail so earning is always cheaper than
+// buying. Bumped in the thirtieth pass economy rebalance.
 export const TIER_PRICES = {
-  bronze: 200,
-  silver: 500,
-  gold:   1500,
+  bronze: 300,
+  silver: 800,
+  gold:   2000,
 }
 
 export function getBadgePrice(badge) {

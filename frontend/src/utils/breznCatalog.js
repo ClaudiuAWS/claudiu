@@ -85,9 +85,9 @@ export const SPEND_CATALOG = {
     title:   'Badges',
     summary: "Skip the grind — buy a badge you didn't earn.",
     items:   [
-      { id: 'badge-bronze', label: 'Any bronze badge', cost: 200,  status: 'soon' },
-      { id: 'badge-silver', label: 'Any silver badge', cost: 500,  status: 'soon' },
-      { id: 'badge-gold',   label: 'Any gold badge',   cost: 1500, status: 'soon' },
+      { id: 'badge-bronze', label: 'Any bronze badge', cost: 300,  status: 'soon' },
+      { id: 'badge-silver', label: 'Any silver badge', cost: 800,  status: 'soon' },
+      { id: 'badge-gold',   label: 'Any gold badge',   cost: 2000, status: 'soon' },
     ],
   },
 
@@ -100,7 +100,7 @@ export const SPEND_CATALOG = {
       {
         id:     'captain-triple',
         label:  'Triple captain',
-        cost:   500,
+        cost:   800,
         detail: 'Your captain scores at 3× for the NEXT match you lock a squad in. Auto-armed at squad lock.',
         status: 'live',
       },
@@ -114,14 +114,14 @@ export const SPEND_CATALOG = {
       {
         id:     'free-hit',
         label:  'Free hit',
-        cost:   800,
+        cost:   1500,
         detail: 'After your squad is locked, swap one drafted player for any other in the same position bucket. One use per match.',
         status: 'live',
       },
       {
         id:     'reaction-pack',
         label:  'Premium reactions pack',
-        cost:   300,
+        cost:   200,
         detail: 'Six extra reactions (🎉 👑 🤡 🥵 🥶 💯) prepended to your reaction picker.',
         status: 'live',
       },
@@ -144,21 +144,21 @@ export const SPEND_CATALOG = {
       {
         id:     'frame-pretzel',
         label:  'Pretzel avatar frame',
-        cost:   2000,
+        cost:   2200,
         detail: 'The signature brezn ring — pulsing amber/gold around your avatar.',
         status: 'live',
       },
       {
         id:     'name-red',
         label:  'Bundesliga red name',
-        cost:   1000,
+        cost:   800,
         detail: 'Your display name shows in Bundesliga red wherever you appear.',
         status: 'live',
       },
       {
         id:     'name-rainbow',
         label:  'Rainbow display name',
-        cost:   3000,
+        cost:   2500,
         detail: 'Animated gradient name (rainbow flows left → right). Loud, but unmistakable.',
         status: 'live',
       },
