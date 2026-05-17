@@ -28,23 +28,33 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT_PATH = ROOT / "frontend" / "public" / "brezn-agent.png"
 
 PROMPT = (
-    "A classic Bavarian pretzel mascot, shaped EXACTLY like a traditional "
-    "pretzel knot: two upper loops curving inward to form a heart-shaped "
-    "silhouette, with the rope twisting once at the bottom and tucking under "
-    "itself in the middle, creating three visible loop openings (top-left, "
-    "top-right, bottom-center). The overall silhouette must read as an "
-    "unmistakable pretzel. Warm orange-brown baked-bread color with bold "
-    "dark-brown outline around the rope, darker shadow tones inside the "
-    "rope curves, lighter golden highlights on the upper surface. White "
-    "salt crystals sprinkled across the body. Two large round cartoon "
-    "eyes peeking out of the two upper loops (one eye per loop). A small "
-    "smiling mouth at the bottom curve of the pretzel rope. Pure white "
-    "background, generous margin around the pretzel, square image, "
-    "centered, looking forward, funny kid-cartoon sticker style, NOT "
-    "photorealistic."
+    "A friendly cartoon mascot of a traditional Bavarian pretzel, drawn with "
+    "the EXACT anatomy of a classic German pretzel knot. SHAPE: the pretzel "
+    "rope forms a HEART-SHAPED silhouette with TWO LARGE UPPER LOOPS — one "
+    "on the LEFT, one on the RIGHT — each curving outward from the top, "
+    "then inward toward the centre. The two rope ends come down from the "
+    "upper loops, CROSS OVER EACH OTHER TWICE in the centre to form a small "
+    "X-shaped knot. After the double crossing, the two rope ends angle "
+    "OUTWARD AND DOWN, terminating in TWO SLIGHTLY ROUNDED TAIL TIPS at the "
+    "bottom-left and bottom-right of the figure. OPENINGS: there must be "
+    "THREE clearly visible openings in the silhouette — a large upper-LEFT "
+    "loop, a large upper-RIGHT loop, and a SMALL DIAMOND-SHAPED opening in "
+    "the very centre where the rope crosses itself. COLOR: warm orange-brown "
+    "baked-bread body, bold DARK-BROWN comic-book outline around every edge "
+    "of the rope, darker brown shadow tones along the bottom of each rope "
+    "segment, lighter golden highlights along the top. TEXTURE: WHITE SALT "
+    "CRYSTALS shaped like small white teardrops or seeds, sprinkled "
+    "generously across the surface. CHARACTER: two large round cartoon eyes "
+    "peeking out from the two UPPER LOOPS — one eye centered inside the "
+    "LEFT upper loop's opening, one eye centered inside the RIGHT upper "
+    "loop's opening. A small smiling mouth at the bottom centre of the "
+    "figure, between the two tail tips. STYLE: pure white background, "
+    "generous margin around the pretzel, square 1:1 image, centred, facing "
+    "forward, funny kid-cartoon sticker style, NOT photorealistic, NOT "
+    "abstract."
 )
 
-SEEDS = [501, 514, 527, 543, 561]  # new seeds (501-561) so reruns don't collide with prior batches
+SEEDS = [635, 642, 651, 663, 670]  # second retry — first batch missed the X-knot + eyes
 MIN_BYTES = 5000
 COLOUR_DISTANCE_THRESHOLD = 80
 LOW_SAT_MAX_DELTA = 30
