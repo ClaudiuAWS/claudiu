@@ -138,8 +138,8 @@ export const SPEND_CATALOG = {
         id:     'frame-gold',
         label:  'Gold avatar frame',
         cost:   1500,
-        detail: 'A glowing gold ring around your profile avatar everywhere in the app.',
-        status: 'soon',
+        detail: 'A glowing gold ring around your avatar everywhere in the app.',
+        status: 'live',
       },
       {
         id:     'frame-pretzel',
