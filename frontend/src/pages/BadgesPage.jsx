@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useBadges } from '../hooks/useBadges'
-import { BADGE_CATALOG, TIER_COLORS, getBadgePrice } from '../utils/badges'
+import { BADGE_CATALOG, TIER_COLORS, TIER_ORDER, getBadgePrice } from '../utils/badges'
+import { getSeenSet } from '../utils/badgesUnseen'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import PretzelCoin from '../components/ui/PretzelCoin'
 import BadgePreviewModal from '../components/BadgePreviewModal'
@@ -8,22 +9,25 @@ import BadgePreviewModal from '../components/BadgePreviewModal'
 export default function BadgesPage() {
   const { badges, loading } = useBadges()
   const [previewBadge, setPreviewBadge] = useState(null)
+  // Snapshot the seen-set into state so we can re-read after the preview
+  // modal marks a badge seen — without forcing a full BadgeCard re-render
+  // dance on every state change.
+  const [seenIds, setSeenIds] = useState(() => getSeenSet())
 
   if (loading) return <LoadingSpinner />
 
   const earnedIds = new Set(badges.map(b => b.badgeId))
 
-  // When the user has at least one earned badge, surface earned ones
-  // first while preserving each group's original catalog order. This is
-  // a stable partition: earned in catalog order → unearned in catalog
-  // order. No-op when nothing is earned (avoids visual churn for a
-  // brand-new account).
-  const orderedCatalog = earnedIds.size > 0
-    ? [
-        ...BADGE_CATALOG.filter(b => earnedIds.has(b.id)),
-        ...BADGE_CATALOG.filter(b => !earnedIds.has(b.id)),
-      ]
-    : BADGE_CATALOG
+  // Sort by tier first (bronze → silver → gold), then earned vs not
+  // within each tier. Within each (tier, earned) bucket, preserve the
+  // catalog's original insertion order for stable rendering.
+  const tieredCatalog = [...BADGE_CATALOG].sort((a, b) => {
+    const tierDiff = (TIER_ORDER[a.tier] ?? 99) - (TIER_ORDER[b.tier] ?? 99)
+    if (tierDiff !== 0) return tierDiff
+    const aEarned = earnedIds.has(a.id) ? 0 : 1
+    const bEarned = earnedIds.has(b.id) ? 0 : 1
+    return aEarned - bEarned
+  })
 
   return (
     <div className="px-6 pt-8 pb-12 max-w-md mx-auto">
@@ -55,15 +59,17 @@ export default function BadgesPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {orderedCatalog.map(badge => {
+        {tieredCatalog.map(badge => {
           const earned = earnedIds.has(badge.id)
           const earnedData = badges.find(b => b.badgeId === badge.id)
+          const unseen = earned && !seenIds.has(badge.id)
           return (
             <BadgeCard
               key={badge.id}
               badge={badge}
               earned={earned}
               earnedAt={earnedData?.earnedAt}
+              unseen={unseen}
               onClick={() => setPreviewBadge({ badge, earned, earnedAt: earnedData?.earnedAt })}
             />
           )
@@ -76,12 +82,20 @@ export default function BadgesPage() {
         </p>
       )}
 
-      <BadgePreviewModal preview={previewBadge} onClose={() => setPreviewBadge(null)} />
+      <BadgePreviewModal
+        preview={previewBadge}
+        onClose={() => {
+          setPreviewBadge(null)
+          // Modal marked the badge seen on open; refresh our local copy
+          // of the seen-set so the glow stops on the closed card.
+          setSeenIds(getSeenSet())
+        }}
+      />
     </div>
   )
 }
 
-function BadgeCard({ badge, earned, earnedAt, onClick }) {
+function BadgeCard({ badge, earned, earnedAt, unseen, onClick }) {
   const [imgFailed, setImgFailed] = useState(false)
   const tierColor = TIER_COLORS[badge.tier] || TIER_COLORS.bronze
 
@@ -101,8 +115,43 @@ function BadgeCard({ badge, earned, earnedAt, onClick }) {
           ? `inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 16px -10px ${tierColor}88`
           : 'inset 0 1px 0 rgba(255,255,255,0.02)',
         opacity: earned ? 1 : 0.55,
+        animation: unseen ? 'badgeNewGlow 1.6s ease-in-out infinite' : 'none',
+        // The glow animation re-defines box-shadow each frame; the static
+        // boxShadow above is the resting value for non-unseen earned cards.
       }}
     >
+      {/* Inline keyframe: pulses a tier-tinted aura around unseen earned
+          cards so the user's eye is drawn to "tap to see your reward". */}
+      {unseen && (
+        <style>{`
+          @keyframes badgeNewGlow {
+            0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1.5px ${tierColor}aa, 0 0 16px 2px ${tierColor}55; }
+            50%      { box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 2px   ${tierColor}ff, 0 0 28px 8px ${tierColor}99; }
+          }
+          @keyframes badgeNewPill {
+            0%, 100% { transform: scale(1);    opacity: 1;   }
+            50%      { transform: scale(1.05); opacity: 0.9; }
+          }
+        `}</style>
+      )}
+
+      {/* "NEW" pill in the top-left when unseen — pairs with the glow so
+          the affordance reads as "this is new — tap to claim". */}
+      {unseen && (
+        <div
+          className="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-widest uppercase pointer-events-none"
+          style={{
+            background: `linear-gradient(135deg, ${tierColor} 0%, ${tierColor}cc 100%)`,
+            border: `1px solid ${tierColor}`,
+            color: '#0a0404',
+            boxShadow: `0 0 8px ${tierColor}aa`,
+            animation: 'badgeNewPill 1.6s ease-in-out infinite',
+          }}
+        >
+          NEW
+        </div>
+      )}
+
       {/* Top sheen */}
       {earned && (
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none" />
