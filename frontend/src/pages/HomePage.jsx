@@ -4,6 +4,7 @@ import { useMatches } from '../hooks/useMatch'
 import { useCredits } from '../hooks/useCredits'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import PretzelCoin from '../components/ui/PretzelCoin'
+import ClubBadge from '../components/match/ClubBadge'
 
 const STATUS = {
   upcoming: { label: 'Upcoming',  pill: 'bg-white/5 text-gray-400',                dot: null },
@@ -35,14 +36,22 @@ function MatchCard({ match, onSelect }) {
         <span className="text-[11px] text-gray-600 tracking-wider uppercase font-medium">Bundesliga</span>
       </div>
 
-      {/* Score row */}
-      <div className="flex items-center justify-between px-5 py-5">
-        <div className="flex-1">
-          <p className="text-white font-semibold text-base leading-tight">{match.homeTeamName}</p>
-          <p className="text-gray-600 text-xs mt-0.5">Home</p>
+      {/* Score row — crest + name stack on each side, score/vs in the
+          middle. Crests are inline SVG (no external assets, no copyright
+          risk), with a per-club color identity from the local registry
+          in ClubBadge.jsx. */}
+      <div className="flex items-center justify-between px-5 py-5 gap-3">
+        <div className="flex-1 flex items-center gap-3 min-w-0">
+          <ClubBadge teamName={match.homeTeamName} size={48} />
+          <div className="min-w-0">
+            <p className="text-white font-semibold text-base leading-tight truncate">
+              {match.homeTeamName || 'Home'}
+            </p>
+            <p className="text-gray-600 text-xs mt-0.5">Home</p>
+          </div>
         </div>
 
-        <div className="px-5 text-center min-w-[90px]">
+        <div className="px-2 text-center min-w-[80px] flex-shrink-0">
           {hasScore ? (
             <>
               <p className="text-white font-bold text-3xl tracking-tight tabular-nums">
@@ -59,9 +68,14 @@ function MatchCard({ match, onSelect }) {
           )}
         </div>
 
-        <div className="flex-1 text-right">
-          <p className="text-white font-semibold text-base leading-tight">{match.awayTeamName}</p>
-          <p className="text-gray-600 text-xs mt-0.5">Away</p>
+        <div className="flex-1 flex items-center gap-3 min-w-0 flex-row-reverse">
+          <ClubBadge teamName={match.awayTeamName} size={48} />
+          <div className="min-w-0 text-right">
+            <p className="text-white font-semibold text-base leading-tight truncate">
+              {match.awayTeamName || 'Away'}
+            </p>
+            <p className="text-gray-600 text-xs mt-0.5">Away</p>
+          </div>
         </div>
       </div>
 
