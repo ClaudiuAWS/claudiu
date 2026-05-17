@@ -26,6 +26,14 @@ from botocore.exceptions import ClientError
 
 import ws
 
+# credits.py bundled into this Lambda's zip by the deploy workflow. Used
+# to pay both ends of a friend-invite acceptance. Lazy import so a
+# missing module never breaks the friend-acceptance flow.
+try:
+    import credits as _credits
+except Exception:
+    _credits = None
+
 dynamodb = boto3.resource("dynamodb")
 cognito = boto3.client("cognito-idp")
 
@@ -184,6 +192,18 @@ def accept_friend(user_id, friend_id):
     )
 
     updated = TABLE.get_item(Key={"userId": user_id, "friendId": friend_id})["Item"]
+
+    # Pay both ends of the friend acceptance — same payout as the
+    # shared-link acceptance path (accept_invite). Wrapped.
+    if _credits is not None:
+        try:
+            _credits.award_invite_accepted(
+                inviter_user_id=friend_id,
+                invitee_user_id=user_id,
+            )
+        except Exception as _e:
+            print(f"[credits] friend-accepted payout failed: {_e}")
+
     return resp(200, {"friend": to_friend_dto(updated)})
 
 
@@ -219,9 +239,26 @@ def accept_invite(user_id, inviter_user_id):
     if not me:
         return resp(500, {"error": "Could not load your profile"})
 
+    # Detect whether the row was already accepted BEFORE we upgrade —
+    # only the first acceptance triggers the brezn payout, so opening
+    # the same invite link twice doesn't pay out twice.
+    existing = TABLE.get_item(Key={"userId": user_id, "friendId": inviter_user_id}).get("Item")
+    was_already_accepted = bool(existing) and existing.get("status") == STATUS_ACCEPTED
+
     # Bidirectional put — overwrites whatever state was there before.
     TABLE.put_item(Item=make_item(user_id,     inviter, STATUS_ACCEPTED))
     TABLE.put_item(Item=make_item(inviter_user_id, me,  STATUS_ACCEPTED))
+
+    # Pay both ends of the invite (only on the first acceptance).
+    # Wrapped so a credits failure can't break the friend acceptance.
+    if not was_already_accepted and _credits is not None:
+        try:
+            _credits.award_invite_accepted(
+                inviter_user_id=inviter_user_id,
+                invitee_user_id=user_id,
+            )
+        except Exception as _e:
+            print(f"[credits] invite-accepted payout failed: {_e}")
 
     return resp(200, {"friend": to_friend_dto(make_item(user_id, inviter, STATUS_ACCEPTED))})
 

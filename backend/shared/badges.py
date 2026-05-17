@@ -44,6 +44,14 @@ try:
 except Exception:
     _ws = None
 
+# credits.py is bundled the same way. A successful badge earn pays out
+# brand-coherent brezn (tier-scaled) so badges feel like real rewards.
+# Lazy import; missing module = badges still write, no payout.
+try:
+    import credits as _credits
+except Exception:
+    _credits = None
+
 
 _dynamodb = boto3.resource('dynamodb')
 _BADGES_TABLE_NAME = os.environ.get('BADGES_TABLE', 'claudiu-badges')
@@ -465,8 +473,14 @@ def award(user_id: str, badge_id: str, match_id: str = '', context: dict | None 
         print(f"[badges] unexpected award error for {user_id}/{badge_id}: {e}")
         return False
 
-    # Successful new write — push the popup.
+    # Successful new write — push the popup AND pay the brezn bonus.
     _push_badge_earned(user_id, badge_id, item)
+    if _credits is not None:
+        try:
+            tier = (BADGE_CATALOG.get(badge_id) or {}).get('tier') or 'bronze'
+            _credits.award_badge_earned(user_id=user_id, tier=tier, badge_id=badge_id)
+        except Exception as _e:  # pragma: no cover
+            print(f"[credits] badge-earn payout failed for {user_id}/{badge_id}: {_e}")
     print(f"[badges] awarded {badge_id} to {user_id} (match={match_id or '-'})")
     return True
 

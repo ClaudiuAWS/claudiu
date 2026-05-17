@@ -851,6 +851,17 @@ def _end_rooms(match_id: str, final_result: str) -> None:
             except Exception as _e:  # pragma: no cover
                 print(f"[history] record_match_end failed for {code}: {_e}")
 
+        # Match-end credit bonuses — participation, winner (scaled by
+        # fantasy-pts gap to runner-up), clean sheet, captain delivered,
+        # daily-first-match. Additive on top of the per-event payouts
+        # that already fired during the match. Wrapped so a credit
+        # failure can never affect room cleanup or history.
+        if _credits is not None:
+            try:
+                _credits.award_match_end_bonuses(room, final_result)
+            except Exception as _e:  # pragma: no cover
+                print(f"[credits] award_match_end_bonuses failed for {code}: {_e}")
+
     count = len(response.get('Items', []))
     if count:
         print(f"Ended {count} rooms for match {match_id}")

@@ -70,6 +70,15 @@ Resources:
                                                             - lambda:InvokeFunction
                                                     Resource:
                                                             - !Sub arn:aws:lambda:eu-central-1:${AWS::AccountId}:function:claudiu-replay-emitter
+                                                  # Credits feature: rooms Lambda awards brezn for
+                                                  # mini-game wins (apply_minigame_score path). Pure
+                                                  # UpdateItem on a single user's row; no reads.
+                                                  - Sid: CreditsWrite
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:UpdateItem
+                                                    Resource:
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-credits
 
         # 
         # Rooms Lambda

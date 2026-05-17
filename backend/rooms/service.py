@@ -9,6 +9,14 @@ from botocore.exceptions import ClientError
 
 import ws
 
+# Bundled into the Lambda zip by deploy-rooms.yml. Lazy import so a
+# stale deploy that hasn't picked up the new bundle still runs (the
+# minigame payout just no-ops in that case).
+try:
+    import credits as _credits
+except Exception:
+    _credits = None
+
 dynamodb = boto3.resource('dynamodb')
 lambda_client = boto3.client('lambda', region_name='eu-central-1')
 rooms_table = dynamodb.Table(os.environ['ROOMS_TABLE'])
@@ -362,6 +370,20 @@ def apply_minigame_score(room_code: str, submitter_user_id: str, game_id: str, g
         'result':   result,
         'deltas':   score_changes,
     })
+
+    # Credit payout for the mini-game win. Same rate as event scoring
+    # (delta × CREDITS_PER_POINT) so the economy stays coherent across
+    # event types. Wrapped so a credits failure can't break the modal
+    # broadcast above.
+    if _credits is not None and raw_delta > 0:
+        try:
+            _credits.award(
+                user_id=submitter_user_id,
+                amount=raw_delta * _credits.CREDITS_PER_POINT,
+                reason=f"minigame · {game_type or 'event'}",
+            )
+        except Exception as _e:
+            print(f"[credits] minigame payout failed for {submitter_user_id}: {_e}")
 
     return {'ok': True, 'changes': score_changes}
 

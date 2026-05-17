@@ -33,7 +33,7 @@ jobs:
                                     --implementation cp \
                                     --python-version 3.14 \
                                     --only-binary=:all:
-                                  cp handler.py service.py models.py constants.py ../shared/ws.py ./package
+                                  cp handler.py service.py models.py constants.py ../shared/ws.py ../shared/credits.py ./package
                                   cd package && zip -r ../function.zip .
                                   aws lambda update-function-code \
                                     --function-name claudiu-rooms \
