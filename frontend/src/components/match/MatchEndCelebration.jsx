@@ -203,6 +203,15 @@ export default function MatchEndCelebration({ shown, match, room, scoreEvents = 
               90%  { opacity: 1; }
               100% { transform: translateY(110vh) rotate(var(--rot-end)); opacity: 0; }
             }
+            /* Respect the OS-level "Reduce motion" toggle — disables the
+               confetti animation entirely for users with vestibular
+               disorders or motion sensitivity. The summary modal +
+               audio still play (those aren't motion-triggering). */
+            @media (prefers-reduced-motion: reduce) {
+              @keyframes matchEndConfetti {
+                0%, 100% { transform: none; opacity: 0; }
+              }
+            }
           `}</style>
         </div>
       )}

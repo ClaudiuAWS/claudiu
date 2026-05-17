@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { matchesApi, roomsApi } from '../../services/api'
 import { PitchView } from '../match/PitchView'
 import { detectFormation, validateSquad } from '../../utils/formationPositions'
@@ -605,6 +605,15 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
       // pair isn't resolved yet (see render).
       setChosen(chosen_player.playerId)
       draft.pick(draft.currentPairIndex, chosen_player.playerId)
+        .then(out => {
+          // Stale-pair race: the opponent's pick + auto-advance resolved
+          // this pair before our request landed. Backend returns
+          // {ok:true, stale:true} instead of erroring; clear our
+          // optimistic lock so the next pair's UI doesn't keep showing
+          // "you picked X". The WS room_update is the source of truth
+          // for what pair we're on now.
+          if (out?.stale) setChosen(null)
+        })
         .catch(err => {
           toast.error(err.message || 'Pick failed')
           setChosen(null)
@@ -641,6 +650,47 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
       setCurrentPair(nextPair)
     }, 420)
   }
+
+  // Track the latest `chosen` value in a ref so the auto-pick timeout
+  // callback can short-circuit if the user squeaked in a pick at the
+  // last moment (after the timer fired but before the callback ran).
+  const chosenRef = useRef(chosen)
+  useEffect(() => { chosenRef.current = chosen }, [chosen])
+
+  // Per-pick auto-pick: when the server-stamped pairStartedAtMs +
+  // pickTimerMs deadline passes and the user hasn't locked a pick, fire
+  // a random one. Stale-pair race (both clients auto-picking at the same
+  // ms) is handled by backend CAS retry + the soft-ack in pass 37.
+  useEffect(() => {
+    if (!isCoordinated || chosen) return
+    if (!effectiveCurrentPair || effectiveCurrentPair.length !== 2) return
+    const startedAt = draft.pairStartedAtMs
+    const duration  = draft.pickTimerMs || 15000
+    if (!startedAt) return  // legacy draft without timer fields — no-op
+    const remainingMs = Math.max(0, startedAt + duration - Date.now())
+    const fireAutoPick = () => {
+      if (chosenRef.current) return  // user picked in the final ms
+      const idx = Math.floor(Math.random() * 2)
+      pick(effectiveCurrentPair[idx], effectiveCurrentPair[1 - idx])
+    }
+    if (remainingMs === 0) {
+      // Joined / re-rendered past deadline — pick on the next tick so
+      // we don't fire mid-render (avoids React state-update warnings).
+      const t = setTimeout(fireAutoPick, 0)
+      return () => clearTimeout(t)
+    }
+    const t = setTimeout(fireAutoPick, remainingMs)
+    return () => clearTimeout(t)
+  }, [
+    isCoordinated,
+    chosen,
+    draft.pairStartedAtMs,
+    draft.currentPairIndex,
+    draft.pickTimerMs,
+    // effectiveCurrentPair intentionally NOT in deps — it's a derived
+    // array whose reference changes every render. currentPairIndex
+    // captures "the pair changed" which is what we actually care about.
+  ])
 
   const starters     = effectiveMyPicks.filter(p =>  starterIds.has(p.playerId))
   const benchPlayers = effectiveMyPicks.filter(p => !starterIds.has(p.playerId))
@@ -843,14 +893,27 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
 
           {/* Coordinated mode: hide the "goes to opponent" hint — both
               players pick simultaneously, and a tiebreak handles same-pick. */}
-          <p
-            className="text-amber-200/70 text-[10px] uppercase tracking-[0.25em] text-center font-semibold"
-            style={{ textShadow: '0 0 8px rgba(245,158,11,0.30)' }}
-          >
-            {isCoordinated
-              ? 'Both pick at the same time — tap your choice'
-              : "Unchosen player goes to opponent's squad"}
-          </p>
+          <div className="flex flex-col items-center gap-2">
+            <p
+              className="text-amber-200/70 text-[10px] uppercase tracking-[0.25em] text-center font-semibold"
+              style={{ textShadow: '0 0 8px rgba(245,158,11,0.30)' }}
+            >
+              {isCoordinated
+                ? 'Both pick at the same time — tap your choice'
+                : "Unchosen player goes to opponent's squad"}
+            </p>
+
+            {/* Per-pick countdown — only renders in coordinated mode after
+                the user enters the pair (chosen is null) and the server has
+                stamped a deadline. When chosen is set, the timer goes away
+                so the "Waiting for opponent" overlay can breathe. */}
+            {isCoordinated && !chosen && draft.pairStartedAtMs && (
+              <PickCountdown
+                startedAtMs={draft.pairStartedAtMs}
+                durationMs={draft.pickTimerMs || 15000}
+              />
+            )}
+          </div>
 
           {/* Cards + VS divider */}
           <div className="relative flex gap-3 w-full max-w-sm">
@@ -1273,6 +1336,76 @@ function RevealBanner({ reveal, currentUserId, opponentDisplayName, playersById 
           <p className="text-gray-300 text-sm font-bold truncate">{oppPlayer?.displayName || oppPlayer?.shirtNumber || '—'}</p>
         </div>
       </div>
+    </div>
+  )
+}
+
+
+// ─── PickCountdown ───────────────────────────────────────────────────────────
+// Circular timer that drains from `durationMs` to 0 across the current draft
+// pair. Tied to the server-stamped `pairStartedAtMs` so all clients see the
+// same number. Color-shifts green → amber → red as the deadline approaches.
+// Mirrors the visual vocabulary of CountdownRing in HalftimeQuiz.jsx.
+function PickCountdown({ startedAtMs, durationMs }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 100)
+    return () => clearInterval(id)
+  }, [])
+  if (!startedAtMs || !durationMs) return null
+
+  const elapsed = Math.max(0, now - startedAtMs)
+  const remaining = Math.max(0, durationMs - elapsed)
+  const progress = remaining / durationMs  // 1.0 → 0.0
+  const seconds = Math.ceil(remaining / 1000)
+
+  // Bands match HalftimeQuiz: top third green, middle amber, last third red.
+  const color = progress > 2 / 3 ? '#10b981'
+              : progress > 1 / 3 ? '#f59e0b'
+              : '#ef4444'
+
+  const SIZE = 40
+  const RADIUS = 17
+  const CIRC = 2 * Math.PI * RADIUS
+  const dash = CIRC * (1 - progress)
+  const isUrgent = progress <= 1 / 3 && seconds > 0
+
+  return (
+    <div
+      className="relative inline-flex items-center justify-center"
+      style={{
+        width: SIZE,
+        height: SIZE,
+        animation: isUrgent ? 'pickCountdownPulse 0.7s ease-in-out infinite' : 'none',
+      }}
+      aria-live="polite"
+      aria-label={`${seconds} seconds left to pick`}
+    >
+      <svg width={SIZE} height={SIZE} className="-rotate-90 absolute inset-0">
+        <circle
+          cx={SIZE / 2} cy={SIZE / 2} r={RADIUS}
+          fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="3"
+        />
+        <circle
+          cx={SIZE / 2} cy={SIZE / 2} r={RADIUS}
+          fill="none" stroke={color} strokeWidth="3" strokeLinecap="round"
+          strokeDasharray={CIRC}
+          strokeDashoffset={dash}
+          style={{ transition: 'stroke-dashoffset 100ms linear, stroke 200ms ease' }}
+        />
+      </svg>
+      <span
+        className="relative text-[12px] font-black text-white tabular-nums"
+        style={{ textShadow: '0 1px 0 rgba(0,0,0,0.6)' }}
+      >
+        {seconds}
+      </span>
+      <style>{`
+        @keyframes pickCountdownPulse {
+          0%, 100% { transform: scale(1);   }
+          50%      { transform: scale(1.1); }
+        }
+      `}</style>
     </div>
   )
 }
