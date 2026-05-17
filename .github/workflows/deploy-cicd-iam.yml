@@ -37,9 +37,16 @@ jobs:
                                   aws-region: eu-central-1
 
                         - name: Deploy CICD IAM stack
+                          # Stack name is the EXISTING one. The role was
+                          # initially bootstrapped inside `cicd-oidc-backend-claudiu`
+                          # — not the more-obvious `claudiu-*` convention —
+                          # so we target that stack to keep the export name
+                          # (`claudiu-github-actions-backend-role-arn`) owned
+                          # by one stack. Changing the stack name would orphan
+                          # the export.
                           run: |
                                   aws cloudformation deploy \
                                     --template-file infra/cicd/cicd-oidc-iam-backend.yml \
-                                    --stack-name claudiu-github-actions-iam \
+                                    --stack-name cicd-oidc-backend-claudiu \
                                     --capabilities CAPABILITY_NAMED_IAM \
                                     --no-fail-on-empty-changeset
