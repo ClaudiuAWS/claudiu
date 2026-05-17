@@ -1,52 +1,29 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import toast from 'react-hot-toast'
 import { SPEND_CATALOG } from '../utils/breznCatalog'
 import { useCredits } from '../hooks/useCredits'
 import { useInventory } from '../hooks/useInventory'
 import PretzelCoin from '../components/ui/PretzelCoin'
+import ItemPreviewModal from '../components/ItemPreviewModal'
 
 /**
  * BreznShop — single page listing every spend item across all four
- * sections (badges, perks, cosmetics, discs). Each item is owned-aware
- * via useInventory so the same SKU shows "Owned" or "Buy" or "Soon"
- * (status from the catalog).
+ * sections (badges, perks, cosmetics, discs). Tapping a card opens
+ * the <ItemPreviewModal> which renders the item-specific preview AND
+ * the Buy CTA. This way every purchase is preceded by an explicit
+ * "here's exactly what you'll get" moment.
  *
- * Item purchase flow:
- *   tap Buy → purchase(itemId) via useInventory →
- *   ok 200       → success toast, inventory + balance auto-refresh
- *   402 insuf    → "Not enough brezn — earn more in your next match"
- *   409 owned    → "You already own this"
- *
- * Items with `status: 'soon'` show the "Coming soon" disabled state.
+ * Items with `status: 'soon'` still show as cards but the modal's
+ * Buy button is disabled with "Coming soon".
  */
 
 const SECTION_ORDER = ['perks', 'cosmetics', 'discs', 'badges']
 
 export default function BreznShopPage() {
   const navigate = useNavigate()
-  const { balance, refresh: refreshBalance } = useCredits()
-  const { owns, purchase, loading } = useInventory()
-  const [pending, setPending] = useState(null) // itemId in flight
-
-  const handleBuy = async (item) => {
-    if (item.status !== 'live') return
-    if (owns(item.id)) { toast('Already owned'); return }
-    if (balance < item.cost) {
-      toast.error(`Need ${item.cost - balance} more brezn`)
-      return
-    }
-    setPending(item.id)
-    try {
-      await purchase(item.id)
-      toast.success(`Purchased ${item.label}`)
-      refreshBalance()
-    } catch (err) {
-      toast.error(err.message)
-    } finally {
-      setPending(null)
-    }
-  }
+  const { balance } = useCredits()
+  const { owns } = useInventory()
+  const [previewItem, setPreviewItem] = useState(null)
 
   return (
     <div className="px-4 pt-6 pb-12 max-w-md mx-auto">
@@ -72,7 +49,7 @@ export default function BreznShopPage() {
       </div>
 
       <p className="text-gray-500 text-xs mb-6">
-        Spend your brezn on match perks, cosmetics, premium discs, and badge buyouts.
+        Tap any item to preview exactly what you'll get before buying.
       </p>
 
       {SECTION_ORDER.map(key => {
@@ -84,14 +61,18 @@ export default function BreznShopPage() {
             <p className="text-gray-600 text-[11px] mb-3">{section.summary}</p>
             <div className="space-y-2">
               {section.items.map(item => {
-                const isOwned   = owns(item.id)
-                const isLive    = item.status === 'live'
-                const isPending = pending === item.id
+                const isOwned = owns(item.id)
+                const isLive  = item.status === 'live'
                 const canAfford = balance >= item.cost
+                const stateLabel = isOwned ? 'Owned'
+                                 : !isLive ? 'Soon'
+                                 : canAfford ? 'Preview'
+                                 : 'Need more'
                 return (
-                  <div
+                  <button
                     key={item.id}
-                    className="rounded-2xl px-4 py-3 flex items-center gap-3"
+                    onClick={() => setPreviewItem(item)}
+                    className="w-full rounded-2xl px-4 py-3 flex items-center gap-3 transition-all active:scale-[0.99] hover:bg-white/[0.02] text-left"
                     style={{
                       background: 'linear-gradient(145deg, #111827 0%, #0d1117 100%)',
                       border:    `1px solid ${isOwned ? 'rgba(34,197,94,0.30)' : 'rgba(255,255,255,0.06)'}`,
@@ -100,7 +81,7 @@ export default function BreznShopPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-white text-sm font-semibold truncate">{item.label}</p>
                       {item.detail && (
-                        <p className="text-gray-500 text-[11px] mt-0.5 leading-snug">{item.detail}</p>
+                        <p className="text-gray-500 text-[11px] mt-0.5 leading-snug line-clamp-2">{item.detail}</p>
                       )}
                     </div>
 
@@ -109,44 +90,46 @@ export default function BreznShopPage() {
                       <span className="text-amber-200 font-bold tabular-nums text-sm">{item.cost}</span>
                     </div>
 
-                    <button
-                      onClick={() => handleBuy(item)}
-                      disabled={!isLive || isOwned || isPending || loading}
-                      className="text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full flex-shrink-0 transition-all active:scale-95"
+                    <span
+                      className="text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full flex-shrink-0"
                       style={{
                         background: isOwned
                           ? 'rgba(34,197,94,0.20)'
                           : !isLive
                             ? 'rgba(255,255,255,0.05)'
                             : canAfford
-                              ? 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)'
+                              ? 'rgba(248,113,113,0.18)'
                               : 'rgba(255,255,255,0.05)',
                         border: `1px solid ${isOwned
                           ? 'rgba(34,197,94,0.40)'
                           : !isLive
                             ? 'rgba(255,255,255,0.10)'
                             : canAfford
-                              ? 'rgba(248,113,113,0.55)'
+                              ? 'rgba(248,113,113,0.40)'
                               : 'rgba(255,255,255,0.10)'}`,
                         color: isOwned
                           ? '#86efac'
                           : !isLive
                             ? '#6b7280'
                             : canAfford
-                              ? '#ffffff'
+                              ? '#fca5a5'
                               : '#6b7280',
-                        cursor: (!isLive || isOwned || isPending) ? 'not-allowed' : 'pointer',
                       }}
                     >
-                      {isPending ? '…' : isOwned ? 'Owned' : !isLive ? 'Soon' : canAfford ? 'Buy' : 'Need more'}
-                    </button>
-                  </div>
+                      {stateLabel}
+                    </span>
+                  </button>
                 )
               })}
             </div>
           </section>
         )
       })}
+
+      <ItemPreviewModal
+        item={previewItem}
+        onClose={() => setPreviewItem(null)}
+      />
     </div>
   )
 }
