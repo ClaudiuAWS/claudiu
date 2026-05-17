@@ -3,9 +3,11 @@ import { useBadges } from '../hooks/useBadges'
 import { BADGE_CATALOG, TIER_COLORS, getBadgePrice } from '../utils/badges'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import PretzelCoin from '../components/ui/PretzelCoin'
+import BadgePreviewModal from '../components/BadgePreviewModal'
 
 export default function BadgesPage() {
   const { badges, loading } = useBadges()
+  const [previewBadge, setPreviewBadge] = useState(null)
 
   if (loading) return <LoadingSpinner />
 
@@ -62,6 +64,7 @@ export default function BadgesPage() {
               badge={badge}
               earned={earned}
               earnedAt={earnedData?.earnedAt}
+              onClick={() => setPreviewBadge({ badge, earned, earnedAt: earnedData?.earnedAt })}
             />
           )
         })}
@@ -72,17 +75,21 @@ export default function BadgesPage() {
           Play matches to earn badges!
         </p>
       )}
+
+      <BadgePreviewModal preview={previewBadge} onClose={() => setPreviewBadge(null)} />
     </div>
   )
 }
 
-function BadgeCard({ badge, earned, earnedAt }) {
+function BadgeCard({ badge, earned, earnedAt, onClick }) {
   const [imgFailed, setImgFailed] = useState(false)
   const tierColor = TIER_COLORS[badge.tier] || TIER_COLORS.bronze
 
   return (
-    <div
-      className="relative overflow-hidden rounded-2xl p-4 flex flex-col items-center text-center"
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative overflow-hidden rounded-2xl p-4 flex flex-col items-center text-center transition-transform active:scale-[0.98] hover:scale-[1.01] focus:outline-none cursor-pointer"
       style={{
         background: earned
           ? 'linear-gradient(145deg, #1a1216 0%, #0d0808 100%)'
@@ -219,7 +226,7 @@ function BadgeCard({ badge, earned, earnedAt }) {
           ✓ {new Date(earnedAt).toLocaleDateString()}
         </p>
       )}
-    </div>
+    </button>
   )
 }
 
