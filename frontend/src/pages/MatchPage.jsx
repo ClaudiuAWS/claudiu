@@ -38,7 +38,14 @@ export default function MatchPage() {
   const [playerMap, setPlayerMap] = useState({})
 
   const { user }                                = useAuth()
-  const { messages, bubbles, onChatMessage, sendMessage } = useChat(matchId)
+  // useChat needs a matchEnded signal so it can demolish persisted chat
+  // history. That signal originates in useRoom (declared below), which we
+  // can't move above useChat without breaking the onChatMessage wiring.
+  // Bridge: local boolean state that we flip via a useEffect once
+  // matchJustEnded turns true. Re-renders cascade into useChat which
+  // then clears its sessionStorage entry + messages.
+  const [chatDemolished, setChatDemolished] = useState(false)
+  const { messages, bubbles, onChatMessage, sendMessage } = useChat(matchId, chatDemolished)
   // useRoom's WS handler will forward minigame messages via the optional 4th
   // arg. We construct a ref-stable forwarder here and feed it both ways.
   const minigameMsgRef = useRef(null)
@@ -51,6 +58,13 @@ export default function MatchPage() {
     pushCheer(msg)
   }, [user?.userId])
   const { room, loading: roomLoading, scoreEvents, matchJustEnded, applyOptimisticDeltas, applyAuthoritativeScoreChange } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler, null, onCheerHandler)
+
+  // Bridge: flip the chat-demolished flag the first time `match_ended`
+  // fires. The useChat hook above watches this and clears its
+  // sessionStorage entry + in-memory messages on the next render.
+  useEffect(() => {
+    if (matchJustEnded && !chatDemolished) setChatDemolished(true)
+  }, [matchJustEnded, chatDemolished])
 
   // Highlight overlay queue — broadcast-style fullscreen card for goals
   // and red cards. Driven entirely client-side from the same reveal

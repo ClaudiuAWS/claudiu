@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { TRACKS, DEFAULT_TRACK_ID, getTrackById } from '../utils/tracks'
+import { TRACKS, DEFAULT_TRACK_ID, getTrackById, isTrackUnlocked } from '../utils/tracks'
+import { useInventory } from './useInventory'
 
 /**
  * Audio preferences for the app.
@@ -110,14 +111,12 @@ function _uuid() {
   }
 }
 
-// Pure helper: given the user's albums + activeAlbumId, derive the
-// ordered list of tracks the playback engine should rotate through.
-// Always intersects with `!requiredBadge` so badge-locked discs never
-// auto-play even if a user dragged them into an album. The default
-// (activeAlbumId === null) is the full unlocked rotation, matching
-// pre-album behaviour.
-function _resolvePlaylist(albums, activeAlbumId) {
-  const baseUnlocked = TRACKS.filter(t => !t.requiredBadge)
+// Pure helper: given the user's albums + activeAlbumId + inventory,
+// derive the ordered list of tracks the playback engine should rotate
+// through. Intersects with isTrackUnlocked so badge-locked discs only
+// auto-play when the user owns the badge OR the premium disc item.
+function _resolvePlaylist(albums, activeAlbumId, inventory = {}) {
+  const baseUnlocked = TRACKS.filter(t => isTrackUnlocked(t, [], inventory))
   if (!activeAlbumId) return baseUnlocked
   const album = (albums || []).find(a => a.id === activeAlbumId)
   if (!album || !Array.isArray(album.trackIds) || album.trackIds.length === 0) {
@@ -165,10 +164,17 @@ export function AppAudioProvider({ children }) {
   const activeAlbumIdRef = useRef(activeAlbumId)
   const shuffleRef       = useRef(shuffle)
   const repeatModeRef    = useRef(repeatMode)
+  // Premium-disc ownership comes from the InventoryProvider above us in
+  // the Layout tree. The ref keeps `_resolvePlaylist` calls (made by
+  // listeners that close over old state) in sync with the latest
+  // inventory without re-creating the listener.
+  const { inventory: ownedInventory } = useInventory()
+  const inventoryRef = useRef(ownedInventory)
   useEffect(() => { albumsRef.current        = albums        }, [albums])
   useEffect(() => { activeAlbumIdRef.current = activeAlbumId }, [activeAlbumId])
   useEffect(() => { shuffleRef.current       = shuffle       }, [shuffle])
   useEffect(() => { repeatModeRef.current    = repeatMode    }, [repeatMode])
+  useEffect(() => { inventoryRef.current     = ownedInventory }, [ownedInventory])
 
   const appTrack = getTrackById(appTrackId)
 
@@ -257,7 +263,7 @@ export function AppAudioProvider({ children }) {
         try { a.currentTime = 0; a.play() } catch {}
         return
       }
-      const playlist = _resolvePlaylist(albumsRef.current, activeAlbumIdRef.current)
+      const playlist = _resolvePlaylist(albumsRef.current, activeAlbumIdRef.current, inventoryRef.current)
       if (playlist.length <= 1) return
 
       let next
@@ -330,7 +336,7 @@ export function AppAudioProvider({ children }) {
   // repeatMode === 'one' (a hard skip should always advance, even when the
   // user has the current track on repeat). Wraps at the playlist ends.
   const nextTrack = () => {
-    const playlist = _resolvePlaylist(albumsRef.current, activeAlbumIdRef.current)
+    const playlist = _resolvePlaylist(albumsRef.current, activeAlbumIdRef.current, inventoryRef.current)
     if (playlist.length <= 1) return
     const idx = playlist.findIndex(t => t.id === appTrackId)
     const next = playlist[(idx + 1) % playlist.length]
@@ -340,7 +346,7 @@ export function AppAudioProvider({ children }) {
     _writeString(KEYS.appTrack, next.id)
   }
   const prevTrack = () => {
-    const playlist = _resolvePlaylist(albumsRef.current, activeAlbumIdRef.current)
+    const playlist = _resolvePlaylist(albumsRef.current, activeAlbumIdRef.current, inventoryRef.current)
     if (playlist.length <= 1) return
     const idx = playlist.findIndex(t => t.id === appTrackId)
     const prev = playlist[(idx - 1 + playlist.length) % playlist.length]

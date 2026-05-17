@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import DisplayName from '../ui/DisplayName'
 
 const AVATAR_COLORS = ['bg-violet-500','bg-blue-500','bg-emerald-500','bg-orange-500','bg-pink-500','bg-cyan-500']
 
@@ -45,7 +46,12 @@ export default function ChatPanel({ messages, onSend, room }) {
                   </div>
                 )}
                 <div className={`flex flex-col gap-0.5 max-w-[72%] ${isMe ? 'items-end' : 'items-start'}`}>
-                  {!isMe && <span className="text-gray-600 text-[10px] px-1">{msg.displayName}</span>}
+                  {!isMe && (
+                    <DisplayName
+                      member={{ userId: msg.userId, displayName: msg.displayName }}
+                      className="text-gray-600 text-[10px] px-1"
+                    />
+                  )}
                   <div
                     className={`px-3 py-2 rounded-2xl text-sm leading-snug ${
                       isMe

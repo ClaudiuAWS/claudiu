@@ -45,6 +45,8 @@ export const roomsApi = {
   postMinigameScore: (roomCode, payload) => request(`/rooms/${roomCode}/minigame-score`, 'POST', payload),
   draftReady:  (roomCode)                   => request(`/rooms/${roomCode}/draft-ready`, 'POST'),
   draftPick:   (roomCode, pairIndex, playerId) => request(`/rooms/${roomCode}/draft-pick`, 'POST', { pairIndex, playerId }),
+  draftReroll: (roomCode)                   => request(`/rooms/${roomCode}/draft-reroll`, 'POST'),
+  freeHitSwap: (roomCode, outPlayerId, inPlayerId) => request(`/rooms/${roomCode}/free-hit-swap`, 'POST', { outPlayerId, inPlayerId }),
   directorTick: (roomCode, snapshot)        => request(`/rooms/${roomCode}/director-tick`, 'POST', { snapshot }),
   react:        (roomCode, eventId, reactionType) => request(`/rooms/${roomCode}/react`, 'POST', { eventId, reactionType }),
   cheer:        (roomCode, emoji)                 => request(`/rooms/${roomCode}/cheer`, 'POST', { emoji }),
@@ -87,6 +89,8 @@ export const leaderboardApi = {
 }
 
 export const creditsApi = {
-  balance: () => request('/credits'),
-  friends: () => request('/credits/friends'),
+  balance:   ()       => request('/credits'),
+  friends:   ()       => request('/credits/friends'),
+  inventory: ()       => request('/credits/inventory'),
+  purchase:  (itemId) => request('/credits/purchase', { method: 'POST', body: { itemId } }),
 }

@@ -57,17 +57,22 @@ export function computeOptimisticDeltas(event, members) {
       // doubled), and the dedup fingerprint in useRoom.js falls through to
       // its delta-aware fallback — letting both entries land as duplicates.
       const captain = m.captainPlayerId || ''
+      // Triple-captain perk (armed at squad-lock time) bumps the
+      // multiplier from ×2 to ×3 for the duration of the match. Same
+      // gate as the backend so the dedup-fingerprint stays in sync.
+      const armedPerks = new Set(m.armedPerks || [])
+      const capMult = armedPerks.has('captain-triple') ? 3 : 2
       let delta = 0
       let reason = ''
       let name   = ''
 
       if (scoringPid && details[scoringPid]) {
-        delta += goalValue * (captain === scoringPid ? 2 : 1)
+        delta += goalValue * (captain === scoringPid ? capMult : 1)
         reason = 'scored for your squad'
         name   = scoringDisplay
       }
       if (assistPid && details[assistPid]) {
-        delta += 3 * (captain === assistPid ? 2 : 1)
+        delta += 3 * (captain === assistPid ? capMult : 1)
         if (!reason) {
           reason = 'assisted for your squad'
           name   = assistDisplay
@@ -80,7 +85,7 @@ export function computeOptimisticDeltas(event, members) {
         )
         if (concedingGK) {
           const gkPid = concedingGK.playerId || ''
-          delta += -1 * (captain && captain === gkPid ? 2 : 1)
+          delta += -1 * (captain && captain === gkPid ? capMult : 1)
           if (!reason) {
             reason = 'conceded'
             // select_team persists displayName on each teamSelectionDetails
@@ -104,8 +109,9 @@ export function computeOptimisticDeltas(event, members) {
     for (const m of members) {
       const selection = new Set(m.teamSelection || [])
       const captain   = m.captainPlayerId || ''
+      const capMult   = new Set(m.armedPerks || []).has('captain-triple') ? 3 : 2
       if (playerId && selection.has(playerId)) {
-        const delta = magnitude * (captain === playerId ? 2 : 1)
+        const delta = magnitude * (captain === playerId ? capMult : 1)
         out.push({ userId: m.userId, delta, reason: verb, playerName: playerDisplay })
       }
     }
@@ -115,8 +121,9 @@ export function computeOptimisticDeltas(event, members) {
     for (const m of members) {
       const ownsGK  = (m.teamSelectionDetails || []).some(d => d.playerId === gkId)
       const captain = m.captainPlayerId || ''
+      const capMult = new Set(m.armedPerks || []).has('captain-triple') ? 3 : 2
       if (gkId && ownsGK) {
-        const delta = 2 * (captain === gkId ? 2 : 1)
+        const delta = 2 * (captain === gkId ? capMult : 1)
         out.push({ userId: m.userId, delta, reason: 'made a save', playerName: gkDisplay })
       }
     }

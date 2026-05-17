@@ -868,6 +868,32 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
             </p>
           )}
 
+          {/* Re-roll button — visible only when the user owns the
+              pick-reroll perk for this match AND hasn't used it yet.
+              Member.armedPerks is stamped server-side at draft-ready;
+              usedDraftReroll flips true when this is consumed. */}
+          {isCoordinated && (() => {
+            const me = (room?.members || []).find(m => m.userId === currentUserId)
+            const ownsReroll = me && (me.armedPerks || []).includes('pick-reroll') && !me.usedDraftReroll
+            if (!ownsReroll || chosen) return null
+            return (
+              <button
+                onClick={async () => {
+                  try { await roomsApi.draftReroll(room.roomCode) }
+                  catch (e) { toast.error(e?.message || 'Re-roll failed') }
+                }}
+                className="text-[11px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full transition-all active:scale-95"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(245,158,11,0.20) 0%, rgba(217,119,6,0.10) 100%)',
+                  border: '1px solid rgba(245,158,11,0.40)',
+                  color: '#fcd34d',
+                }}
+              >
+                🔄 Re-roll this pair
+              </button>
+            )
+          })()}
+
           {/* Coordinated mode: pair-resolved reveal banner. Shows for 1.8s
               right after the backend broadcasts draft_pair_resolved so the
               user can see what the opponent picked + the tiebreak result

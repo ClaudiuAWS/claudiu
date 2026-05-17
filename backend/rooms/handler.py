@@ -45,6 +45,12 @@ def handler(event, context):
             elif method == 'POST' and '/draft-pick' in path:
                 return _post_draft_pick(event, user_id)
 
+            elif method == 'POST' and '/draft-reroll' in path:
+                return _post_draft_reroll(event, user_id)
+
+            elif method == 'POST' and '/free-hit-swap' in path:
+                return _post_free_hit_swap(event, user_id)
+
             elif method == 'POST' and '/react' in path:
                 return _post_reaction(event, user_id)
 
@@ -176,6 +182,28 @@ def _post_draft_pick(event, user_id):
         if not player_id:
             return _response(400, {'error': 'playerId is required'})
         out = service.submit_draft_pick(room_code, user_id, pair_index, player_id)
+        return _response(200, out)
+
+
+def _post_draft_reroll(event, user_id):
+        # Re-roll the current draft pair — replaces it with a randomly-
+        # chosen upcoming pair. Consumes the 'pick-reroll' perk that
+        # was armed at squad-lock time. One re-roll per match.
+        room_code = event['pathParameters']['code']
+        out = service.reroll_draft_pair(room_code, user_id)
+        return _response(200, out)
+
+
+def _post_free_hit_swap(event, user_id):
+        # Consume the 'free-hit' perk: swap one drafted player for another
+        # from the same position bucket. Body: {outPlayerId, inPlayerId}.
+        room_code = event['pathParameters']['code']
+        body = json.loads(event.get('body') or '{}')
+        out_pid = (body.get('outPlayerId') or '').strip()
+        in_pid  = (body.get('inPlayerId') or '').strip()
+        if not out_pid or not in_pid:
+            return _response(400, {'error': 'outPlayerId and inPlayerId required'})
+        out = service.free_hit_swap(room_code, user_id, out_pid, in_pid)
         return _response(200, out)
 
 

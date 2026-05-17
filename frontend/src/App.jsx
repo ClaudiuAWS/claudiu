@@ -20,10 +20,12 @@ import BadgesPage from './pages/BadgesPage'
 import HistoryPage from './pages/HistoryPage'
 import LeaderboardPage from './pages/LeaderboardPage'
 import TracksPage from './pages/TracksPage'
+import BreznShopPage from './pages/BreznShopPage'
 import InvitePage from './pages/InvitePage'
 import InviteListener from './components/InviteListener'
 import BadgeListener from './components/BadgeListener'
 import PendingInviteConsumer from './components/PendingInviteConsumer'
+import { InventoryProvider } from './hooks/useInventory'
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null } }
@@ -53,18 +55,19 @@ const Placeholder = ({ title }) => (
 )
 
 const Layout = ({ children }) => (
-  // AppAudioProvider mounts a single <audio> element scoped to the
-  // post-auth area. The login/register screens have their own ambient
-  // audio via `useBgAmbientAudio` and are outside Layout, so the two
-  // sources never play simultaneously.
-  <AppAudioProvider>
-    <PendingInviteConsumer />
-    <TopNav />
-    <div className="pt-16 pb-24">
-      {children}
-    </div>
-    <BottomNav />
-  </AppAudioProvider>
+  // Provider order matters: AppAudio needs to read Inventory to know
+  // which badge-locked tracks the user has bought as premium discs, so
+  // InventoryProvider must be an ancestor of AppAudioProvider.
+  <InventoryProvider>
+    <AppAudioProvider>
+      <PendingInviteConsumer />
+      <TopNav />
+      <div className="pt-16 pb-24">
+        {children}
+      </div>
+      <BottomNav />
+    </AppAudioProvider>
+  </InventoryProvider>
 )
 
 export default function App() {
@@ -116,6 +119,9 @@ export default function App() {
           }/>
           <Route path="/tracks" element={
             <ProtectedRoute><Layout><TracksPage /></Layout></ProtectedRoute>
+          }/>
+          <Route path="/shop" element={
+            <ProtectedRoute><Layout><BreznShopPage /></Layout></ProtectedRoute>
           }/>
 
           {/* Invite link — public route. Decides whether to auto-friend

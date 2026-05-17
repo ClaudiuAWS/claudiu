@@ -30,6 +30,13 @@ Resources:
                                                             - dynamodb:GetItem
                                                             - dynamodb:BatchGetItem
                                                     Resource: !ImportValue claudiu-credits-table-arn
+                                                  # Purchase path needs UpdateItem on the user's
+                                                  # own row — atomic debit + inventory insert.
+                                                  - Sid: CreditsTablePurchaseWrite
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:UpdateItem
+                                                    Resource: !ImportValue claudiu-credits-table-arn
                                                   - Sid: FriendsTableRead
                                                     Effect: Allow
                                                     Action:

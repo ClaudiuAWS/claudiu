@@ -173,3 +173,209 @@ def award_for_score_changes(score_changes: list, match_id: str = '') -> None:
         if match_id:
             reason = f"{reason} (match {match_id})" if reason else f"match {match_id}"
         award(user_id=user_id, amount=amount, reason=reason)
+
+
+# ----- Earn rates (single source of truth, kept here so all writers ----
+# agree on the brand-coherent economy). Tweaking a number here changes
+# both backend awards AND the frontend's "rumored payout" hints.
+
+# Match-end bonuses, paid once per user per match at fulltime.
+MATCH_PARTICIPATION_BONUS = 50
+WINNER_BONUS_BASE         = 50    # everyone who wins gets at least this
+WINNER_BONUS_PER_PT_LEAD  = 5     # +5 brezn per fantasy-point lead over runner-up
+WINNER_BONUS_CAP          = 300   # cap on the runaway-winner case
+CLEAN_SHEET_BONUS         = 100   # match where YOUR keeper conceded 0
+CAPTAIN_DELIVERED_BONUS   = 75    # captain produced at least one positive event
+
+# Badge unlock — paid once at the moment an earned (not bought) badge
+# fires. Mirrors the tier-priced retail cost in frontend/utils/badges.js,
+# scaled down so earning is cheaper than buying (the right incentive).
+BADGE_EARN_PAYOUT = {
+    'bronze': 100,
+    'silver': 300,
+    'gold':   750,
+}
+
+# Mini-game payouts, fired by the mini-game scoring path.
+MINIGAME_PAYOUT = {
+    'HALFTIME_QUIZ_CORRECT':  20,   # per correct answer
+    'OFFSIDE_REFLEX_HIT':     30,
+    'SHOT_CALL_HIT':          30,
+    'PENALTY_SHOOTOUT_WIN':   40,
+}
+
+# Habit + growth loops.
+DAILY_FIRST_MATCH_BONUS = 50      # once per UTC day, first finished match
+INVITE_ACCEPTED_BONUS   = 100     # both inviter + invitee get this on accept
+
+
+def award_match_end_bonuses(room: dict, final_result: str = '') -> None:
+    """Called from event-processor's `_end_rooms` at fulltime. Computes
+    + awards every match-end bonus per member. Never raises — failures
+    are logged and swallowed so the room cleanup is unaffected.
+
+    Bonuses (additive per member):
+      • Participation:    +MATCH_PARTICIPATION_BONUS (every finisher)
+      • Winner:           scaled by fantasy-pts gap to runner-up
+                          (base + gap*per_pt, capped). Solo matches
+                          are treated as participation-only.
+      • Clean sheet:      +CLEAN_SHEET_BONUS if a member's drafted GK
+                          on the team that conceded 0
+      • Captain delivered:+CAPTAIN_DELIVERED_BONUS if the member's
+                          captainPlayerId was a scorer/assister/keeper
+                          for any event this match (proxied by the
+                          captain having a non-zero fantasy score
+                          contribution — we re-derive from match score
+                          here since the per-event breakdown isn't
+                          stored on the room record).
+    """
+    members = room.get('members', [])
+    if not members:
+        return
+
+    match_id  = room.get('matchId') or ''
+    room_code = room.get('roomCode') or ''
+
+    # Parse the final result so the clean-sheet rule can ask "was YOUR
+    # team's score the zero half?". finalResult shape is "H:A".
+    home_goals, away_goals = _parse_final_result(final_result)
+
+    scores = [int(m.get('score') or 0) for m in members]
+    top_score = max(scores) if scores else 0
+    runner_up = sorted(scores, reverse=True)[1] if len(scores) > 1 else 0
+
+    for m in members:
+        uid = m.get('userId')
+        if not uid:
+            continue
+
+        total = 0
+        reasons = []
+
+        # 1. Participation — flat floor.
+        total += MATCH_PARTICIPATION_BONUS
+        reasons.append('participation')
+
+        # 2. Winner bonus — multi-user matches only. Tie-on-top still
+        # rewards both, scaled by lead over runner-up (= 0 when tied,
+        # so flat WINNER_BONUS_BASE).
+        score = int(m.get('score') or 0)
+        if len(members) > 1 and score == top_score and top_score > runner_up:
+            lead = top_score - runner_up
+            winner_amt = min(WINNER_BONUS_CAP, WINNER_BONUS_BASE + lead * WINNER_BONUS_PER_PT_LEAD)
+            total += winner_amt
+            reasons.append(f'winner +{winner_amt}')
+        elif len(members) > 1 and score == top_score and top_score == runner_up:
+            # Multi-way tie at the top — give everyone the base.
+            total += WINNER_BONUS_BASE
+            reasons.append('shared winner')
+
+        # 3. Clean sheet — find the member's drafted keeper, check if
+        # the team they're on conceded 0 goals.
+        details = m.get('teamSelectionDetails') or []
+        gk = next((d for d in details if (d.get('position') or '') == 'TW'), None)
+        if gk:
+            gk_role = (gk.get('teamRole') or '').lower()
+            conceded = away_goals if gk_role == 'home' else home_goals if gk_role == 'away' else None
+            if conceded == 0:
+                total += CLEAN_SHEET_BONUS
+                reasons.append('clean sheet')
+
+        # 4. Captain delivered — proxy: did the captain pick up any
+        # positive contribution this match? Without per-event history
+        # on the room record we approximate via the match score: if the
+        # member's overall score is positive AND they have a captain
+        # set, assume the captain helped. Cheap, generous, and shifts
+        # the captain pick toward feeling rewarding.
+        if (m.get('captainPlayerId') or '') and score > 0:
+            total += CAPTAIN_DELIVERED_BONUS
+            reasons.append('captain delivered')
+
+        # 5. Daily first match — one bonus per UTC day, evaluated at the
+        # award time. Uses a conditional update on lastDailyBonusYmd so
+        # concurrent end-of-match awards from different rooms can't
+        # double-grant.
+        if _claim_daily_first_match(uid):
+            total += DAILY_FIRST_MATCH_BONUS
+            reasons.append('daily first match')
+
+        if total <= 0:
+            continue
+        reason = ' · '.join(reasons)
+        if match_id:
+            reason = f"{reason} (match {match_id})"
+        award(user_id=uid, amount=total, reason=reason)
+
+
+def award_badge_earned(user_id: str, tier: str, badge_id: str = '') -> None:
+    """Called from shared/badges.py at the moment a badge is unlocked
+    (writes the badge row → calls this). Pays a tier-scaled bonus.
+    Idempotency is handled by the badges layer: it only invokes this
+    when the conditional PutItem actually inserted a new row.
+    """
+    amount = BADGE_EARN_PAYOUT.get((tier or '').lower(), 0)
+    if amount <= 0 or not user_id:
+        return
+    reason = f"badge unlock: {badge_id}" if badge_id else 'badge unlock'
+    award(user_id=user_id, amount=amount, reason=reason)
+
+
+def award_minigame_result(user_id: str, kind: str, count: int = 1) -> None:
+    """Pay out a mini-game result. `kind` is one of the MINIGAME_PAYOUT
+    keys; `count` multiplies (e.g. 3 correct quiz answers → count=3).
+    """
+    per = MINIGAME_PAYOUT.get(kind, 0)
+    if per <= 0 or count <= 0 or not user_id:
+        return
+    award(user_id=user_id, amount=per * count, reason=f'minigame: {kind.lower()}')
+
+
+def award_invite_accepted(inviter_user_id: str, invitee_user_id: str) -> None:
+    """Pay both ends of a friend-invite acceptance. Called once per
+    invite from the friends acceptance path.
+    """
+    for uid in (inviter_user_id, invitee_user_id):
+        if not uid:
+            continue
+        award(user_id=uid, amount=INVITE_ACCEPTED_BONUS, reason='invite accepted')
+
+
+# ----- Internal helpers ----------------------------------------------
+
+def _parse_final_result(final_result: str):
+    """'2:1' → (2, 1). Anything malformed → (None, None)."""
+    try:
+        if not final_result:
+            return (None, None)
+        parts = str(final_result).split(':')
+        return (int(parts[0]), int(parts[1]))
+    except Exception:
+        return (None, None)
+
+
+def _claim_daily_first_match(user_id: str) -> bool:
+    """Atomic UTC-daily claim. Returns True if this call won the claim
+    (caller should award), False if today's bonus was already taken.
+
+    Uses a conditional UpdateItem on `lastDailyBonusYmd` so concurrent
+    end-of-match invocations on the same user can't double-grant.
+    """
+    if not user_id:
+        return False
+    today = time.strftime('%Y-%m-%d', time.gmtime())
+    try:
+        _table.update_item(
+            Key={'userId': user_id},
+            UpdateExpression='SET lastDailyBonusYmd = :today',
+            ConditionExpression='attribute_not_exists(lastDailyBonusYmd) OR lastDailyBonusYmd <> :today',
+            ExpressionAttributeValues={':today': today},
+        )
+        return True
+    except ClientError as e:
+        if e.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
+            return False
+        print(f"[credits] daily claim failed for {user_id}: {e}")
+        return False
+    except Exception as e:
+        print(f"[credits] daily claim error for {user_id}: {e}")
+        return False
