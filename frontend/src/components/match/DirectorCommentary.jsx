@@ -57,7 +57,7 @@ function CommentaryCard({ entry }) {
   const ring     = personal ? 'ring-amber-300/50 bg-amber-500/20' : 'ring-violet-400/40 bg-violet-500/20'
   const border   = personal ? 'border-amber-300/40' : 'border-violet-400/30'
   const overlay  = personal ? 'from-amber-500/20 via-amber-500/10' : 'from-violet-500/20 via-violet-500/10'
-  const labelText = personal ? 'For You · AI Director' : 'AI Director'
+  const labelText = personal ? 'For You · Brezn Agent' : 'Brezn Agent'
   const labelClr  = personal ? 'text-amber-300/90' : 'text-violet-300/85'
   const pillBg    = personal
     ? 'border-amber-300/50 bg-amber-500/15 text-amber-100/90 hover:bg-amber-500/25 hover:text-amber-50'
@@ -83,10 +83,16 @@ function CommentaryCard({ entry }) {
 
       <div className="relative px-3 py-2.5 flex items-start gap-3">
         <div
-          className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center ring-2 ${ring}`}
+          className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center ring-2 ${ring} overflow-hidden`}
           style={{ animation: 'directorRingPulse 1.8s ease-out 1' }}
         >
-          <span className="text-lg leading-none" aria-hidden="true">{personal ? '⭐' : '🎙️'}</span>
+          <img
+            src="/brezn-agent.png"
+            alt=""
+            aria-hidden="true"
+            className="w-7 h-7 object-contain"
+            style={{ filter: personal ? 'drop-shadow(0 0 4px rgba(252,211,77,0.6))' : 'none' }}
+          />
         </div>
 
         <div className="flex-1 min-w-0">
@@ -123,7 +129,7 @@ function CommentaryCard({ entry }) {
             }}
           >
             <p className="text-[9px] font-black tracking-widest uppercase text-violet-300/70 mb-0.5">
-              AI reasoning
+              Brezn thoughts
             </p>
             <p className="text-[11.5px] text-violet-100/90 leading-snug">
               {entry.reasoning}

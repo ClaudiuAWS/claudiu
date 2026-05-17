@@ -26,13 +26,21 @@ def handler(event, _ctx):
         user_id = claims.get('sub')
 
         body = json.loads(event.get('body') or '{}')
+        # Mode multiplexer: this Lambda answers two kinds of requests on the
+        # same /director-tick endpoint. The default tick is per-event match
+        # commentary; mode='captain-suggestion' is a one-shot called from the
+        # lobby's preview phase to recommend who should wear the armband.
+        mode = body.get('mode') or 'tick'
         try:
-                decision = service.run_director_tick(room_code, user_id, body)
+                if mode == 'captain-suggestion':
+                        decision = service.run_captain_suggestion(room_code, user_id, body)
+                else:
+                        decision = service.run_director_tick(room_code, user_id, body)
                 return _response(200, {'decision': decision})
         except Exception as e:
                 # Logged for debugging but never block the room — frontend has its own
                 # rule-based fallback (Step 1).
-                print(f"director tick failed for room {room_code}: {e}")
+                print(f"director tick failed for room {room_code} (mode={mode}): {e}")
                 return _response(200, {'decision': {'action': 'wait', 'reason': 'director error'}})
 
 
