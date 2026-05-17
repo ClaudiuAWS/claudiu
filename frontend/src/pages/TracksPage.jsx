@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppAudio } from '../hooks/useAppAudio'
 import { useBadges } from '../hooks/useBadges'
-import { TRACKS } from '../utils/tracks'
+import { useInventory } from '../hooks/useInventory'
+import { TRACKS, isTrackUnlocked } from '../utils/tracks'
 import { getBadgeById } from '../utils/badges'
 import DiscArtwork from '../components/ui/DiscArtwork'
 import AlbumEditor from '../components/AlbumEditor'
@@ -22,11 +23,14 @@ export default function TracksPage() {
     repeatMode, cycleRepeatMode,
   } = useAppAudio()
   const { badges } = useBadges()
+  const { inventory } = useInventory()
 
   const [editingAlbumId, setEditingAlbumId] = useState(null)
 
   const earnedIds = new Set((badges || []).map(b => b.badgeId))
-  const unlocked = (t) => !t.requiredBadge || earnedIds.has(t.requiredBadge)
+  // Tracks unlock via the earned badge OR a purchased disc inventory
+  // item (see DISC_TO_ITEM in utils/tracks.js).
+  const unlocked = (t) => isTrackUnlocked(t, earnedIds, inventory)
 
   // When an album is active, narrow the disc list to its picks.
   // Locked tracks still appear (so users see what they could unlock),

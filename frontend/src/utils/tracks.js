@@ -68,12 +68,37 @@ export function getTrackById(id) {
   return TRACKS.find(t => t.id === id) || TRACKS.find(t => t.id === DEFAULT_TRACK_ID)
 }
 
+// Maps the badge-locked track id to its premium-disc inventory item.
+// Both unlock paths (earn the badge OR buy the disc) feed into the
+// same isTrackUnlocked check.
+const DISC_TO_ITEM = {
+  'shakira-waka-waka':  'disc-waka-waka',
+  'pitbull-we-are-one': 'disc-we-are-one',
+  'kwabs-walk':         'disc-walk',
+}
+
+function _hasBadge(unlockedBadgeIds, badgeId) {
+  if (!badgeId || !unlockedBadgeIds) return false
+  if (unlockedBadgeIds.has)      return unlockedBadgeIds.has(badgeId)
+  if (Array.isArray(unlockedBadgeIds)) return unlockedBadgeIds.includes(badgeId)
+  return false
+}
+
+/** True if the user can play this track (no gate, badge owned, or disc bought). */
+export function isTrackUnlocked(track, unlockedBadgeIds = [], inventory = {}) {
+  if (!track) return false
+  if (!track.requiredBadge) return true
+  if (_hasBadge(unlockedBadgeIds, track.requiredBadge)) return true
+  const itemId = DISC_TO_ITEM[track.id]
+  return !!(itemId && inventory && inventory[itemId])
+}
+
 /**
  * Filter the catalogue to what a given user can actually play.
  * `unlockedBadgeIds` is a Set or array of badge ids the user owns.
+ * `inventory` is the credits-row inventory map keyed by item id.
  * Tracks without `requiredBadge` are always returned.
  */
-export function getUnlockedTracks(unlockedBadgeIds = []) {
-  const owned = new Set(unlockedBadgeIds)
-  return TRACKS.filter(t => !t.requiredBadge || owned.has(t.requiredBadge))
+export function getUnlockedTracks(unlockedBadgeIds = [], inventory = {}) {
+  return TRACKS.filter(t => isTrackUnlocked(t, unlockedBadgeIds, inventory))
 }

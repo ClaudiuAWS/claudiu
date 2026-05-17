@@ -55,24 +55,19 @@ const Placeholder = ({ title }) => (
 )
 
 const Layout = ({ children }) => (
-  // AppAudioProvider mounts a single <audio> element scoped to the
-  // post-auth area. The login/register screens have their own ambient
-  // audio via `useBgAmbientAudio` and are outside Layout, so the two
-  // sources never play simultaneously.
-  //
-  // InventoryProvider sits inside Layout (post-auth only) so the shop +
-  // cosmetic consumers (frame around avatars, name colour, premium
-  // disc gating) all share one fetch.
-  <AppAudioProvider>
-    <InventoryProvider>
+  // Provider order matters: AppAudio needs to read Inventory to know
+  // which badge-locked tracks the user has bought as premium discs, so
+  // InventoryProvider must be an ancestor of AppAudioProvider.
+  <InventoryProvider>
+    <AppAudioProvider>
       <PendingInviteConsumer />
       <TopNav />
       <div className="pt-16 pb-24">
         {children}
       </div>
       <BottomNav />
-    </InventoryProvider>
-  </AppAudioProvider>
+    </AppAudioProvider>
+  </InventoryProvider>
 )
 
 export default function App() {
