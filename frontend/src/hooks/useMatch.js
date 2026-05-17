@@ -3,6 +3,7 @@ import { matchesApi } from '../services/api'
 import { logger } from '../services/logger'
 import { useWebSocket } from './useWebSocket'
 import { gameTimeToSeconds } from '../utils/matchEvents'
+import { withDefaults } from '../utils/matchDefaults'
 
 const FLASH_EVENT_TYPES = new Set(['nutmeg', 'spectacular_play'])
 
@@ -30,7 +31,11 @@ export function useMatches() {
 
   useEffect(() => {
     matchesApi.list()
-      .then(data => setMatches(data))
+      // Pipe each record through withDefaults so empty homeTeamName /
+      // awayTeamName fields on the backend record get back-filled from
+      // the local KNOWN_MATCHES registry. Backend values always win
+      // when present — defaults are a safety net only.
+      .then(data => setMatches((data || []).map(withDefaults)))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
@@ -73,7 +78,9 @@ export function useMatch(matchId, onScoreEvent = null) {
       matchesApi.getEvents(matchId),
     ])
       .then(([matchData, eventsData]) => {
-        setMatch(matchData)
+        // Back-fill team-name defaults from KNOWN_MATCHES registry when
+        // the backend record has empty fields (stale loader on prod).
+        setMatch(withDefaults(matchData))
         // Merge: keep any WS events that arrived before REST completed
         setAllEvents(prev => {
           const ids = new Set(eventsData.map(e => e.eventId))
@@ -134,7 +141,7 @@ export function useMatch(matchId, onScoreEvent = null) {
     for (const m of batch) {
       if ((m._receivedAt ?? 0) > (latestArrival._receivedAt ?? 0)) latestArrival = m
     }
-    if (latestArrival?.match) setMatch(latestArrival.match)
+    if (latestArrival?.match) setMatch(withDefaults(latestArrival.match))
   }, [])
 
   // Real-time updates via WebSocket
