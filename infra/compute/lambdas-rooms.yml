@@ -79,6 +79,16 @@ Resources:
                                                             - dynamodb:UpdateItem
                                                     Resource:
                                                             - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-credits
+                                                  # Match-perk arming reads the user's inventory at
+                                                  # team-selection time (select_team → _arm_user_perks)
+                                                  # so we can snapshot armed perks onto the room state
+                                                  # without a second client roundtrip.
+                                                  - Sid: CreditsRead
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:GetItem
+                                                    Resource:
+                                                            - !Sub arn:aws:dynamodb:eu-central-1:${AWS::AccountId}:table/claudiu-credits
 
         # 
         # Rooms Lambda

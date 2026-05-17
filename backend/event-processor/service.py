@@ -396,25 +396,30 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
             uid       = m['userId']
             details   = {d['playerId']: d for d in m.get('teamSelectionDetails', [])}
             captain   = m.get('captainPlayerId') or ''
+            # Triple-captain perk armed via the credits-inventory snapshot
+            # at squad-lock time → captain multiplier is ×3 for the whole
+            # match instead of ×2. Falls back to ×2 when no perk is armed.
+            armed_perks = set(m.get('armedPerks') or [])
+            captain_mult = 3 if 'captain-triple' in armed_perks else 2
             delta, reason, name = 0, '', ''
             captained = False  # any captain-multiplied component fired?
 
             # Owners stack: scorer bonus + assist bonus + GK conceded penalty.
-            # Captain multiplier (×2) applies per-component — if the captain
-            # is the scorer, the scorer portion doubles; if the captain is
-            # the assister, the assister portion doubles. Conceded penalty
-            # is doubled too when the captain IS the conceding keeper, since
-            # captain-doubling-applies-to-negatives matches Bundesliga
-            # Fantasy convention (the price of a bold pick).
+            # Captain multiplier applies per-component — if the captain
+            # is the scorer, the scorer portion is multiplied; if the
+            # captain is the assister, the assister portion is multiplied.
+            # Conceded penalty is multiplied too when the captain IS the
+            # conceding keeper, since captain-doubling-applies-to-negatives
+            # matches Bundesliga Fantasy convention (the price of a bold pick).
             if scoring_pid and scoring_pid in details:
-                gain = goal_value * (2 if captain == scoring_pid else 1)
+                gain = goal_value * (captain_mult if captain == scoring_pid else 1)
                 if captain == scoring_pid: captained = True
                 delta += gain
                 reason = 'scored for your squad'
                 name   = scoring_display
 
             if assist_pid and assist_pid in details:
-                gain = 3 * (2 if captain == assist_pid else 1)
+                gain = 3 * (captain_mult if captain == assist_pid else 1)
                 if captain == assist_pid: captained = True
                 delta += gain
                 if not reason:
@@ -430,7 +435,7 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
                 )
                 if conceding_gk:
                     gk_pid = conceding_gk.get('playerId') or ''
-                    loss = -1 * (2 if captain and captain == gk_pid else 1)
+                    loss = -1 * (captain_mult if captain and captain == gk_pid else 1)
                     if captain and captain == gk_pid: captained = True
                     delta += loss
                     if not reason:
@@ -454,11 +459,13 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
             uid       = m['userId']
             selection = set(m.get('teamSelection', []))
             captain   = m.get('captainPlayerId') or ''
+            armed_perks = set(m.get('armedPerks') or [])
+            captain_mult = 3 if 'captain-triple' in armed_perks else 2
             if player_id and player_id in selection:
                 is_captain = (captain == player_id)
                 entry = {
                     'userId':     uid,
-                    'delta':      magnitude * (2 if is_captain else 1),
+                    'delta':      magnitude * (captain_mult if is_captain else 1),
                     'reason':     verb,
                     'playerName': player_display,
                 }
@@ -474,11 +481,13 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
             uid     = m['userId']
             details = {d['playerId']: d for d in m.get('teamSelectionDetails', [])}
             captain = m.get('captainPlayerId') or ''
+            armed_perks = set(m.get('armedPerks') or [])
+            captain_mult = 3 if 'captain-triple' in armed_perks else 2
             if gk_id and gk_id in details:
                 is_captain = (captain == gk_id)
                 entry = {
                     'userId':     uid,
-                    'delta':      2 * (2 if is_captain else 1),
+                    'delta':      2 * (captain_mult if is_captain else 1),
                     'reason':     'made a save',
                     'playerName': gk_display,
                 }

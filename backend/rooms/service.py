@@ -872,12 +872,24 @@ def select_team(room_code: str, user_id: str, player_ids: list) -> dict:
         for pid in player_ids
     ]
 
+    # Snapshot any owned consumable perks at squad-lock time. Perks
+    # are "armed" for this match — committed atomically so the user
+    # can't double-spend (e.g. arm twice on two concurrent
+    # team-selection calls). Marked as `consumedForMatch` on the
+    # credits row so they can't be applied to a different match.
+    armed_perks = _arm_user_perks(user_id, match_id)
+
     members = room.get('members', [])
     updated = False
     for m in members:
         if m['userId'] == user_id:
             m['teamSelection'] = player_ids
             m['teamSelectionDetails'] = selection_details
+            if armed_perks:
+                # Snapshot armed perk ids onto the member entry so the
+                # event-processor can read them at match time without a
+                # second credits-table fetch.
+                m['armedPerks'] = armed_perks
             updated = True
             break
     if not updated:
@@ -890,7 +902,74 @@ def select_team(room_code: str, user_id: str, player_ids: list) -> dict:
     )
     room['members'] = members
     _push_room_update(room)
-    return {'ok': True, 'playerCount': 11}
+    return {'ok': True, 'playerCount': 11, 'armedPerks': armed_perks}
+
+
+# ── Match-perk consumption helpers ───────────────────────────────────
+
+# Subset of breznCatalog item ids that are consumable match perks.
+# Mirrored here so we can keep this Lambda's deps small (we don't
+# want to bundle the whole catalog) — keep in sync with
+# backend/shared/breznCatalog.py.
+_CONSUMABLE_PERK_IDS = {
+    'captain-triple',
+    'pick-reroll',
+    'free-hit',
+    'reaction-pack',
+}
+
+
+def _arm_user_perks(user_id: str, match_id: str) -> list:
+    """Read the user's inventory; for each owned consumable perk that
+    isn't already armed/consumed, mark it `consumedForMatch = match_id`
+    via a conditional UpdateItem (one DDB call per perk so we can
+    detect races individually).
+
+    Returns: list of perk ids that successfully armed for THIS match.
+
+    Never raises — armed perks are additive (no perk = baseline gameplay).
+    On any error returns the empty list and the user just plays without
+    perks.
+    """
+    if not user_id or not match_id or _credits is None:
+        return []
+
+    try:
+        item = _credits._table.get_item(
+            Key={'userId': user_id},
+            ConsistentRead=True,
+        ).get('Item') or {}
+    except Exception as e:
+        print(f"[perks] inventory read failed for {user_id}: {e}")
+        return []
+
+    inventory = item.get('inventory') or {}
+    armed = []
+    for item_id in _CONSUMABLE_PERK_IDS:
+        entry = inventory.get(item_id)
+        if not entry:
+            continue
+        # Already consumed for a previous match — skip.
+        if entry.get('consumedForMatch'):
+            continue
+        try:
+            _credits._table.update_item(
+                Key={'userId': user_id},
+                UpdateExpression='SET inventory.#item.consumedForMatch = :match',
+                ConditionExpression='attribute_exists(inventory.#item) AND (attribute_not_exists(inventory.#item.consumedForMatch) OR inventory.#item.consumedForMatch = :empty)',
+                ExpressionAttributeNames={'#item': item_id},
+                ExpressionAttributeValues={':match': match_id, ':empty': ''},
+            )
+            armed.append(item_id)
+        except ClientError as e:
+            if e.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
+                # Concurrent arm landed first — this match isn't getting
+                # the perk. Skip silently.
+                continue
+            print(f"[perks] arm failed for {user_id}/{item_id}: {e}")
+        except Exception as e:
+            print(f"[perks] arm unexpected error for {user_id}/{item_id}: {e}")
+    return armed
 
 
 def start_match_for_room(room_code: str, user_id: str, speed_multiplier: float = 5.0) -> dict:

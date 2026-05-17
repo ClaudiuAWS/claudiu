@@ -101,8 +101,8 @@ export const SPEND_CATALOG = {
         id:     'captain-triple',
         label:  'Triple captain',
         cost:   500,
-        detail: 'Your captain scores at 3× for this match instead of 2×.',
-        status: 'soon',
+        detail: 'Your captain scores at 3× for the NEXT match you lock a squad in. Auto-armed at squad lock.',
+        status: 'live',
       },
       {
         id:     'pick-reroll',
