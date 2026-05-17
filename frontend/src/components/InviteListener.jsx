@@ -52,19 +52,22 @@ export default function InviteListener() {
     if (!payloadMatchId) {
       // Payload had no matchId (legacy backend / race). Fall back to
       // the slower-but-safe path: await join, derive matchId from the
-      // response, then navigate.
+      // response, then navigate. Pass the joined room as initialRoom
+      // so LobbyPage renders fully-populated on the first frame instead
+      // of showing a spinner while useRoom re-fetches.
       setAccepting(true)
       ;(async () => {
         try {
           const joined = await roomsApi.join(roomCode)
-          const mid = joined?.room?.matchId || joined?.matchId
+          const fullRoom = joined?.room || joined  // some shapes return room at top level
+          const mid = fullRoom?.matchId
           if (!mid) {
             toast.error("Couldn't find that party — try again from the friend's profile.")
             return
           }
           sessionStorage.setItem('fan_squad_room_code', roomCode)
           setPending(null)
-          navigate(`/lobby/${mid}`)
+          navigate(`/lobby/${mid}`, { state: { initialRoom: fullRoom } })
         } catch (err) {
           toast.error(err.message || 'Failed to join')
         } finally {
@@ -74,10 +77,25 @@ export default function InviteListener() {
       return
     }
 
-    // Happy path — instant navigate, join in the background.
+    // Happy path — instant navigate, join in the background. We don't
+    // have the room's full member list yet (that arrives via WS
+    // room_update once the background join completes), so pass a STUB
+    // initialRoom so LobbyPage's useRoom skips its loading-spinner gate.
+    // The WS handler then fills in members + hostUserId in the background.
+    // Mirrors the LobbyPage→MatchPage navigation pattern at LobbyPage.jsx:87.
     sessionStorage.setItem('fan_squad_room_code', roomCode)
     setPending(null)
-    navigate(`/lobby/${payloadMatchId}`)
+    navigate(`/lobby/${payloadMatchId}`, {
+      state: {
+        initialRoom: {
+          roomCode,
+          matchId: payloadMatchId,
+          members:    [],
+          hostUserId: null,
+          status:     'lobby',
+        },
+      },
+    })
 
     roomsApi.join(roomCode).catch(err => {
       // If the background join fails, surface a toast + bounce back

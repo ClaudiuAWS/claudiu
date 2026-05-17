@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useRoom } from '../hooks/useRoom'
 import { useMatch } from '../hooks/useMatch'
 import { useAuth } from '../hooks/useAuth'
@@ -19,6 +19,7 @@ export default function LobbyPage() {
   const { matchId } = useParams()
   const { user } = useAuth()
   const { match } = useMatch(matchId)
+  const location = useLocation()
   const [mode, setMode] = useState('create')
   const [error, setError] = useState('')
   const [teamModalOpen, setTeamModalOpen] = useState(false)
@@ -36,10 +37,13 @@ export default function LobbyPage() {
     sessionStorage.setItem(flagKey, '1')
     navigate(`/match/${mid}`)
   }
+  // Pass nav-state initialRoom (e.g. from InviteListener accepting an
+  // invite) to useRoom so the loading-spinner gate doesn't fire while
+  // the API restore round-trips. Mirrors MatchPage.jsx:60.
   const { room, loading, createRoom, joinRoom, leaveRoom } = useRoom(
     null,
     user?.userId,
-    null,
+    location.state?.initialRoom || null,
     null,
     handleMatchStarted,
   )
