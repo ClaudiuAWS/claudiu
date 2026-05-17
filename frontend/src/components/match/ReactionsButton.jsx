@@ -2,13 +2,19 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { roomsApi } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
+import { useInventory } from '../../hooks/useInventory'
 import { pushCheer } from './ReactionsOverlay'
 
-// Pretzel last in the array → renders at the BOTTOM of the vertical
-// column (closest to the FAB above which the picker pops). Single
-// continuous column reads as one strip; the previous 2-col grid felt
-// like four discrete pairs.
-const EMOJIS = ['💀', '🙌', '😱', '🤣', '🔥', '⚽', '🥨']
+// Base reactions, available to every user. Pretzel last in the array
+// → renders at the BOTTOM of the vertical column (closest to the FAB
+// above which the picker pops).
+const BASE_EMOJIS = ['💀', '🙌', '😱', '🤣', '🔥', '⚽', '🥨']
+
+// Premium 6-emoji pack unlocked by the 'reaction-pack' perk
+// (catalog item 300 brezn). Stacks ABOVE the base column so the
+// extras are visible at the top of the open picker — a clear visual
+// "you have the pack" signal.
+const PREMIUM_EMOJIS = ['🎉', '👑', '🤡', '🥵', '🥶', '💯']
 
 /**
  * Floating reactions button (bottom-right of the match view).
@@ -21,6 +27,13 @@ const EMOJIS = ['💀', '🙌', '😱', '🤣', '🔥', '⚽', '🥨']
 export default function ReactionsButton({ roomCode }) {
   const [open, setOpen] = useState(false)
   const { user } = useAuth()
+  const { owns } = useInventory()
+
+  // Owners of the reaction-pack perk see PREMIUM_EMOJIS prepended to
+  // the base set. Same single-column layout — the picker just grows.
+  const EMOJIS = owns('reaction-pack')
+    ? [...PREMIUM_EMOJIS, ...BASE_EMOJIS]
+    : BASE_EMOJIS
 
   if (!roomCode) return null
 
