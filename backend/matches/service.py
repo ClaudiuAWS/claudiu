@@ -2,14 +2,6 @@ import boto3
 import os
 from boto3.dynamodb.conditions import Key
 
-# Player roster fallback — kicks in when player_lookup is empty in the
-# deployed env (loader was never re-run). Lazy import so a stale deploy
-# without the shared module bundled still falls through to direct DDB.
-try:
-    from players import query_players_with_fallback as _query_players_with_fallback
-except Exception:
-    _query_players_with_fallback = None
-
 dynamodb = boto3.resource('dynamodb')
 
 matches_table      = dynamodb.Table(os.environ['MATCHES_TABLE'])
@@ -60,20 +52,15 @@ def get_match_events(match_id: str) -> list:
 
 
 def get_match_players(match_id: str) -> list:
-    # Shared helper handles DDB query + bundled fallback when DDB is
-    # empty (deployed env without loader run).
-    if _query_players_with_fallback is not None:
-        players = _query_players_with_fallback(player_lookup_table, match_id)
-    else:
-        players = []
-        kwargs = {'KeyConditionExpression': Key('matchId').eq(match_id)}
-        while True:
-            resp = player_lookup_table.query(**kwargs)
-            players.extend(resp.get('Items', []))
-            lek = resp.get('LastEvaluatedKey')
-            if not lek:
-                break
-            kwargs['ExclusiveStartKey'] = lek
+    players = []
+    kwargs = {'KeyConditionExpression': Key('matchId').eq(match_id)}
+    while True:
+        resp = player_lookup_table.query(**kwargs)
+        players.extend(resp.get('Items', []))
+        lek = resp.get('LastEvaluatedKey')
+        if not lek:
+            break
+        kwargs['ExclusiveStartKey'] = lek
 
     def sort_key(p):
         return (

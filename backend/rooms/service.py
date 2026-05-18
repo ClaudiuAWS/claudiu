@@ -17,13 +17,6 @@ try:
 except Exception:
     _credits = None
 
-# Player roster fallback — kicks in when player_lookup is empty in the
-# deployed env (loader was never re-run). Same lazy-import pattern.
-try:
-    from players import query_players_with_fallback as _query_players_with_fallback
-except Exception:
-    _query_players_with_fallback = None
-
 dynamodb = boto3.resource('dynamodb')
 lambda_client = boto3.client('lambda', region_name='eu-central-1')
 rooms_table = dynamodb.Table(os.environ['ROOMS_TABLE'])
@@ -552,22 +545,16 @@ def _generate_draft_pairs(match_id: str) -> tuple[list, list]:
     The order is randomised within each zone, then pairs are interleaved
     across zones so users don't get a single position-type streak.
     """
-    # Prefer the shared helper which falls back to a bundled roster when
-    # DDB is empty (deployed env without loader run). Direct-query path
-    # kept as a safety net if the players module didn't bundle.
-    if _query_players_with_fallback is not None:
-        players = _query_players_with_fallback(player_lookup_table, match_id)
-    else:
+    resp = player_lookup_table.query(
+        KeyConditionExpression=Key('matchId').eq(match_id),
+    )
+    players = resp.get('Items', [])
+    while resp.get('LastEvaluatedKey'):
         resp = player_lookup_table.query(
             KeyConditionExpression=Key('matchId').eq(match_id),
+            ExclusiveStartKey=resp['LastEvaluatedKey'],
         )
-        players = resp.get('Items', [])
-        while resp.get('LastEvaluatedKey'):
-            resp = player_lookup_table.query(
-                KeyConditionExpression=Key('matchId').eq(match_id),
-                ExclusiveStartKey=resp['LastEvaluatedKey'],
-            )
-            players.extend(resp.get('Items', []))
+        players.extend(resp.get('Items', []))
 
     # Group by zone, dropping players without a known position. Keep the full
     # player object (not just playerId) so we can prioritise starters when
