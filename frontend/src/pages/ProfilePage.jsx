@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { profileApi } from '../services/api'
+import { profileApi, leaderboardApi } from '../services/api'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import { useAppAudio } from '../hooks/useAppAudio'
 import { useCredits } from '../hooks/useCredits'
@@ -91,7 +91,29 @@ export default function ProfilePage() {
 
   return (
     <div className="px-6 pt-8 pb-12 max-w-md mx-auto">
-      <h1 className="text-white text-2xl font-bold tracking-tight mb-6">Profile</h1>
+      {/* Glossy header */}
+      <div className="relative overflow-hidden rounded-2xl mb-5">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/60 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.07] to-transparent pointer-events-none" />
+        <div
+          className="relative px-5 py-4"
+          style={{
+            background: 'linear-gradient(180deg, #1a0a0a 0%, #0d0606 100%)',
+            border: '1px solid rgba(220,38,38,0.25)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px -12px rgba(220,38,38,0.50)',
+          }}
+        >
+          <h1
+            className="text-white font-stadium text-2xl leading-none"
+            style={{ letterSpacing: '0.10em', textShadow: '0 2px 0 rgba(0,0,0,0.6), 0 -1px 0 rgba(255,255,255,0.05)' }}
+          >
+            PROFILE
+          </h1>
+          <p className="text-gray-400 text-[11px] mt-1.5 tracking-wider">
+            Your identity & settings
+          </p>
+        </div>
+      </div>
 
       {/* Identity card */}
       <div
@@ -196,6 +218,9 @@ export default function ProfilePage() {
       {/* Portfolio: earned crests above the wallet — trophies first. */}
       <BadgesShowcase />
 
+      {/* Stats row */}
+      <StatsRow />
+
       {/* Wallet */}
       <CreditsCard />
 
@@ -231,6 +256,38 @@ export default function ProfilePage() {
       >
         {signingOut ? 'Signing out…' : 'Log out'}
       </button>
+    </div>
+  )
+}
+
+function StatsRow() {
+  const [stats, setStats] = useState(null)
+  useEffect(() => {
+    leaderboardApi.me().then(d => setStats(d.me)).catch(() => {})
+  }, [])
+  if (!stats || !stats.matchesPlayed) return null
+  const winRate = stats.matchesPlayed > 0 ? Math.round((stats.wins / stats.matchesPlayed) * 100) : 0
+  return (
+    <div
+      className="mt-4 rounded-2xl px-4 py-3 flex items-center justify-around"
+      style={{ background: 'linear-gradient(145deg, #111827 0%, #0d1117 100%)', border: '1px solid rgba(255,255,255,0.06)' }}
+    >
+      <StatPill label="Matches" value={stats.matchesPlayed} />
+      <div className="w-px h-8 bg-white/10" />
+      <StatPill label="Wins" value={stats.wins} />
+      <div className="w-px h-8 bg-white/10" />
+      <StatPill label="Win %" value={`${winRate}%`} />
+      <div className="w-px h-8 bg-white/10" />
+      <StatPill label="Rank" value={stats.rank ? `#${stats.rank}` : '—'} />
+    </div>
+  )
+}
+
+function StatPill({ label, value }) {
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <span className="text-white font-stadium text-base tabular-nums leading-none">{value}</span>
+      <span className="text-gray-500 text-[9px] tracking-widest uppercase font-semibold">{label}</span>
     </div>
   )
 }

@@ -91,18 +91,7 @@ export default function LeaderboardPage() {
 
       {top3.length > 0 && <Podium top3={top3} myUserId={myUserId} />}
 
-      {rest.length > 0 && (
-        <div className="mt-5 space-y-2">
-          {rest.map((row, idx) => (
-            <ListRow
-              key={row.userId}
-              row={row}
-              rank={idx + 4}
-              isMe={row.userId === myUserId}
-            />
-          ))}
-        </div>
-      )}
+      {rest.length > 0 && <PaginatedList rest={rest} myUserId={myUserId} />}
 
       {/* "Your rank" sticky card — only when user is OUTSIDE the top-N
           but has a row on the leaderboard */}
@@ -131,6 +120,68 @@ export default function LeaderboardPage() {
         <p className="text-center text-gray-600 text-xs mt-6 leading-relaxed">
           Play a match to climb the global ranks.
         </p>
+      )}
+    </div>
+  )
+}
+
+// ---------- Paginated List ---------------------------------------------
+
+const PAGE_SIZE = 10
+
+function PaginatedList({ rest, myUserId }) {
+  const [page, setPage] = useState(0)
+  const totalPages = Math.ceil(rest.length / PAGE_SIZE)
+  const slice = rest.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+  return (
+    <div className="mt-5">
+      <div className="space-y-2">
+        {slice.map((row, idx) => (
+          <ListRow
+            key={row.userId}
+            row={row}
+            rank={page * PAGE_SIZE + idx + 4}
+            isMe={row.userId === myUserId}
+          />
+        ))}
+      </div>
+      {totalPages > 1 && (
+        <div
+          className="flex items-center justify-between mt-4 px-3 py-2.5 rounded-2xl"
+          style={{
+            background: 'linear-gradient(145deg, #111827 0%, #0d1117 100%)',
+            border: '1px solid rgba(255,255,255,0.06)',
+          }}
+        >
+          <button
+            onClick={() => setPage(p => p - 1)}
+            disabled={page === 0}
+            className="px-3.5 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
+            style={{
+              background: page > 0 ? 'rgba(220,38,38,0.15)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${page > 0 ? 'rgba(248,113,113,0.35)' : 'rgba(255,255,255,0.08)'}`,
+              color: page > 0 ? '#fca5a5' : '#6b7280',
+            }}
+          >
+            ← Prev
+          </button>
+          <span className="text-gray-400 text-[11px] font-semibold tabular-nums tracking-wider">
+            {page + 1} <span className="text-gray-600">/</span> {totalPages}
+          </span>
+          <button
+            onClick={() => setPage(p => p + 1)}
+            disabled={page >= totalPages - 1}
+            className="px-3.5 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
+            style={{
+              background: page < totalPages - 1 ? 'rgba(220,38,38,0.15)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${page < totalPages - 1 ? 'rgba(248,113,113,0.35)' : 'rgba(255,255,255,0.08)'}`,
+              color: page < totalPages - 1 ? '#fca5a5' : '#6b7280',
+            }}
+          >
+            Next →
+          </button>
+        </div>
       )}
     </div>
   )

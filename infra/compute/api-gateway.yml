@@ -1980,6 +1980,14 @@ Resources:
                         - CreditsOptionsMethod
                         - GetCreditsFriendsMethod
                         - CreditsFriendsOptionsMethod
+                        - GetCreditsInventoryMethod
+                        - CreditsInventoryOptionsMethod
+                        - PostCreditsPurchaseMethod
+                        - CreditsPurchaseOptionsMethod
+                        - PostRoomsDraftRerollMethod
+                        - RoomsDraftRerollOptionsMethod
+                        - PostRoomsFreeHitSwapMethod
+                        - RoomsFreeHitSwapOptionsMethod
                         - PostFriendsAcceptInviteMethod
                         - FriendsAcceptInviteOptionsMethod
                         - PostRoomsCheerMethod

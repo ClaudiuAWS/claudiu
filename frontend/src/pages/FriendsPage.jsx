@@ -4,6 +4,7 @@ import { useFriendCredits } from '../hooks/useCredits'
 import { useAuth } from '../hooks/useAuth'
 import InviteShareSheet from '../components/InviteShareSheet'
 import PretzelCoin from '../components/ui/PretzelCoin'
+import LoadingSpinner from '../components/ui/LoadingSpinner'
 
 const AVATAR_COLORS = [
   'from-violet-500 to-fuchsia-600',
@@ -142,7 +143,7 @@ function AddFriendForm({ onAdd }) {
           <button
             type="submit"
             disabled={state === 'loading' || !email.trim()}
-            className="text-emerald-400 hover:text-emerald-300 transition-colors disabled:opacity-40 font-semibold text-sm"
+            className="text-red-400 hover:text-red-300 transition-colors disabled:opacity-40 font-semibold text-sm"
           >
             {state === 'loading' ? 'Sending…' : 'Send'}
           </button>
@@ -205,26 +206,48 @@ export default function FriendsPage() {
 
   return (
     <div className="px-6 pt-8 pb-12 max-w-md mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-white text-2xl font-bold tracking-tight">Friends</h1>
-        <button
-          type="button"
-          onClick={() => setShareOpen(true)}
-          className="text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full transition-all active:scale-95 flex items-center gap-1.5"
+      {/* Glossy header */}
+      <div className="relative overflow-hidden rounded-2xl mb-5">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/60 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.07] to-transparent pointer-events-none" />
+        <div
+          className="relative px-5 py-4 flex items-center justify-between"
           style={{
-            background: 'linear-gradient(135deg, rgba(220,38,38,0.30) 0%, rgba(153,27,27,0.20) 100%)',
-            border: '1px solid rgba(248,113,113,0.45)',
-            color: '#fca5a5',
-            boxShadow: '0 0 14px -4px rgba(220,38,38,0.45)',
+            background: 'linear-gradient(180deg, #1a0a0a 0%, #0d0606 100%)',
+            border: '1px solid rgba(220,38,38,0.25)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px -12px rgba(220,38,38,0.50)',
           }}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
-            <polyline points="16 6 12 2 8 6" />
-            <line x1="12" y1="2" x2="12" y2="15" />
-          </svg>
-          Share invite
-        </button>
+          <div>
+            <h1
+              className="text-white font-stadium text-2xl leading-none"
+              style={{ letterSpacing: '0.10em', textShadow: '0 2px 0 rgba(0,0,0,0.6), 0 -1px 0 rgba(255,255,255,0.05)' }}
+            >
+              FRIENDS
+            </h1>
+            <p className="text-gray-400 text-[11px] mt-1.5 tracking-wider">
+              {data.accepted.length} friend{data.accepted.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            className="text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full transition-all active:scale-95 flex items-center gap-1.5"
+            style={{
+              background: 'linear-gradient(135deg, rgba(220,38,38,0.30) 0%, rgba(153,27,27,0.20) 100%)',
+              border: '1px solid rgba(248,113,113,0.45)',
+              color: '#fca5a5',
+              boxShadow: '0 0 14px -4px rgba(220,38,38,0.45)',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+              <polyline points="16 6 12 2 8 6" />
+              <line x1="12" y1="2" x2="12" y2="15" />
+            </svg>
+            Invite
+          </button>
+        </div>
       </div>
 
       <AddFriendForm onAdd={handleAdd} />
@@ -236,9 +259,7 @@ export default function FriendsPage() {
         inviterName={user?.displayName}
       />
 
-      {loading && (
-        <p className="text-gray-500 text-sm text-center py-8">Loading…</p>
-      )}
+      {loading && <LoadingSpinner />}
 
       <Section title="Friend requests" count={data.incoming.length}>
         {data.incoming.map(f => (
