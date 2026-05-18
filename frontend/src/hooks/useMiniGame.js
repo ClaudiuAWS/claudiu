@@ -199,9 +199,37 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
     if (state?.status !== 'active' || !state?.startedAtMs || !state?.durationMs) return
     const remaining = Math.max(0, state.startedAtMs + state.durationMs - Date.now())
     expireTimerRef.current = setTimeout(() => {
-      if (!submittedRef.current && !resolvedRef.current) {
-        // Force-resolve with whatever we have. Bot may have submitted; user
-        // didn't. Compute deltas with userPayload=null.
+      if (resolvedRef.current) return
+
+      // Multi-user penalty special case: _resolve uses state._botPayload,
+      // which is set only by the solo bot — null in multi-user mode. The
+      // opponent's pick lands via the announce-only WS broadcast and is
+      // stashed in state._opponentPick. Use that so the deltas reflect
+      // reality:
+      //   shooter committed, keeper didn't  → _localPick=shooter,
+      //                                      _opponentPick=null → GOAL
+      //   keeper committed, shooter didn't  → _localPick=keeper,
+      //                                      _opponentPick=null → no deltas
+      //   both committed (rare — should've resolved earlier on WS merge,
+      //                   but safety net)   → both populated → real outcome
+      //   neither committed                 → both null → empty deltas
+      //
+      // Previously the shooter's expire timer no-op'd because
+      // submittedRef was true (they committed) and the hard fail-safe
+      // flipped status to 'resolved' WITHOUT computing deltas, so the
+      // banner fell through to MISS / "No one committed" even though
+      // the goal should have stood.
+      const s = stateRef.current
+      const isMultiPenalty =
+        s?.gameType === 'PENALTY_SHOOTOUT' && (room?.members || []).length > 1
+      if (isMultiPenalty) {
+        _resolveBoth(s._localPick || null, s._opponentPick || null)
+        return
+      }
+
+      if (!submittedRef.current) {
+        // Non-penalty (or solo penalty): bot may have submitted; user didn't.
+        // Compute deltas with userPayload=null.
         _resolve(null)
       }
     }, remaining + 200)  // small buffer

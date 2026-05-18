@@ -1233,17 +1233,14 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
             />
           </div>
 
-          <div className="flex-shrink-0 px-4 pb-8 pt-3 border-t border-white/10 flex gap-3">
-            <button
-              onClick={() => setPhase('select_xi')}
-              className="flex-1 py-3 rounded-2xl font-bold text-sm text-gray-400 bg-white/8 hover:bg-white/12 transition-all"
-            >
-              ← Edit XI
-            </button>
+          <div className="flex-shrink-0 px-4 pb-8 pt-3 border-t border-white/10">
+            {/* No "Edit XI" back button — once the player reaches preview,
+                the only action is Lock In Squad. Squad is final once locked
+                in; backtracking after that is impossible by design. */}
             <button
               onClick={confirm}
               disabled={submitting || !captainPlayerId}
-              className="flex-[2] py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
+              className="w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide transition-all
                 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white
                 disabled:opacity-40 disabled:cursor-not-allowed"
             >
