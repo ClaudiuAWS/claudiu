@@ -392,6 +392,18 @@ _COUNTER_BADGES = {
 }
 
 
+# Retail price (brezn) to buy a specific badge of the given tier from the
+# shop. Mirrors the frontend TIER_PRICES in frontend/src/utils/badges.js
+# and the BADGE_EARN_PAYOUT amounts in shared/credits.py — earning and
+# buying cost the same; the difference is just whether you grind a
+# specific badge in-match or pay to claim one.
+BADGE_BUY_PRICES = {
+    'bronze': 300,
+    'silver': 800,
+    'gold':   2000,
+}
+
+
 def _increment_counter(user_id: str, counter_key: str, match_id: str = '', context: dict | None = None) -> None:
     """Atomically increment a counter and award badges whose threshold is met.
 

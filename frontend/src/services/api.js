@@ -75,8 +75,9 @@ export const friendsApi = {
 }
 
 export const badgesApi = {
-  list:    () => request('/badges'),
-  catalog: () => request('/badges/catalog'),
+  list:    ()        => request('/badges'),
+  catalog: ()        => request('/badges/catalog'),
+  buy:     (badgeId) => request('/badges/buy', 'POST', { badgeId }),
 }
 
 export const historyApi = {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useCredits } from '../hooks/useCredits'
 import { useInventory } from '../hooks/useInventory'
@@ -47,11 +48,19 @@ const CATEGORY_RENDER = {
 }
 
 export default function ItemPreviewModal({ item, onClose }) {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { balance, refresh: refreshBalance } = useCredits()
   const { owns, purchase } = useInventory()
   const { badges } = useBadges()
   const [submitting, setSubmitting] = useState(false)
+
+  // Tier-buy items (badge-bronze/silver/gold) don't go through the
+  // inventory-map purchase path — they live in the claudiu-badges
+  // table and need a specific badgeId. We special-case them: the Buy
+  // CTA navigates to /badges where the user picks a specific badge
+  // and confirms via BadgePreviewModal's Buy flow.
+  const isBadgeTierItem = item?.id?.startsWith?.('badge-')
 
   // Discs that the user already unlocked via earning the corresponding
   // badge — the Buy button reads "Already unlocked" so they don't waste
@@ -71,6 +80,13 @@ export default function ItemPreviewModal({ item, onClose }) {
 
   const handleBuy = async () => {
     if (!isLive || isOwned || viaBadge || submitting) return
+    // Tier-buy items: bounce the user to /badges. The actual buy
+    // happens there once they pick a specific badge.
+    if (isBadgeTierItem) {
+      onClose()
+      navigate('/badges')
+      return
+    }
     if (!canAfford) return
     setSubmitting(true)
     try {
@@ -147,7 +163,7 @@ export default function ItemPreviewModal({ item, onClose }) {
           </div>
           <button
             onClick={handleBuy}
-            disabled={!isLive || isOwned || viaBadge || !canAfford || submitting}
+            disabled={!isLive || isOwned || viaBadge || submitting || (!isBadgeTierItem && !canAfford)}
             className="flex-1 py-3 rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98]
               disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
@@ -155,22 +171,23 @@ export default function ItemPreviewModal({ item, onClose }) {
                 ? 'rgba(34,197,94,0.20)'
                 : !isLive
                   ? 'rgba(255,255,255,0.05)'
-                  : canAfford
+                  : (isBadgeTierItem || canAfford)
                     ? 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)'
                     : 'rgba(255,255,255,0.05)',
               border: `1px solid ${
                 (isOwned || viaBadge) ? 'rgba(34,197,94,0.40)'
                 : !isLive ? 'rgba(255,255,255,0.10)'
-                : canAfford ? 'rgba(248,113,113,0.55)'
+                : (isBadgeTierItem || canAfford) ? 'rgba(248,113,113,0.55)'
                 : 'rgba(255,255,255,0.10)'
               }`,
-              color: (isOwned || viaBadge) ? '#86efac' : canAfford ? '#ffffff' : '#6b7280',
+              color: (isOwned || viaBadge) ? '#86efac' : (isBadgeTierItem || canAfford) ? '#ffffff' : '#6b7280',
             }}
           >
             {submitting ? 'Buying…'
               : isOwned ? 'Owned'
               : viaBadge ? '✓ Already unlocked via badge'
               : !isLive ? 'Coming soon'
+              : isBadgeTierItem ? `Browse ${item.id.replace('badge-', '')} badges →`
               : !canAfford ? `Need ${item.cost - balance} more brezn`
               : `Buy for ${item.cost}`}
           </button>

@@ -1,8 +1,12 @@
-import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { TIER_COLORS } from '../utils/badges'
+import { useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
+import { TIER_COLORS, TIER_PRICES } from '../utils/badges'
 import { TRACKS } from '../utils/tracks'
 import { markSeen } from '../utils/badgesUnseen'
+import { badgesApi } from '../services/api'
+import { useBadges } from '../hooks/useBadges'
+import { useCredits } from '../hooks/useCredits'
+import PretzelCoin from './ui/PretzelCoin'
 
 /**
  * BadgePreviewModal — tap-to-preview for any badge on the BadgesPage.
@@ -13,15 +17,14 @@ import { markSeen } from '../utils/badgesUnseen'
  *     BadgesPage card (so it reads consistent).
  *   - Stadium-font title + tier pill + description.
  *   - Disc-reward marker if the badge unlocks a track.
- *   - Earned pill (green) when owned; otherwise an "Open Brezn Shop"
- *     button that routes to the tier-level shop items.
- *
- * Direct buy-this-specific-badge is intentionally NOT wired here — the
- * existing badge-bronze/silver/gold shop items still operate at
- * tier-level. The Shop link is the bridge.
+ *   - Earned pill (green) when owned; otherwise a "Buy for N 🥨" button
+ *     that pays the tier price and writes the badge atomically via
+ *     POST /badges/buy.
  */
 export default function BadgePreviewModal({ preview, onClose }) {
-  const navigate = useNavigate()
+  const { refresh: refreshBadges } = useBadges()
+  const { balance, refresh: refreshCredits } = useCredits()
+  const [submitting, setSubmitting] = useState(false)
 
   // When an EARNED badge is previewed, mark it seen so the glow + "NEW"
   // pill on the BadgesPage card retire. Idempotent + safe to fire for
@@ -40,10 +43,31 @@ export default function BadgePreviewModal({ preview, onClose }) {
   const rewardTrack = badge.discReward
     ? TRACKS.find(t => t.id === badge.discReward)
     : null
+  const price = TIER_PRICES[badge.tier] ?? 0
+  const canAfford = balance >= price
 
-  const goToShop = () => {
-    onClose()
-    navigate('/shop')
+  const handleBuy = async () => {
+    if (submitting || earned || price <= 0) return
+    if (!canAfford) {
+      toast.error('Not enough brezn')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await badgesApi.buy(badge.id)
+      // Refresh both caches so the card flips to "Earned" and the
+      // header brezn pill ticks down.
+      await Promise.all([refreshBadges(), refreshCredits()])
+      toast.success(`${badge.title} unlocked!`)
+      onClose()
+    } catch (err) {
+      const msg = String(err?.message || '').toLowerCase()
+      if (msg.includes('insufficient')) toast.error('Not enough brezn')
+      else if (msg.includes('already owned')) toast.error('Already owned')
+      else toast.error(err?.message || 'Purchase failed')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -150,15 +174,24 @@ export default function BadgePreviewModal({ preview, onClose }) {
             </div>
           ) : (
             <button
-              onClick={goToShop}
-              className="w-full py-3 rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98]"
+              onClick={handleBuy}
+              disabled={submitting || price <= 0}
+              className="w-full py-3 rounded-2xl font-bold text-sm tracking-wide transition-all active:scale-[0.98]
+                disabled:opacity-50 disabled:cursor-not-allowed
+                flex items-center justify-center gap-2"
               style={{
-                background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
-                border: '1px solid rgba(248,113,113,0.55)',
-                color: '#ffffff',
+                background: canAfford
+                  ? 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)'
+                  : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${canAfford ? 'rgba(248,113,113,0.55)' : 'rgba(255,255,255,0.10)'}`,
+                color: canAfford ? '#ffffff' : '#6b7280',
               }}
             >
-              Open Brezn Shop →
+              {submitting
+                ? 'Buying…'
+                : canAfford
+                  ? <>Buy for {price.toLocaleString()} <PretzelCoin size={14} color="#fcd34d" /></>
+                  : `Need ${(price - balance).toLocaleString()} more brezn`}
             </button>
           )}
         </div>
