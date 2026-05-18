@@ -63,7 +63,7 @@ function CommentaryCard({ entry }) {
   const ring     = personal ? 'ring-amber-300/50 bg-amber-500/20' : 'ring-violet-400/40 bg-violet-500/20'
   const border   = personal ? 'border-amber-300/40' : 'border-violet-400/30'
   const overlay  = personal ? 'from-amber-500/20 via-amber-500/10' : 'from-violet-500/20 via-violet-500/10'
-  const labelText = personal ? 'For You · Brezn Agent' : 'Brezn Agent'
+  const labelText = personal ? 'For You · Brezn Commentator' : 'Brezn Commentator'
   const labelClr  = personal ? 'text-amber-300/90' : 'text-violet-300/85'
   const pillBg    = personal
     ? 'border-amber-300/50 bg-amber-500/15 text-amber-100/90 hover:bg-amber-500/25 hover:text-amber-50'

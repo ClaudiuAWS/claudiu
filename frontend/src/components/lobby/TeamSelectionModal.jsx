@@ -422,7 +422,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
   // shirt over the course of the match.
   const [captainPlayerId, setCaptainPlayerId] = useState(null)
 
-  // Brezn Agent's captain recommendation. Populated by a one-shot call to
+  // Brezn Commentator's captain recommendation. Populated by a one-shot call to
   // the director Lambda (mode='captain-suggestion') when the preview phase
   // is entered with a complete 11-player XI. The banner renders only when
   // the user hasn't picked a captain yet.
@@ -696,7 +696,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
   const benchPlayers = effectiveMyPicks.filter(p => !starterIds.has(p.playerId))
   const starterCount = starterIds.size
 
-  // Fire the Brezn Agent's captain recommendation once, when the user
+  // Fire the Brezn Commentator's captain recommendation once, when the user
   // enters the preview phase with a full 11. Reuses the existing director
   // Lambda via the body-mode multiplexer. Silent failure — the user can
   // still pick a captain manually, so we don't toast on error.
@@ -1173,7 +1173,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
 
       ) : phase === 'preview' ? (
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Brezn Agent's captain recommendation. Only renders while the
+          {/* Brezn Commentator's captain recommendation. Only renders while the
               user hasn't picked yet — once they tap a starter or apply the
               suggestion the banner disappears. */}
           {captainSuggestion?.recommendedPlayerId && !captainPlayerId && (() => {
@@ -1191,7 +1191,7 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
                 <img src="/brezn-agent.png?v=5" alt="" className="w-9 h-9 flex-shrink-0 object-contain" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[9px] font-black tracking-widest uppercase text-amber-300/80 mb-0.5">
-                    Brezn suggests
+                    Brezn Commentator suggests
                   </p>
                   <p className="text-white text-xs font-semibold leading-snug truncate">
                     <span className="text-amber-200">{recPlayer.displayName}</span>
