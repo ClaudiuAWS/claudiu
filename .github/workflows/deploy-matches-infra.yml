@@ -112,8 +112,8 @@ jobs:
                                     --policy-name claudiu-event-processor-writes \
                                     --query 'PolicyDocument.Statement[].Sid' --output json
                                   echo ""
-                                  echo "=== event-processor env vars (relevant keys) ==="
+                                  echo "=== event-processor env vars (full map — grep for BADGES_TABLE / MATCH_HISTORY_TABLE / LEADERBOARD_TABLE / CREDITS_TABLE) ==="
                                   aws lambda get-function-configuration \
                                     --function-name claudiu-event-processor \
-                                    --query 'Environment.Variables | {BADGES_TABLE, MATCH_HISTORY_TABLE, LEADERBOARD_TABLE, CREDITS_TABLE}' \
+                                    --query 'Environment.Variables' \
                                     --output json
