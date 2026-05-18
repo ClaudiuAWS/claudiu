@@ -4,6 +4,7 @@ import { useFriendCredits } from '../hooks/useCredits'
 import { useAuth } from '../hooks/useAuth'
 import InviteShareSheet from '../components/InviteShareSheet'
 import PretzelCoin from '../components/ui/PretzelCoin'
+import LoadingSpinner from '../components/ui/LoadingSpinner'
 
 const AVATAR_COLORS = [
   'from-violet-500 to-fuchsia-600',
@@ -236,9 +237,7 @@ export default function FriendsPage() {
         inviterName={user?.displayName}
       />
 
-      {loading && (
-        <p className="text-gray-500 text-sm text-center py-8">Loading…</p>
-      )}
+      {loading && <LoadingSpinner />}
 
       <Section title="Friend requests" count={data.incoming.length}>
         {data.incoming.map(f => (

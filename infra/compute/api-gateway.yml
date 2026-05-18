@@ -1929,6 +1929,14 @@ Resources:
                         - CreditsOptionsMethod
                         - GetCreditsFriendsMethod
                         - CreditsFriendsOptionsMethod
+                        - GetCreditsInventoryMethod
+                        - CreditsInventoryOptionsMethod
+                        - PostCreditsPurchaseMethod
+                        - CreditsPurchaseOptionsMethod
+                        - PostRoomsDraftRerollMethod
+                        - RoomsDraftRerollOptionsMethod
+                        - PostRoomsFreeHitSwapMethod
+                        - RoomsFreeHitSwapOptionsMethod
                         - PostFriendsAcceptInviteMethod
                         - FriendsAcceptInviteOptionsMethod
                         - PostRoomsCheerMethod
@@ -1943,7 +1951,7 @@ Resources:
                         - LeaderboardMeOptionsMethod
                 Properties:
                         RestApiId: !Ref RestApi
-                        Description: "2026-05-16-leaderboard"
+                        Description: "2026-05-18-inventory-reroll-freeHit"
 
         RestApiStage:
                 Type: AWS::ApiGateway::Stage
