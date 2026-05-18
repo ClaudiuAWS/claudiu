@@ -44,6 +44,7 @@ export default function InviteListener() {
     // acknowledges, so a slow join just delays "you're in the
     // members list" — the user never waits to navigate.
     const { roomCode, matchId: payloadMatchId } = pending
+    console.info('[invite] accept tapped — roomCode=%s matchId=%s', roomCode, payloadMatchId)
     if (!roomCode) {
       toast.error("Invite is missing a room code — ask your friend to resend.")
       setPending(null)
@@ -55,6 +56,7 @@ export default function InviteListener() {
       // response, then navigate. Pass the joined room as initialRoom
       // so LobbyPage renders fully-populated on the first frame instead
       // of showing a spinner while useRoom re-fetches.
+      console.info('[invite] using async fallback (no matchId in WS payload)')
       setAccepting(true)
       ;(async () => {
         try {
@@ -62,13 +64,16 @@ export default function InviteListener() {
           const fullRoom = joined?.room || joined  // some shapes return room at top level
           const mid = fullRoom?.matchId
           if (!mid) {
+            console.warn('[invite] join succeeded but room has no matchId', fullRoom)
             toast.error("Couldn't find that party — try again from the friend's profile.")
             return
           }
+          console.info('[invite] async fallback navigating to /lobby/%s', mid)
           sessionStorage.setItem('fan_squad_room_code', roomCode)
-          setPending(null)
           navigate(`/lobby/${mid}`, { state: { initialRoom: fullRoom } })
+          setPending(null)   // close popup AFTER navigate so a failure here leaves it visible
         } catch (err) {
+          console.warn('[invite] async fallback join failed', err)
           toast.error(err.message || 'Failed to join')
         } finally {
           setAccepting(false)
@@ -89,6 +94,7 @@ export default function InviteListener() {
     // overwrites this stub with the authoritative server state — but
     // since the data matches what's already on screen, there's no
     // visible flicker.
+    console.info('[invite] using happy path — instant navigate, join in background')
     const inviterMember = pending.inviter?.userId ? {
       userId:        pending.inviter.userId,
       displayName:   pending.inviter.displayName || 'Friend',
@@ -106,7 +112,10 @@ export default function InviteListener() {
     const stubMembers = [inviterMember, selfMember].filter(Boolean)
 
     sessionStorage.setItem('fan_squad_room_code', roomCode)
-    setPending(null)
+    // Navigate BEFORE closing the popup. If navigate throws (router quirk,
+    // unmount race), the popup stays visible so the user can retry —
+    // strictly better than silently losing the popup AND not navigating.
+    toast.success('Joining party…', { duration: 1500 })
     navigate(`/lobby/${payloadMatchId}`, {
       state: {
         initialRoom: {
@@ -123,13 +132,25 @@ export default function InviteListener() {
         },
       },
     })
+    console.info('[invite] navigate fired → /lobby/%s', payloadMatchId)
+    setPending(null)
 
-    roomsApi.join(roomCode).catch(err => {
-      // If the background join fails, surface a toast + bounce back
-      // home so the user isn't stranded on a lobby they're not in.
-      toast.error(err?.message || 'Failed to join — sent you back home.')
-      navigate('/')
-    })
+    console.info('[invite] background join started')
+    roomsApi.join(roomCode)
+      .then(() => console.info('[invite] background join succeeded'))
+      .catch(err => {
+        const msg = String(err?.message || '').toLowerCase()
+        // 409 "Already a member" is NOT a failure — the backend's
+        // invite_to_room path may have already added the user. Stay on
+        // the lobby; the WS room_update will populate normally.
+        if (msg.includes('already')) {
+          console.info('[invite] background join skipped — already in the room')
+          return
+        }
+        console.warn('[invite] background join failed', err)
+        toast.error(err?.message || 'Failed to join — sent you back home.')
+        navigate('/')
+      })
   }
 
   const handleDecline = () => setPending(null)
