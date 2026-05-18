@@ -1918,7 +1918,12 @@ Resources:
         # Deployment
         # -----------------------------------------
 
-        RestApiDeployment:
+        # AWS::ApiGateway::Deployment will NOT be recreated by CFN when
+        # only DependsOn / Description change. To publish new Methods to
+        # the prod stage, rename this LogicalId on each significant route
+        # addition. Old Deployment is removed after Stage swaps to the new
+        # one — no downtime. Next route add → bump the date suffix.
+        RestApiDeployment20260518:
                 Type: AWS::ApiGateway::Deployment
                 DependsOn:
                         - PostRoomsMethod
@@ -1987,16 +1992,54 @@ Resources:
                         - LeaderboardOptionsMethod
                         - GetLeaderboardMeMethod
                         - LeaderboardMeOptionsMethod
+                        # Newly published in this Deployment: routes that
+                        # existed in the API definition but were never on
+                        # the prod stage because the previous Deployment
+                        # LogicalId didn't change.
+                        - GetCreditsInventoryMethod
+                        - CreditsInventoryOptionsMethod
+                        - PostCreditsPurchaseMethod
+                        - CreditsPurchaseOptionsMethod
+                        - PostBadgesBuyMethod
+                        - BadgesBuyOptionsMethod
                 Properties:
                         RestApiId: !Ref RestApi
-                        Description: "2026-05-16-leaderboard"
+                        Description: "2026-05-18-publish-credits-purchase-and-badges-buy"
 
         RestApiStage:
                 Type: AWS::ApiGateway::Stage
                 Properties:
                         RestApiId: !Ref RestApi
-                        DeploymentId: !Ref RestApiDeployment
+                        DeploymentId: !Ref RestApiDeployment20260518
                         StageName: prod
+
+        # GatewayResponses inject CORS headers onto API Gateway's DEFAULT
+        # 4XX / 5XX responses (the ones returned BEFORE the Lambda runs —
+        # e.g. when a Cognito-authorized route gets an expired token, or
+        # an unpublished route gets called). Without these, the browser
+        # receives a response with no Access-Control-Allow-Origin header
+        # and reports `TypeError: Failed to fetch` — masking what's
+        # actually a 401 or 403. Adding CORS lets the FE surface a real
+        # message (e.g. "Session expired, please sign in").
+        GatewayResponseDefault4XX:
+                Type: AWS::ApiGateway::GatewayResponse
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResponseType: DEFAULT_4XX
+                        ResponseParameters:
+                                gatewayresponse.header.Access-Control-Allow-Origin:  "'*'"
+                                gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+                                gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,PATCH,OPTIONS'"
+
+        GatewayResponseDefault5XX:
+                Type: AWS::ApiGateway::GatewayResponse
+                Properties:
+                        RestApiId: !Ref RestApi
+                        ResponseType: DEFAULT_5XX
+                        ResponseParameters:
+                                gatewayresponse.header.Access-Control-Allow-Origin:  "'*'"
+                                gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+                                gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,PATCH,OPTIONS'"
 
 Outputs:
         RestApiUrl:
