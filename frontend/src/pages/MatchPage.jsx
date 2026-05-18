@@ -59,12 +59,23 @@ export default function MatchPage() {
   }, [user?.userId])
   const { room, loading: roomLoading, scoreEvents, matchJustEnded, applyOptimisticDeltas, applyAuthoritativeScoreChange } = useRoom(onChatMessage, user?.userId, location.state?.initialRoom, minigameMsgHandler, null, onCheerHandler)
 
-  // Bridge: flip the chat-demolished flag the first time `match_ended`
-  // fires. The useChat hook above watches this and clears its
-  // sessionStorage entry + in-memory messages on the next render.
+  // Frontend-driven match-end trigger. The fulltime event becomes visible
+  // to the user when the reveal clock (in useMatch) crosses its gameTime —
+  // typically BEFORE the backend's `match_ended` WS broadcast lands, because
+  // the event-processor often cold-starts on fulltime (10-30s delay).
+  // Flipping this flag locally fires the celebration overlay at the EXACT
+  // moment the displayed match clock concludes; the backend `matchJustEnded`
+  // from useRoom catches up later and the OR'd flag below stays true.
+  const [endedFromFeed, setEndedFromFeed] = useState(false)
+  const matchEnded = matchJustEnded || endedFromFeed
+
+  // Bridge: flip the chat-demolished flag the first time the match ends
+  // (whether via local fulltime detection or backend `match_ended` WS).
+  // The useChat hook above watches this and clears its sessionStorage
+  // entry + in-memory messages on the next render.
   useEffect(() => {
-    if (matchJustEnded && !chatDemolished) setChatDemolished(true)
-  }, [matchJustEnded, chatDemolished])
+    if (matchEnded && !chatDemolished) setChatDemolished(true)
+  }, [matchEnded, chatDemolished])
 
   // Highlight overlay queue — broadcast-style fullscreen card for goals
   // and red cards. Driven entirely client-side from the same reveal
@@ -110,6 +121,15 @@ export default function MatchPage() {
   }, [applyOptimisticDeltas, highlights])
 
   const { match, events, loading, flashEvent }  = useMatch(matchId, handleScoreEvent)
+
+  // Watch the locally-revealed events for the fulltime event — that's the
+  // exact moment the displayed clock concludes the match. Fires the
+  // celebration without waiting for the backend WS round-trip.
+  useEffect(() => {
+    if (endedFromFeed) return
+    if (events.some(e => e.eventType === 'fulltime')) setEndedFromFeed(true)
+  }, [events, endedFromFeed])
+
   const minigame = useMiniGame(room, user?.userId, events, matchId, match?.startedAt)
   minigameMsgRef.current = minigame.onMinigameMessage
 
@@ -220,7 +240,7 @@ export default function MatchPage() {
   if (!room) return <Navigate to={`/lobby/${matchId}`} replace />
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col min-h-screen">
       <SkillFlashBadge event={flashEvent} onReact={handleReactTap} />
       <HighlightOverlay
         highlight={highlights.current}
@@ -282,8 +302,10 @@ export default function MatchPage() {
         ))}
       </div>
 
-      {/* Content */}
-      <div className="relative">
+      {/* Content. Chat tab is height-bounded so the page can't scroll past
+          the input bar — only the conversation itself scrolls. Feed +
+          squad keep their natural scroll behavior. */}
+      <div className={tab === 'chat' ? 'flex-1 min-h-0 overflow-hidden relative' : 'relative'}>
         {tab === 'feed' && <MatchFeed events={events} playerMap={playerMap} />}
 
         {tab === 'squad' && (
@@ -331,7 +353,7 @@ export default function MatchPage() {
           Home". The matchJustEnded flag stays true until MatchPage
           unmounts on navigate. */}
       <MatchEndCelebration
-        shown={matchJustEnded}
+        shown={matchEnded}
         match={match}
         room={room}
         scoreEvents={scoreEvents}
