@@ -5,6 +5,13 @@ on:
                 branches: [main]
                 paths:
                         - "infra/compute/lambdas-matches.yml"
+        # Manual trigger from the GHA UI. Useful when the live CFN stack
+        # drifts from source (e.g. admin tweaked an IAM Sid outside of git)
+        # or when source-only changes need to be re-applied. Also fixes
+        # the "first run" chicken-and-egg where a workflow was added AFTER
+        # its target file was last edited — the only way to fire it is
+        # either a manual run here or a fresh edit to that file.
+        workflow_dispatch:
 
 permissions:
         id-token: write

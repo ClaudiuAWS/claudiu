@@ -1,6 +1,12 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Claudiu Lambda Functions - Matches Feature
 
+# Last IAM revision: 2026-05-18 — re-applying the CreditsWrite Sid +
+# CREDITS_TABLE env (originally added in commit 86af855) so the
+# deploy-matches-infra.yml workflow actually fires. The workflow was
+# created AFTER that earlier edit, so it never had a real change to
+# react to and the stack stayed in its pre-credits-IAM state on AWS.
+
 Resources:
         # 
         # EventBridge role to invoke event-processor
