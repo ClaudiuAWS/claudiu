@@ -28,8 +28,9 @@ export default function ChatPanel({ messages, onSend, room }) {
   return (
     <div className="flex flex-col h-full">
 
-      {/* Message list */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
+      {/* Message list — pb-32 so the last message doesn't slide behind the
+          fixed input bar at viewport bottom-6. */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-32 space-y-3">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 opacity-40">
             <p className="text-2xl">💬</p>
@@ -70,11 +71,22 @@ export default function ChatPanel({ messages, onSend, room }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="px-4 pb-4 pt-2 border-t border-white/[0.04]">
+      {/* Input — anchored to the viewport bottom with breathing room from
+          the screen edge. Sits BELOW the 🥨 reactions FAB (which lives at
+          fixed bottom-44 right-4 in ReactionsButton.jsx), so the two stack
+          vertically: FAB above, message bar at the bottom. Translucent +
+          backdrop-blur so messages scrolling behind it stay legible
+          without a harsh seam. */}
+      <div className="fixed left-0 right-0 bottom-6 px-4 z-30 pointer-events-none">
         <div
-          className="flex items-center gap-2 px-4 py-2 rounded-2xl"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+          className="pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-2xl max-w-md mx-auto"
+          style={{
+            background: 'rgba(15,18,25,0.92)',
+            border: '1px solid rgba(255,255,255,0.10)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            boxShadow: '0 8px 24px -10px rgba(0,0,0,0.65)',
+          }}
         >
           <input
             type="text"
