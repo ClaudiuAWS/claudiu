@@ -230,9 +230,15 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
           // events for different players (e.g., two different scorers
           // both worth +5) don't false-dedup.
           const filtered = incoming.filter(inc => !prev.some(e => {
+            // Source-event fingerprint must also match the REASON now —
+            // goal events emit per-component entries (scorer / assist /
+            // conceded), all sharing the same _sourceEventId. Without
+            // the reason check, the optimistic and WS entries collapse
+            // to a single row and the user loses the breakdown.
             if (inc._sourceEventId
                 && e._sourceEventId === inc._sourceEventId
-                && e.userId === inc.userId) return true
+                && e.userId === inc.userId
+                && e.reason === inc.reason) return true
             if (e.userId !== inc.userId)             return false
             if (e.reason !== inc.reason)             return false
             if (e.delta  !== inc.delta)              return false

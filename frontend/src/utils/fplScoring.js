@@ -52,31 +52,37 @@ export function computeOptimisticDeltas(event, members) {
       const details = {}
       for (const d of (m.teamSelectionDetails || [])) details[d.playerId] = d
       // Captain multiplier — must mirror backend/event-processor/service.py
-      // _calculate_member_changes. Without this, the optimistic delta (e.g.
-      // +4 for a FWD goal) disagrees with the WS broadcast (+8 if captain
-      // doubled), and the dedup fingerprint in useRoom.js falls through to
-      // its delta-aware fallback — letting both entries land as duplicates.
+      // _calculate_member_changes. Without this the optimistic delta
+      // disagrees with the WS broadcast and the dedup misfires.
       const captain = m.captainPlayerId || ''
       // Triple-captain perk (armed at squad-lock time) bumps the
       // multiplier from ×2 to ×3 for the duration of the match. Same
       // gate as the backend so the dedup-fingerprint stays in sync.
       const armedPerks = new Set(m.armedPerks || [])
       const capMult = armedPerks.has('captain-triple') ? 3 : 2
-      let delta = 0
-      let reason = ''
-      let name   = ''
 
+      // Per-component entries — one row per (scorer | assist | conceded)
+      // so the score timeline shows the full breakdown instead of one
+      // bundled "+10 Pavlović" line that hides the assist + conceded math.
+      // Total leaderboard bump is identical (room.members[*].score sums
+      // every delta) — only visibility changes.
       if (scoringPid && details[scoringPid]) {
-        delta += goalValue * (captain === scoringPid ? capMult : 1)
-        reason = 'scored for your squad'
-        name   = scoringDisplay
+        const d = goalValue * (captain === scoringPid ? capMult : 1)
+        out.push({
+          userId: m.userId, delta: d,
+          reason: 'scored for your squad',
+          playerName: scoringDisplay,
+          component: 'scorer',
+        })
       }
       if (assistPid && details[assistPid]) {
-        delta += 3 * (captain === assistPid ? capMult : 1)
-        if (!reason) {
-          reason = 'assisted for your squad'
-          name   = assistDisplay
-        }
+        const d = 3 * (captain === assistPid ? capMult : 1)
+        out.push({
+          userId: m.userId, delta: d,
+          reason: 'assisted for your squad',
+          playerName: assistDisplay,
+          component: 'assist',
+        })
       }
       if (scoringRole) {
         const oppRole = scoringRole === 'home' ? 'away' : 'home'
@@ -85,18 +91,18 @@ export function computeOptimisticDeltas(event, members) {
         )
         if (concedingGK) {
           const gkPid = concedingGK.playerId || ''
-          delta += -1 * (captain && captain === gkPid ? capMult : 1)
-          if (!reason) {
-            reason = 'conceded'
+          const d = -1 * (captain && captain === gkPid ? capMult : 1)
+          out.push({
+            userId: m.userId, delta: d,
+            reason: 'conceded',
             // select_team persists displayName on each teamSelectionDetails
             // entry (since the keeper-name fix). Fall back to the generic
             // label only for legacy rooms saved before that schema bump.
-            name   = concedingGK.displayName || 'your keeper'
-          }
+            playerName: concedingGK.displayName || 'your keeper',
+            component: 'concede',
+          })
         }
       }
-
-      if (delta !== 0) out.push({ userId: m.userId, delta, reason, playerName: name })
     }
   } else if (type === 'card') {
     const playerId      = event.playerId

@@ -401,30 +401,41 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
             # match instead of ×2. Falls back to ×2 when no perk is armed.
             armed_perks = set(m.get('armedPerks') or [])
             captain_mult = 3 if 'captain-triple' in armed_perks else 2
-            delta, reason, name = 0, '', ''
-            captained = False  # any captain-multiplied component fired?
 
-            # Owners stack: scorer bonus + assist bonus + GK conceded penalty.
+            # Per-component entries: emit ONE timeline entry per component
+            # the user has a stake in (scorer, assist, conceded). Before, all
+            # three components were bundled into one entry — the user saw
+            # "Pavlović +10" without realising the +10 was 5 (scorer) + 6
+            # (Kane captain assist) − 1 (Daniel Fernandes conceded). Now
+            # each component shows up as its own row in the score timeline.
+            #
             # Captain multiplier applies per-component — if the captain
-            # is the scorer, the scorer portion is multiplied; if the
-            # captain is the assister, the assister portion is multiplied.
-            # Conceded penalty is multiplied too when the captain IS the
-            # conceding keeper, since captain-doubling-applies-to-negatives
-            # matches Bundesliga Fantasy convention (the price of a bold pick).
+            # is the scorer, only the scorer entry is doubled; same for
+            # assist or the conceding keeper (negatives multiply too,
+            # matching Bundesliga Fantasy convention).
             if scoring_pid and scoring_pid in details:
-                gain = goal_value * (captain_mult if captain == scoring_pid else 1)
-                if captain == scoring_pid: captained = True
-                delta += gain
-                reason = 'scored for your squad'
-                name   = scoring_display
+                is_cap = captain == scoring_pid
+                gain = goal_value * (captain_mult if is_cap else 1)
+                entry = {
+                    'userId': uid, 'delta': gain,
+                    'reason': 'scored for your squad',
+                    'playerName': scoring_display,
+                    'component': 'scorer',
+                }
+                if is_cap: entry['captained'] = True
+                out.append(entry)
 
             if assist_pid and assist_pid in details:
-                gain = 3 * (captain_mult if captain == assist_pid else 1)
-                if captain == assist_pid: captained = True
-                delta += gain
-                if not reason:
-                    reason = 'assisted for your squad'
-                    name   = assist_display
+                is_cap = captain == assist_pid
+                gain = 3 * (captain_mult if is_cap else 1)
+                entry = {
+                    'userId': uid, 'delta': gain,
+                    'reason': 'assisted for your squad',
+                    'playerName': assist_display,
+                    'component': 'assist',
+                }
+                if is_cap: entry['captained'] = True
+                out.append(entry)
 
             if scoring_role:
                 opp_role = 'away' if scoring_role == 'home' else 'home'
@@ -435,17 +446,16 @@ def _calculate_member_changes(room: dict, event_type: str, data: dict) -> list:
                 )
                 if conceding_gk:
                     gk_pid = conceding_gk.get('playerId') or ''
-                    loss = -1 * (captain_mult if captain and captain == gk_pid else 1)
-                    if captain and captain == gk_pid: captained = True
-                    delta += loss
-                    if not reason:
-                        reason = 'conceded'
-                        name   = conceding_gk.get('displayName') or 'your keeper'
-
-            entry = {'userId': uid, 'delta': delta, 'reason': reason, 'playerName': name}
-            if captained:
-                entry['captained'] = True
-            out.append(entry)
+                    is_cap = captain and captain == gk_pid
+                    loss = -1 * (captain_mult if is_cap else 1)
+                    entry = {
+                        'userId': uid, 'delta': loss,
+                        'reason': 'conceded',
+                        'playerName': conceding_gk.get('displayName') or 'your keeper',
+                        'component': 'concede',
+                    }
+                    if is_cap: entry['captained'] = True
+                    out.append(entry)
 
     elif event_type == 'card':
         player_id     = data.get('playerId')
