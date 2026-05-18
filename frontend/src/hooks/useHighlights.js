@@ -139,6 +139,12 @@ function usePrefersReducedMotion() {
 export function buildHighlightFromEvent(event, opts = {}) {
   if (!event) return null
   const userPlayerIds = opts.userPlayerIds instanceof Set ? opts.userPlayerIds : new Set()
+  // The current user's REAL delta for this event (computed by
+  // computeOptimisticDeltas). Used by HighlightOverlay to render the
+  // accurate "+N / -N for your squad" chip — values that match what the
+  // leaderboard + Squad tab + ScoreToast all bump by. Without this,
+  // the overlay hardcoded "+5" which was only correct for MID goals.
+  const userDelta = Number(opts.userDelta) || 0
 
   if (event.eventType === 'goal') {
     const scorerId = event.scoringPlayerId
@@ -150,6 +156,7 @@ export function buildHighlightFromEvent(event, opts = {}) {
       gameTime:     event.gameTime || '',
       score:        event.currentResult || '',
       forYourSquad: scorerId ? userPlayerIds.has(scorerId) : false,
+      userDelta,
     }
   }
 
@@ -160,6 +167,7 @@ export function buildHighlightFromEvent(event, opts = {}) {
       title:        'RED CARD',
       playerName:   event.playerDisplay || 'Unknown',
       gameTime:     event.gameTime || '',
+      userDelta,
     }
   }
 

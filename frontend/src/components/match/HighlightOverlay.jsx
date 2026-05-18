@@ -140,18 +140,28 @@ export default function HighlightOverlay({ highlight, onDismiss, reducedMotion =
             </p>
           )}
 
-          {/* "For your squad" tag */}
-          {isGoal && highlight.forYourSquad && (
+          {/* Real points chip — pulled directly from computeOptimisticDeltas
+              so it matches the leaderboard, Squad tab, and ScoreToast value
+              for the same event. Renders only when the current user has a
+              non-zero stake: striker goal +4, MID goal +5, DEF goal +6,
+              GK +10, captain ×2/×3, your keeper concedes -1, your player
+              red-carded -3 (×capMult). Green for positive, red for negative. */}
+          {Number(highlight.userDelta) !== 0 && (
             <div
               className="mt-4 px-3 py-1.5 rounded-full text-[10px] font-bold tracking-widest uppercase"
-              style={{
+              style={highlight.userDelta > 0 ? {
+                background: 'linear-gradient(135deg, rgba(34,197,94,0.30) 0%, rgba(21,128,61,0.18) 100%)',
+                color:      '#86efac',
+                border:     '1px solid rgba(74,222,128,0.45)',
+                boxShadow:  '0 0 18px -4px rgba(34,197,94,0.50)',
+              } : {
                 background: 'linear-gradient(135deg, rgba(220,38,38,0.30) 0%, rgba(153,27,27,0.18) 100%)',
-                color: '#fca5a5',
-                border: '1px solid rgba(248,113,113,0.45)',
-                boxShadow: '0 0 18px -4px rgba(220,38,38,0.50)',
+                color:      '#fca5a5',
+                border:     '1px solid rgba(248,113,113,0.45)',
+                boxShadow:  '0 0 18px -4px rgba(220,38,38,0.50)',
               }}
             >
-              +5 for your squad
+              {highlight.userDelta > 0 ? `+${highlight.userDelta}` : highlight.userDelta} for your squad
             </div>
           )}
         </div>
