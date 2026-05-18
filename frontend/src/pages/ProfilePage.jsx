@@ -221,9 +221,6 @@ export default function ProfilePage() {
       {/* Stats row */}
       <StatsRow />
 
-      {/* Quick actions */}
-      <QuickActions />
-
       {/* Wallet */}
       <CreditsCard />
 
@@ -291,31 +288,6 @@ function StatPill({ label, value }) {
     <div className="flex flex-col items-center gap-0.5">
       <span className="text-white font-stadium text-base tabular-nums leading-none">{value}</span>
       <span className="text-gray-500 text-[9px] tracking-widest uppercase font-semibold">{label}</span>
-    </div>
-  )
-}
-
-function QuickActions() {
-  const navigate = useNavigate()
-  const actions = [
-    { icon: '🛒', label: 'Shop', path: '/shop' },
-    { icon: '🏅', label: 'Badges', path: '/badges' },
-    { icon: '📜', label: 'History', path: '/history' },
-    { icon: '🏆', label: 'Ranks', path: '/leaderboard' },
-  ]
-  return (
-    <div className="mt-4 grid grid-cols-4 gap-2">
-      {actions.map(a => (
-        <button
-          key={a.path}
-          onClick={() => navigate(a.path)}
-          className="flex flex-col items-center gap-1.5 py-3 rounded-2xl transition-all active:scale-95"
-          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-        >
-          <span className="text-lg">{a.icon}</span>
-          <span className="text-gray-400 text-[10px] font-semibold tracking-wider uppercase">{a.label}</span>
-        </button>
-      ))}
     </div>
   )
 }
