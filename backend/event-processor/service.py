@@ -636,12 +636,17 @@ def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, g
             config['takerName']  = data.get('scoringDisplay') or data.get('playerDisplay') or data.get('penaltyTakerId')
             config['teamRole']   = data.get('teamRole') or data.get('scoringTeamRole')
         elif game_type == 'HALFTIME_QUIZ':
-            # Pre-shuffled fallback questions (3) so the game has content even
-            # without an AI Director pass. AI Director can overwrite this via
-            # its own minigame_start broadcast with custom `questions`.
-            # Seed by match_id + event_id so this matches what each frontend
-            # computes locally (same algorithm in `quizFallback.js`).
-            config['questions'] = _fallback_quiz_questions(3, seed=f"{match_id}#{event_id}")
+            # Match-aware halftime quiz: questions built from THIS match's
+            # roster + first-half goals (Bayern's keeper, Kimmich's position,
+            # who scored the opener, etc.). Falls back to the static rules
+            # pool only when DDB roster lookup fails (e.g. before the loader
+            # ran). The AI Director can still overwrite via its own
+            # minigame_start broadcast with custom `questions` — the
+            # commentator's match-aware Bedrock quiz wins when validation
+            # passes. Seed by match_id + event_id for deterministic output.
+            config['questions'] = _match_aware_quiz_questions(
+                match_id, count=3, seed=f"{match_id}#{event_id}",
+            )
 
         payload = {
             'type':                'minigame_start',
@@ -799,6 +804,294 @@ def _fallback_quiz_questions(count: int = 3, seed: str = None) -> list:
     indices = list(range(len(_QUIZ_POOL)))
     _quiz_shuffle(indices, rand)
     picked = [_QUIZ_POOL[i] for i in indices[:count]]
+    out = []
+    for q in picked:
+        idxs = list(range(len(q['choices'])))
+        _quiz_shuffle(idxs, rand)
+        choices = [q['choices'][i] for i in idxs]
+        correct_idx = idxs.index(q['correctIdx'])
+        out.append({
+            'q':          q['q'],
+            'choices':    choices,
+            'correctIdx': correct_idx,
+            'category':   q['category'],
+        })
+    return out
+
+
+# ─────────────────────────────────────────
+# Match-aware halftime quiz
+# ─────────────────────────────────────────
+# Builds quiz questions from the LIVE match: players in this fixture, their
+# positions, and the first-half goal events. The Brezn Commentator can still
+# overwrite this with its Bedrock-generated quiz via the director-handler
+# Lambda; the match-aware path is the deterministic baseline so users never
+# see the generic-rules pool when real data is available.
+
+# German position code → readable label for trivia choices. Long codes from
+# the loader's normalization (IVZ, STR, etc.) all collapse to the family name
+# so question choices read naturally.
+_POS_LABEL = {
+    'TW':  'Goalkeeper',
+    'IV':  'Centre-back', 'IVZ': 'Centre-back', 'IVL': 'Centre-back', 'IVR': 'Centre-back',
+    'LV':  'Left-back',
+    'RV':  'Right-back',
+    'DM':  'Defensive Midfielder', 'DMZ': 'Defensive Midfielder',
+    'DML': 'Defensive Midfielder', 'DMR': 'Defensive Midfielder',
+    'ZM':  'Central Midfielder',
+    'OM':  'Attacking Midfielder', 'ZO':  'Attacking Midfielder',
+    'OLM': 'Attacking Midfielder', 'ORM': 'Attacking Midfielder',
+    'LM':  'Left Winger',  'DLM': 'Left Winger',
+    'RM':  'Right Winger', 'DRM': 'Right Winger',
+    'LA':  'Left Forward',
+    'RA':  'Right Forward',
+    'MS':  'Striker', 'ST': 'Striker', 'STZ': 'Striker', 'STL': 'Striker', 'STR': 'Striker',
+}
+
+# Plausible distractor clubs for "which team does X play for?" questions.
+# Picked from well-known Bundesliga sides so the wrong answers feel real
+# even when the user is fairly sure of the right one.
+_DISTRACTOR_CLUBS = [
+    'Borussia Dortmund', 'RB Leipzig', 'Bayer Leverkusen',
+    'Eintracht Frankfurt', 'VfB Stuttgart', 'Borussia Mönchengladbach',
+    'Schalke 04', '1. FC Köln',
+]
+
+
+def _gametime_seconds(gt) -> int:
+    """Parse 'MM:SS' game-clock strings to seconds. Returns a large sentinel
+    on parse failure so unparseable events sort to the end."""
+    if gt is None:
+        return 999999
+    s = str(gt).strip()
+    parts = s.split(':')
+    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+        try:
+            return int(parts[0]) * 60 + int(parts[1])
+        except ValueError:
+            pass
+    return 999999
+
+
+def _load_match_roster(match_id: str) -> list:
+    """All player_lookup rows for this match. Paginates DDB."""
+    items = []
+    kwargs = {'KeyConditionExpression': Key('matchId').eq(match_id)}
+    while True:
+        resp = player_lookup_table.query(**kwargs)
+        items.extend(resp.get('Items', []))
+        lek = resp.get('LastEvaluatedKey')
+        if not lek:
+            break
+        kwargs['ExclusiveStartKey'] = lek
+    return items
+
+
+def _load_first_half_goals(match_id: str, roster_by_id: dict) -> list:
+    """All goal events with gameTime <= 45:00, in chronological order.
+    Each goal carries: {gameTimeSecs, teamRole, scorerName}."""
+    items = []
+    kwargs = {'KeyConditionExpression': Key('matchId').eq(match_id)}
+    while True:
+        resp = match_events_table.query(**kwargs)
+        items.extend(resp.get('Items', []))
+        lek = resp.get('LastEvaluatedKey')
+        if not lek:
+            break
+        kwargs['ExclusiveStartKey'] = lek
+
+    goals = []
+    for e in items:
+        if e.get('eventType') != 'goal':
+            continue
+        secs = _gametime_seconds(e.get('gameTime'))
+        if secs > 45 * 60:
+            continue
+        data = e.get('data') or {}
+        scorer_id = data.get('scoringPlayerId') or data.get('playerId')
+        scorer = roster_by_id.get(scorer_id) if scorer_id else None
+        scorer_name = (scorer or {}).get('displayName') \
+            or data.get('scoringDisplay') or data.get('playerDisplay') \
+            or data.get('scoringPlayerName') or data.get('playerName')
+        team_role = (scorer or {}).get('teamRole') \
+            or data.get('scoringTeamRole') or data.get('teamRole')
+        if not scorer_name or not team_role:
+            continue
+        goals.append({
+            'gameTimeSecs': secs,
+            'teamRole':     team_role,
+            'scorerName':   scorer_name,
+        })
+    goals.sort(key=lambda g: g['gameTimeSecs'])
+    return goals
+
+
+def _build_quiz_candidates(roster: list, goals: list, home_team: str, away_team: str) -> list:
+    """Build a pool of match-aware quiz candidates from roster + goal data.
+    Each candidate has the canonical {q, choices (4), correctIdx: 0, category}
+    shape — correctIdx is 0 at build time and gets shuffled later."""
+    candidates = []
+
+    # Skip rows that lack the basic fields we read from.
+    starters = [p for p in roster if p.get('starting') and p.get('displayName')]
+    if not starters:
+        return candidates
+
+    # ── Q-type: which team does {player} play for? ────────────────────────
+    # Use up to 4 random starters to keep variety from match to match.
+    for p in starters[:6]:
+        team_role = p.get('teamRole')
+        if team_role not in ('home', 'away'):
+            continue
+        correct = home_team if team_role == 'home' else away_team
+        other   = away_team if team_role == 'home' else home_team
+        # Distractors: the other team in this match + 2 unrelated clubs
+        distractors = [other]
+        for club in _DISTRACTOR_CLUBS:
+            if club != correct and club != other and len(distractors) < 3:
+                distractors.append(club)
+        candidates.append({
+            'q':          f"Which team does {p['displayName']} play for in this match?",
+            'choices':    [correct] + distractors,
+            'correctIdx': 0,
+            'category':   'history',
+        })
+
+    # ── Q-type: what position does {player} play? ─────────────────────────
+    for p in starters[:8]:
+        label = _POS_LABEL.get(p.get('position'))
+        if not label:
+            continue
+        # Distractors: 3 other position labels (deduped, excluding the correct)
+        others = sorted({v for v in _POS_LABEL.values() if v != label})
+        if len(others) < 3:
+            continue
+        # Take the first 3 — RNG-shuffled later in the outer flow
+        candidates.append({
+            'q':          f"What position does {p['displayName']} play?",
+            'choices':    [label, others[0], others[1], others[2]],
+            'correctIdx': 0,
+            'category':   'positions',
+        })
+
+    # ── Q-type: who started in goal for {team}? ───────────────────────────
+    for team_role, team_name in (('home', home_team), ('away', away_team)):
+        keepers = [p for p in starters
+                   if p.get('teamRole') == team_role and p.get('position') == 'TW']
+        outfield = [p for p in starters
+                    if p.get('teamRole') == team_role and p.get('position') != 'TW']
+        if not keepers or len(outfield) < 3:
+            continue
+        keeper_name = keepers[0]['displayName']
+        distractors = [op['displayName'] for op in outfield[:3]]
+        candidates.append({
+            'q':          f"Who started in goal for {team_name}?",
+            'choices':    [keeper_name] + distractors,
+            'correctIdx': 0,
+            'category':   'positions',
+        })
+
+    # ── Q-type: who scored {team}'s opening goal? ─────────────────────────
+    # Match-event grounded — only fires when first half actually had a goal.
+    for team_role, team_name in (('home', home_team), ('away', away_team)):
+        team_goals = [g for g in goals if g.get('teamRole') == team_role]
+        if not team_goals:
+            continue
+        scorer = team_goals[0]['scorerName']
+        # Distractors from the same team's outfield starters, skipping the scorer
+        teammates = [p['displayName'] for p in starters
+                     if p.get('teamRole') == team_role
+                     and p.get('position') != 'TW'
+                     and p.get('displayName') != scorer]
+        if len(teammates) < 3:
+            continue
+        candidates.append({
+            'q':          f"Who scored {team_name}'s opening goal of the first half?",
+            'choices':    [scorer] + teammates[:3],
+            'correctIdx': 0,
+            'category':   'goals',
+        })
+
+    # ── Q-type: halftime score ────────────────────────────────────────────
+    home_goals = sum(1 for g in goals if g.get('teamRole') == 'home')
+    away_goals = sum(1 for g in goals if g.get('teamRole') == 'away')
+    correct_score = f"{home_goals}-{away_goals}"
+    # Plausible distractors: nearby scores not equal to the truth
+    distractor_scores = []
+    for dh, da in [
+        (home_goals + 1, away_goals),
+        (home_goals,     away_goals + 1),
+        (max(0, home_goals - 1), away_goals),
+        (home_goals,     max(0, away_goals - 1)),
+        (home_goals + 1, away_goals + 1),
+        (0, 0),
+        (1, 0),
+        (0, 1),
+    ]:
+        s = f"{dh}-{da}"
+        if s != correct_score and s not in distractor_scores:
+            distractor_scores.append(s)
+        if len(distractor_scores) == 3:
+            break
+    if len(distractor_scores) == 3:
+        candidates.append({
+            'q':          'What was the score at halftime?',
+            'choices':    [correct_score] + distractor_scores,
+            'correctIdx': 0,
+            'category':   'stats',
+        })
+
+    return candidates
+
+
+def _match_aware_quiz_questions(match_id: str, count: int = 3, seed: str = None) -> list:
+    """Build halftime quiz questions from THIS match's roster + first-half
+    goal events. Falls back to the static rules pool when DDB data is
+    insufficient (e.g. loader hasn't run, no players, sparse roster)."""
+    if seed is not None:
+        rand = _quiz_mulberry32(_quiz_hash_seed(str(seed)))
+    else:
+        import random as _quiz_random
+        rand = _quiz_random.random
+
+    # Load roster + events. If anything fails (missing IAM, empty table,
+    # network), fall back to the static pool — never block the quiz.
+    try:
+        roster = _load_match_roster(match_id)
+    except Exception as e:
+        print(f"[quiz] roster load failed: {e}, using static fallback")
+        return _fallback_quiz_questions(count, seed)
+
+    if not roster or sum(1 for p in roster if p.get('starting')) < 11:
+        print(f"[quiz] insufficient roster ({len(roster)} rows), using static fallback")
+        return _fallback_quiz_questions(count, seed)
+
+    roster_by_id = {p.get('playerId'): p for p in roster if p.get('playerId')}
+    try:
+        goals = _load_first_half_goals(match_id, roster_by_id)
+    except Exception as e:
+        print(f"[quiz] goal-events load failed: {e}, continuing with roster only")
+        goals = []
+
+    try:
+        match = matches_table.get_item(Key={'matchId': match_id}).get('Item') or {}
+    except Exception:
+        match = {}
+    home_team = match.get('homeTeamName') or 'Home'
+    away_team = match.get('awayTeamName') or 'Away'
+
+    candidates = _build_quiz_candidates(roster, goals, home_team, away_team)
+
+    # Backstop: if not enough candidates, top up from the static pool so
+    # we always return `count` questions. The mix-in is deterministic
+    # because the seeded RNG drives both shuffles below.
+    if len(candidates) < count:
+        topup_needed = count - len(candidates)
+        candidates.extend(_fallback_quiz_questions(topup_needed, seed=f"{seed}#static"))
+
+    # Shuffle candidate order + answer order deterministically by the room seed
+    _quiz_shuffle(candidates, rand)
+    picked = candidates[:count]
     out = []
     for q in picked:
         idxs = list(range(len(q['choices'])))

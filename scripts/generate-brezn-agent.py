@@ -183,13 +183,13 @@ def main() -> int:
 # need re-tuning. The alpha-channel analysis snippet that found these
 # values lives in the commit history.
 
-EYE_RADIUS       = 38
+EYE_RADIUS       = 60
 EYE_OUTLINE_W    = 3
 EYE_OUTLINE      = (26, 10, 5, 255)    # dark brown matching the pretzel edge
 SCLERA           = (255, 255, 255, 255)
-PUPIL_RADIUS     = 16
+PUPIL_RADIUS     = 26
 PUPIL            = (26, 10, 5, 255)
-HIGHLIGHT_RADIUS = 6
+HIGHLIGHT_RADIUS = 10
 HIGHLIGHT        = (255, 255, 255, 255)
 
 LEFT_EYE_CENTER  = (277, 274)
@@ -207,13 +207,13 @@ def draw_eyes(img: Image.Image) -> Image.Image:
             fill=SCLERA, outline=EYE_OUTLINE, width=EYE_OUTLINE_W,
         )
         # Pupil slightly down-right of centre for a "looking forward" feel
-        pcx, pcy = cx + 5, cy + 6
+        pcx, pcy = cx + 8, cy + 10
         draw.ellipse(
             [(pcx - PUPIL_RADIUS, pcy - PUPIL_RADIUS), (pcx + PUPIL_RADIUS, pcy + PUPIL_RADIUS)],
             fill=PUPIL,
         )
         # Highlight dot upper-left of pupil — cartoon polish
-        hcx, hcy = pcx - 5, pcy - 5
+        hcx, hcy = pcx - 8, pcy - 8
         draw.ellipse(
             [(hcx - HIGHLIGHT_RADIUS, hcy - HIGHLIGHT_RADIUS),
              (hcx + HIGHLIGHT_RADIUS, hcy + HIGHLIGHT_RADIUS)],

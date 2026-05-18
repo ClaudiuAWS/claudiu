@@ -107,9 +107,9 @@ export default function DraftRevealShow({ open, room, onClose }) {
       )}
 
       {phase === 'reveal' && (
-        <div className="text-center px-4 max-h-[90vh] overflow-y-auto py-6">
+        <div className="text-center px-4 md:px-12 max-h-[90vh] overflow-y-auto py-6 w-full">
           <p
-            className="text-white font-stadium text-3xl leading-none mb-6"
+            className="text-white font-stadium text-3xl md:text-5xl leading-none mb-6 md:mb-10"
             style={{
               letterSpacing: '0.08em',
               textShadow: '0 0 24px rgba(220,38,38,0.55), 0 4px 0 rgba(0,0,0,0.6)',
@@ -117,7 +117,7 @@ export default function DraftRevealShow({ open, room, onClose }) {
           >
             TEAMS REVEALED
           </p>
-          <div className="flex flex-col gap-3 max-w-md mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 max-w-5xl mx-auto">
             {members.map((m, i) => {
               const details   = m.teamSelectionDetails || []
               const captain   = m.captainPlayerId || null
@@ -125,7 +125,7 @@ export default function DraftRevealShow({ open, room, onClose }) {
               return (
                 <div
                   key={m.userId}
-                  className="rounded-2xl px-3 py-3"
+                  className="rounded-2xl px-3 md:px-5 py-3 md:py-5"
                   style={{
                     background: 'linear-gradient(145deg, rgba(40,12,12,0.85) 0%, rgba(20,6,6,0.95) 100%)',
                     border: '1px solid rgba(248,113,113,0.40)',
@@ -133,17 +133,17 @@ export default function DraftRevealShow({ open, room, onClose }) {
                   }}
                 >
                   {/* Header row */}
-                  <div className="flex items-center justify-between gap-2 mb-2.5">
-                    <span className="text-white text-sm font-bold tracking-wide truncate text-left flex-1">
+                  <div className="flex items-center justify-between gap-2 mb-2.5 md:mb-4">
+                    <span className="text-white text-sm md:text-base font-bold tracking-wide truncate text-left flex-1">
                       {m.displayName}
                     </span>
                     {details.length === 11 && (
-                      <span className="text-gray-400 text-[10px] font-bold tracking-widest tabular-nums">
+                      <span className="text-gray-400 text-[10px] md:text-xs font-bold tracking-widest tabular-nums">
                         {formation}
                       </span>
                     )}
                     <span
-                      className="text-[9px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full text-amber-300 flex-shrink-0"
+                      className="text-[9px] md:text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full text-amber-300 flex-shrink-0"
                       style={{
                         background: 'rgba(252,211,77,0.10)',
                         border: '1px solid rgba(252,211,77,0.35)',
@@ -162,7 +162,7 @@ export default function DraftRevealShow({ open, room, onClose }) {
                     teamRole="home"
                     formation={formation}
                     captainPlayerId={captain}
-                    maxHeight="260px"
+                    maxHeight="340px"
                     showHeader={false}
                   />
                 </div>

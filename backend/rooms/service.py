@@ -983,6 +983,7 @@ def free_hit_swap(room_code: str, user_id: str, out_player_id: str, in_player_id
                 'teamRole':    in_player.get('teamRole', ''),
                 'shirtNumber': in_player.get('shirtNumber', ''),
                 'displayName': in_player.get('displayName', ''),
+                'imageUrl':    in_player.get('imageUrl', ''),
             })
         else:
             new_details.append(d)
@@ -1130,6 +1131,7 @@ def select_team(room_code: str, user_id: str, player_ids: list) -> dict:
             # rooms without this field still work — callers default to a
             # generic "your keeper" label.
             'displayName': fetched[pid].get('displayName', ''),
+            'imageUrl':    fetched[pid].get('imageUrl', ''),
         }
         for pid in player_ids
     ]
