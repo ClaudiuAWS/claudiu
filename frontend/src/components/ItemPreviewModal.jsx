@@ -78,8 +78,8 @@ export default function ItemPreviewModal({ item, onClose }) {
       refreshBalance()
       onClose()
     } catch {
-      // useInventory.purchase already toasts; keep modal open so user
-      // can see what went wrong + retry.
+      // useInventory.purchase toasts on failure; we just keep the
+      // modal open so the user can retry without losing context.
     } finally {
       setSubmitting(false)
     }
