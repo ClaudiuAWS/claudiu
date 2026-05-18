@@ -143,7 +143,7 @@ function AddFriendForm({ onAdd }) {
           <button
             type="submit"
             disabled={state === 'loading' || !email.trim()}
-            className="text-emerald-400 hover:text-emerald-300 transition-colors disabled:opacity-40 font-semibold text-sm"
+            className="text-red-400 hover:text-red-300 transition-colors disabled:opacity-40 font-semibold text-sm"
           >
             {state === 'loading' ? 'Sending…' : 'Send'}
           </button>
