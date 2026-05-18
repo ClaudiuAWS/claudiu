@@ -1174,6 +1174,19 @@ def _end_rooms(match_id: str, final_result: str) -> None:
             except Exception as _e:  # pragma: no cover
                 print(f"[credits] award_match_end_bonuses failed for {code}: {_e}")
 
+            # Release consumable perks bound to THIS match so members
+            # can re-buy them. Without this, captain-triple / pick-reroll
+            # / free-hit stayed forever-owned (consumedForMatch=oldMatchId)
+            # and the shop wouldn't let users re-purchase. Per-user delete
+            # of inventory entries where consumedForMatch == this matchId.
+            try:
+                for _m in room.get('members', []):
+                    _uid = _m.get('userId')
+                    if _uid:
+                        _credits.consume_perks_for_match(_uid, match_id)
+            except Exception as _e:  # pragma: no cover
+                print(f"[credits] consume_perks_for_match loop failed for {code}: {_e}")
+
     count = len(response.get('Items', []))
     if count:
         print(f"Ended {count} rooms for match {match_id}")

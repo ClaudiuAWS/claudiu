@@ -346,6 +346,52 @@ def award_invite_accepted(inviter_user_id: str, invitee_user_id: str) -> None:
         award(user_id=uid, amount=INVITE_ACCEPTED_BONUS, reason='invite accepted')
 
 
+def consume_perks_for_match(user_id: str, match_id: str) -> None:
+    """Release consumable inventory entries bound to this match so the
+    user can re-buy them. Called from event-processor's `_end_rooms` at
+    fulltime — without this the perks would stay forever-owned with
+    `consumedForMatch = <past matchId>`, blocking the user from buying
+    the same perk again (they could only ever use each consumable
+    once across the lifetime of the wallet).
+
+    Idempotent: no-op if the user owns no consumables or none are
+    bound to this match. Never raises — wrapped so match-end cleanup
+    can't be broken by a wallet error.
+    """
+    if not user_id or not match_id:
+        return
+    try:
+        item = _table.get_item(
+            Key={'userId': user_id},
+            ConsistentRead=True,
+        ).get('Item') or {}
+    except Exception as e:
+        print(f"[credits] consume_perks_for_match read failed for {user_id}: {e}")
+        return
+    inventory = item.get('inventory') or {}
+    to_remove = [
+        iid for iid, e in inventory.items()
+        if (e or {}).get('kind') == 'consumable'
+        and (e or {}).get('consumedForMatch') == match_id
+    ]
+    if not to_remove:
+        return
+    # REMOVE inventory.#i0, inventory.#i1, ... — DDB doesn't allow REMOVE
+    # of map keys with a literal in the path, hence the ExpressionAttributeNames
+    # placeholder per key.
+    update_expr = 'REMOVE ' + ', '.join(f'inventory.#i{n}' for n in range(len(to_remove)))
+    names       = {f'#i{n}': iid for n, iid in enumerate(to_remove)}
+    try:
+        _table.update_item(
+            Key={'userId': user_id},
+            UpdateExpression=update_expr,
+            ExpressionAttributeNames=names,
+        )
+        print(f"[credits] released {len(to_remove)} consumed perks for {user_id} from {match_id}: {to_remove}")
+    except Exception as e:
+        print(f"[credits] consume_perks_for_match write failed for {user_id}/{match_id}: {e}")
+
+
 # ----- Internal helpers ----------------------------------------------
 
 def _parse_final_result(final_result: str):
