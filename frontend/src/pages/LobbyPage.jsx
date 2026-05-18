@@ -33,14 +33,15 @@ export default function LobbyPage() {
 
   const handleMatchStarted = (mid) => {
     if (!mid) return
-    const flagKey = `lobby_auto_redirected_${mid}`
-    if (sessionStorage.getItem(flagKey)) return
-    sessionStorage.setItem(flagKey, '1')
-    // Pass state.initialRoom so the non-host's MatchPage skips its
-    // loading-spinner gate (same pattern as handleStart and the isLive
-    // auto-redirect useEffect). Without this, the friend's tab flashed
-    // a blank spinner between WS arrival and useRoom's API restore.
-    navigate(`/match/${mid}`, { state: { initialRoom: room } })
+    // No sessionStorage flag here. The flag belongs to the useEffect below,
+    // which is the authoritative fallback driven by match.status='live'.
+    // If THIS path doesn't actually flip the route for any reason (router
+    // race, stale closure), the useEffect still fires when match_update
+    // arrives and navigates the user. Previously both paths shared one
+    // flag and the optimistic path's "I tried" set the flag, blocking
+    // the fallback path from retrying — that left invited users stuck
+    // on the lobby with the "Kicking off…" pill visible.
+    navigate(`/match/${mid}`, { state: { initialRoom: room }, replace: true })
   }
   // Pass nav-state initialRoom (e.g. from InviteListener accepting an
   // invite) to useRoom so the loading-spinner gate doesn't fire while
@@ -95,7 +96,7 @@ export default function LobbyPage() {
     const flagKey = `lobby_auto_redirected_${matchId}`
     if (sessionStorage.getItem(flagKey)) return
     sessionStorage.setItem(flagKey, '1')
-    navigate(`/match/${matchId}`, { state: { initialRoom: room } })
+    navigate(`/match/${matchId}`, { state: { initialRoom: room }, replace: true })
   }, [isLive, matchId, room, navigate])
 
   const handleReadyUp = async () => {
@@ -119,7 +120,7 @@ export default function LobbyPage() {
     try {
       await roomsApi.startMatch(room.roomCode, speedMultiplier)
       sessionStorage.setItem(`lobby_auto_redirected_${matchId}`, '1')
-      navigate(`/match/${matchId}`, { state: { initialRoom: room } })
+      navigate(`/match/${matchId}`, { state: { initialRoom: room }, replace: true })
     } catch (e) {
       setError(e.message)
       setStarting(false)
