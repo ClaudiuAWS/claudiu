@@ -117,6 +117,24 @@ def _purchase(user_id: str, item_id: str) -> dict:
         entry['armedForMatchId'] = ''
         entry['usedAt']          = ''
 
+    # DynamoDB doesn't allow `SET inventory.#item = …` when `inventory`
+    # itself doesn't exist on the row yet (it raises ValidationException,
+    # which is NOT a ConditionalCheckFailedException, so it falls
+    # through to the catch-all 500 below — that's the "internal error"
+    # users see on their first purchase). Pre-initialize the map with
+    # if_not_exists, which is idempotent: concurrent first-purchase
+    # races + repeat buys are safe no-ops.
+    try:
+        _table.update_item(
+            Key={'userId': user_id},
+            UpdateExpression='SET inventory = if_not_exists(inventory, :empty)',
+            ExpressionAttributeValues={':empty': {}},
+        )
+    except Exception as e:
+        # Best-effort. If this fails the atomic update below will
+        # surface the real error — no need to handle it here.
+        print(f"[credits] inventory pre-init failed for {user_id}: {e}")
+
     try:
         _table.update_item(
             Key={'userId': user_id},
