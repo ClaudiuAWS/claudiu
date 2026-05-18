@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { CombinedPitchView } from './CombinedPitchView'
 import { PlayerStatsPopup } from './PlayerStatsPopup'
 import { gameTimeToSeconds, formatFootballTime } from '../../utils/matchEvents'
@@ -150,6 +150,15 @@ export function SquadVisualization({
   // so this just sorts & renders. Empty when the room has no members yet.
   const sortedMembers = [...members].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
 
+  // Captain markers on the pitch: collect every member's captainPlayerId
+  // into one set so the PitchView can render a yellow "C" disc on each
+  // captain's dot — your captain AND your opponent's captain both
+  // highlighted (helps users spot the 2× scorer at a glance).
+  const captainPlayerIds = useMemo(
+    () => new Set((members || []).map(m => m.captainPlayerId).filter(Boolean)),
+    [members],
+  )
+
   return (
     <div className="w-full flex flex-col items-center gap-3">
       <CombinedPitchView
@@ -162,6 +171,7 @@ export function SquadVisualization({
         onHomePlayerClick={handleHomeClick}
         onAwayPlayerClick={handleAwayClick}
         selectedPlayerId={selectedPlayer?.playerId ?? null}
+        captainPlayerIds={captainPlayerIds}
       />
 
       {/* Leaderboard — collapsible. Rendered between the pitch and the

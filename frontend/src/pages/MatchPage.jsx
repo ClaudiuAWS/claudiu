@@ -116,8 +116,13 @@ export default function MatchPage() {
     // treats as a no-op. forYourSquad uses the user's current draft;
     // userDelta carries the CURRENT user's real points delta for the
     // event so the chip reads exactly the same value the leaderboard
-    // and ScoreToast bump by (no more hardcoded "+5").
-    const myDelta = deltas.find(d => d.userId === user?.userId)?.delta || 0
+    // and ScoreToast bump by (no more hardcoded "+5"). SUM across
+    // all per-component entries (scorer + assist + concede) — the
+    // backend + fplScoring now emit one entry per component, so a
+    // single goal can produce multiple rows for the same user.
+    const myDelta = deltas
+      .filter(d => d.userId === user?.userId)
+      .reduce((sum, d) => sum + (Number(d.delta) || 0), 0)
     const highlight = buildHighlightFromEvent(event, {
       userPlayerIds: userPlayerIdsRef.current,
       userDelta:     myDelta,

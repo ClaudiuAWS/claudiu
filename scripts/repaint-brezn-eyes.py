@@ -11,13 +11,13 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 OUT_PATH = ROOT / "frontend" / "public" / "brezn-agent.png"
 
-EYE_RADIUS       = 60
-EYE_OUTLINE_W    = 3
+EYE_RADIUS       = 120
+EYE_OUTLINE_W    = 5
 EYE_OUTLINE      = (26, 10, 5, 255)
 SCLERA           = (255, 255, 255, 255)
-PUPIL_RADIUS     = 26
+PUPIL_RADIUS     = 52
 PUPIL            = (26, 10, 5, 255)
-HIGHLIGHT_RADIUS = 10
+HIGHLIGHT_RADIUS = 20
 HIGHLIGHT        = (255, 255, 255, 255)
 LEFT_EYE_CENTER  = (277, 274)
 RIGHT_EYE_CENTER = (500, 228)
@@ -29,12 +29,12 @@ for cx, cy in (LEFT_EYE_CENTER, RIGHT_EYE_CENTER):
         [(cx - EYE_RADIUS, cy - EYE_RADIUS), (cx + EYE_RADIUS, cy + EYE_RADIUS)],
         fill=SCLERA, outline=EYE_OUTLINE, width=EYE_OUTLINE_W,
     )
-    pcx, pcy = cx + 8, cy + 10
+    pcx, pcy = cx + 16, cy + 20
     draw.ellipse(
         [(pcx - PUPIL_RADIUS, pcy - PUPIL_RADIUS), (pcx + PUPIL_RADIUS, pcy + PUPIL_RADIUS)],
         fill=PUPIL,
     )
-    hcx, hcy = pcx - 8, pcy - 8
+    hcx, hcy = pcx - 16, pcy - 16
     draw.ellipse(
         [(hcx - HIGHLIGHT_RADIUS, hcy - HIGHLIGHT_RADIUS),
          (hcx + HIGHLIGHT_RADIUS, hcy + HIGHLIGHT_RADIUS)],

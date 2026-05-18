@@ -63,7 +63,7 @@ export default function ReactionsButton({ roomCode }) {
   }
 
   return (
-    <div className="fixed bottom-44 right-4 z-50">
+    <div className="fixed bottom-24 right-4 z-50">
       {open && (
         <div
           className="absolute bottom-14 right-0 flex flex-col gap-1 mb-2"

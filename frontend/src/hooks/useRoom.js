@@ -230,9 +230,15 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
           // events for different players (e.g., two different scorers
           // both worth +5) don't false-dedup.
           const filtered = incoming.filter(inc => !prev.some(e => {
+            // Source-event fingerprint must also match the REASON now —
+            // goal events emit per-component entries (scorer / assist /
+            // conceded), all sharing the same _sourceEventId. Without
+            // the reason check, the optimistic and WS entries collapse
+            // to a single row and the user loses the breakdown.
             if (inc._sourceEventId
                 && e._sourceEventId === inc._sourceEventId
-                && e.userId === inc.userId) return true
+                && e.userId === inc.userId
+                && e.reason === inc.reason) return true
             if (e.userId !== inc.userId)             return false
             if (e.reason !== inc.reason)             return false
             if (e.delta  !== inc.delta)              return false
@@ -441,13 +447,23 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
 
     // Per-event toast for the current user. Mirrors the score_update toast
     // logic so optimistic bumps surface immediately rather than waiting on
-    // the backend round-trip.
-    const myDelta = deltas.find(d => d.userId === currentUserId && d.delta !== 0)
-    if (myDelta) {
+    // the backend round-trip. SUM across all per-component entries (one
+    // goal can produce scorer + assist + concede rows for the same user)
+    // and label the toast with the dominant component (scorer > assist
+    // > concede) so the user reads it as one logical event.
+    const myEntries = deltas.filter(d => d.userId === currentUserId && d.delta !== 0)
+    if (myEntries.length) {
+      const sumDelta = myEntries.reduce((s, d) => s + (Number(d.delta) || 0), 0)
+      const ranked   = ['scorer', 'assist', 'concede']
+      const pick = myEntries.slice().sort((a, b) => {
+        const ai = ranked.indexOf(a.component || '')
+        const bi = ranked.indexOf(b.component || '')
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+      })[0]
       emitScoreToast({
-        delta:      myDelta.delta,
-        reason:     myDelta.reason,
-        playerName: myDelta.playerName,
+        delta:      sumDelta,
+        reason:     pick?.reason     || 'your squad',
+        playerName: pick?.playerName || '',
       })
     }
   }, [currentUserId])

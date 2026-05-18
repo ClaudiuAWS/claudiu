@@ -32,7 +32,7 @@ function computeRowPcts(positioned, team) {
   return pcts
 }
 
-function PlayerDot({ player, xPct, yPct, color, isSelected, onClick }) {
+function PlayerDot({ player, xPct, yPct, color, isSelected, isCaptain, onClick }) {
   return (
     <div
       onClick={onClick}
@@ -40,41 +40,75 @@ function PlayerDot({ player, xPct, yPct, color, isSelected, onClick }) {
         position: 'absolute',
         left: `${xPct}%`,
         top: `${yPct}%`,
+        // outer wrapper keeps the captain badge OUTSIDE the dot's circular
+        // clip; the dot's `overflow: hidden` lives on the inner avatar wrapper.
         transform: 'translate(-50%, -50%)',
         width: 34,
         height: 34,
-        borderRadius: '50%',
-        background: isSelected ? '#14532d' : `${color}44`,
-        border: `2px solid ${isSelected ? '#22c55e' : color}`,
-        boxShadow: isSelected ? '0 0 8px rgba(34,197,94,0.7)' : '0 1px 6px rgba(0,0,0,0.7)',
         cursor: 'pointer',
-        overflow: 'hidden',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1,
+        zIndex: isCaptain ? 2 : 1,
         WebkitTapHighlightColor: 'transparent',
         flexShrink: 0,
       }}
     >
-      {player.imageUrl ? (
-        <>
-          <img
-            src={player.imageUrl}
-            alt=""
-            referrerPolicy="no-referrer"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
-            onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'block' }}
-          />
-          <span style={{ display: 'none', color: 'white', fontWeight: 900, fontSize: 10, fontFamily: 'system-ui' }}>
+      {/* Captain marker — yellow "C" disc at the top-right of the dot.
+          Renders for every member's captain on the pitch (current user
+          + opponents) so users see who has the 2× scoring boost. */}
+      {isCaptain && (
+        <div style={{
+          position: 'absolute',
+          top: -4,
+          right: -4,
+          width: 16,
+          height: 16,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #fcd34d 0%, #d97706 100%)',
+          border: '1.5px solid #fbbf24',
+          boxShadow: '0 0 6px rgba(252,211,77,0.7), 0 2px 3px rgba(0,0,0,0.4)',
+          color: '#1a0606',
+          fontSize: 10,
+          fontWeight: 900,
+          lineHeight: '13px',
+          fontFamily: 'system-ui, sans-serif',
+          textAlign: 'center',
+          zIndex: 3,
+          pointerEvents: 'none',
+        }}>C</div>
+      )}
+
+      <div
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: '50%',
+          background: isSelected ? '#14532d' : `${color}44`,
+          border: `2px solid ${isSelected ? '#22c55e' : color}`,
+          boxShadow: isSelected ? '0 0 8px rgba(34,197,94,0.7)' : '0 1px 6px rgba(0,0,0,0.7)',
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {player.imageUrl ? (
+          <>
+            <img
+              src={player.imageUrl}
+              alt=""
+              referrerPolicy="no-referrer"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
+              onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'block' }}
+            />
+            <span style={{ display: 'none', color: 'white', fontWeight: 900, fontSize: 10, fontFamily: 'system-ui' }}>
+              {player.shirtNumber || '?'}
+            </span>
+          </>
+        ) : (
+          <span style={{ color: 'white', fontWeight: 900, fontSize: 10, fontFamily: 'system-ui' }}>
             {player.shirtNumber || '?'}
           </span>
-        </>
-      ) : (
-        <span style={{ color: 'white', fontWeight: 900, fontSize: 10, fontFamily: 'system-ui' }}>
-          {player.shirtNumber || '?'}
-        </span>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -89,7 +123,9 @@ export function CombinedPitchView({
   onHomePlayerClick,
   onAwayPlayerClick,
   selectedPlayerId = null,
+  captainPlayerIds = null,   // Set<string> of every member's captainPlayerId
 }) {
+  const captainSet = captainPlayerIds instanceof Set ? captainPlayerIds : new Set()
   const homePositioned = assignPlayersToFormation(homePlayers)
   const awayPositioned = assignPlayersToFormation(awayPlayers)
   const homeRowPcts = computeRowPcts(homePositioned, 'home')
@@ -170,6 +206,7 @@ export function CombinedPitchView({
               yPct={yPct}
               color={AWAY_COLOR}
               isSelected={!!(selectedPlayerId && player.playerId === selectedPlayerId)}
+              isCaptain={captainSet.has(player.playerId)}
               onClick={() => onAwayPlayerClick?.(player)}
             />
           )
@@ -187,6 +224,7 @@ export function CombinedPitchView({
               yPct={yPct}
               color={HOME_COLOR}
               isSelected={!!(selectedPlayerId && player.playerId === selectedPlayerId)}
+              isCaptain={captainSet.has(player.playerId)}
               onClick={() => onHomePlayerClick?.(player)}
             />
           )
