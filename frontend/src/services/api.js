@@ -75,8 +75,9 @@ export const friendsApi = {
 }
 
 export const badgesApi = {
-  list:    () => request('/badges'),
-  catalog: () => request('/badges/catalog'),
+  list:    ()        => request('/badges'),
+  catalog: ()        => request('/badges/catalog'),
+  buy:     (badgeId) => request('/badges/buy', 'POST', { badgeId }),
 }
 
 export const historyApi = {
@@ -92,5 +93,5 @@ export const creditsApi = {
   balance:   ()       => request('/credits'),
   friends:   ()       => request('/credits/friends'),
   inventory: ()       => request('/credits/inventory'),
-  purchase:  (itemId) => request('/credits/purchase', { method: 'POST', body: { itemId } }),
+  purchase:  (itemId) => request('/credits/purchase', 'POST', { itemId }),
 }

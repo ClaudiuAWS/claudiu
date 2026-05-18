@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PitchView } from '../match/PitchView'
+import { useAuth } from '../../hooks/useAuth'
 
 // Reveal needs longer dwell now that we actually show the squads on a
 // pitch — readers need time to scan formations + spot captain rings.
@@ -43,6 +44,7 @@ function formationString(details = []) {
 export default function DraftRevealShow({ open, room, onClose }) {
   const [phase, setPhase] = useState('countdown') // countdown -> reveal -> kickoff
   const [count, setCount]  = useState(COUNTDOWN_S)
+  const { user }           = useAuth()
 
   useEffect(() => {
     if (!open) return
@@ -67,7 +69,16 @@ export default function DraftRevealShow({ open, room, onClose }) {
 
   if (!open) return null
 
-  const members = room?.members ?? []
+  const allMembers = room?.members ?? []
+  // Show ONLY the opponent's pitch — the user already saw their own squad
+  // during the lock-in phase, so re-revealing it is redundant. The reveal
+  // is about surprising them with what the opponent picked. Solo match
+  // (no opponents) falls back to showing the user's own pitch so the
+  // reveal isn't empty.
+  const opponents = user?.userId
+    ? allMembers.filter(m => m.userId !== user.userId)
+    : allMembers
+  const members = opponents.length > 0 ? opponents : allMembers
 
   return (
     <div

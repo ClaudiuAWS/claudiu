@@ -40,7 +40,7 @@ export const BADGE_CATALOG = [
   {
     id: 'goal_machine',
     title: 'Goal Machine',
-    description: 'Your squad has scored 10 career goals.',
+    description: 'Your squad has scored 100 career goals.',
     image: '/badge-goal-machine.png?v=4',
     tier: 'gold',
     discReward: null,

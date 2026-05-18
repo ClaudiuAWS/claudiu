@@ -98,7 +98,7 @@ BADGE_CATALOG = {
     'goal_machine': {
         'id':          'goal_machine',
         'title':       'Goal Machine',
-        'description': 'Your squad has scored 10 career goals.',
+        'description': 'Your squad has scored 100 career goals.',
         'image':       '/badge-goal-machine.png?v=4',
         'tier':        'gold',
         'discReward':  None,
@@ -386,9 +386,21 @@ def get_catalog():
 # and attempt to award any that are now met. award() is idempotent so
 # re-checking already-crossed thresholds is a harmless no-op.
 _COUNTER_BADGES = {
-    'counter#goals':     [(1, 'striker_1'), (5, 'striker_5'), (10, 'goal_machine')],
+    'counter#goals':     [(1, 'striker_1'), (5, 'striker_5'), (100, 'goal_machine')],
     'counter#saves':     [(1, 'goalkeeper_1'), (5, 'goalkeeper_5')],
     'counter#penalties': [(1, 'penalty_1'), (5, 'penalty_5')],
+}
+
+
+# Retail price (brezn) to buy a specific badge of the given tier from the
+# shop. Mirrors the frontend TIER_PRICES in frontend/src/utils/badges.js
+# and the BADGE_EARN_PAYOUT amounts in shared/credits.py — earning and
+# buying cost the same; the difference is just whether you grind a
+# specific badge in-match or pay to claim one.
+BADGE_BUY_PRICES = {
+    'bronze': 300,
+    'silver': 800,
+    'gold':   2000,
 }
 
 

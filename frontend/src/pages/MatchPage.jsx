@@ -113,9 +113,14 @@ export default function MatchPage() {
 
     // Broadcast-style highlight overlay (goals + red cards only). The
     // builder returns null for any other event type, which the queue
-    // treats as a no-op. forYourSquad uses the user's current draft.
+    // treats as a no-op. forYourSquad uses the user's current draft;
+    // userDelta carries the CURRENT user's real points delta for the
+    // event so the chip reads exactly the same value the leaderboard
+    // and ScoreToast bump by (no more hardcoded "+5").
+    const myDelta = deltas.find(d => d.userId === user?.userId)?.delta || 0
     const highlight = buildHighlightFromEvent(event, {
       userPlayerIds: userPlayerIdsRef.current,
+      userDelta:     myDelta,
     })
     if (highlight) highlights.pushHighlight(highlight)
   }, [applyOptimisticDeltas, highlights])

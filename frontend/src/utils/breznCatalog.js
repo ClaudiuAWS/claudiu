@@ -85,9 +85,12 @@ export const SPEND_CATALOG = {
     title:   'Badges',
     summary: "Skip the grind — buy a badge you didn't earn.",
     items:   [
-      { id: 'badge-bronze', label: 'Any bronze badge', cost: 300,  status: 'soon' },
-      { id: 'badge-silver', label: 'Any silver badge', cost: 800,  status: 'soon' },
-      { id: 'badge-gold',   label: 'Any gold badge',   cost: 2000, status: 'soon' },
+      // The card opens a preview that bounces the user to /badges
+      // where they pick a specific badge to buy. The actual purchase
+      // happens on the BadgePreviewModal via POST /badges/buy.
+      { id: 'badge-bronze', label: 'Any bronze badge', cost: 300,  status: 'live' },
+      { id: 'badge-silver', label: 'Any silver badge', cost: 800,  status: 'live' },
+      { id: 'badge-gold',   label: 'Any gold badge',   cost: 2000, status: 'live' },
     ],
   },
 

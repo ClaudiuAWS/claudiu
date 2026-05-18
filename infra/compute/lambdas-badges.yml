@@ -31,6 +31,23 @@ Resources:
                                                             - dynamodb:Query
                                                             - dynamodb:GetItem
                                                     Resource: !ImportValue claudiu-badges-table-arn
+                                                  # Buy path writes a badge row when a user pays brezn
+                                                  # for a specific badge. Idempotent on already-owned
+                                                  # via the badges Lambda's transact-write condition.
+                                                  - Sid: BadgesTableBuyWrite
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:PutItem
+                                                    Resource: !ImportValue claudiu-badges-table-arn
+                                                  # Buy path also debits the user's brezn balance in
+                                                  # the same DDB transaction. UpdateItem only — the
+                                                  # earn path lives in event-processor's role.
+                                                  - Sid: CreditsTableBuyDebit
+                                                    Effect: Allow
+                                                    Action:
+                                                            - dynamodb:UpdateItem
+                                                            - dynamodb:GetItem
+                                                    Resource: !ImportValue claudiu-credits-table-arn
 
         BadgesLambda:
                 Type: AWS::Lambda::Function
@@ -44,6 +61,7 @@ Resources:
                         Environment:
                                 Variables:
                                         BADGES_TABLE: !ImportValue claudiu-badges-table
+                                        CREDITS_TABLE: !ImportValue claudiu-credits-table
                         Code:
                                 ZipFile: |
                                         def handler(event, context):

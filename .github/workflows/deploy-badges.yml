@@ -7,6 +7,8 @@ on:
                         - "backend/badges/**"
                         - "backend/shared/badges.py"
                         - "backend/shared/ws.py"
+                        - "infra/compute/lambdas-badges.yml"
+        workflow_dispatch:
 
 permissions:
         id-token: write
@@ -24,7 +26,22 @@ jobs:
                                   role-to-assume: ${{ secrets.AWS_BACKEND_GITHUB_ACTIONS_ROLE_ARN }}
                                   aws-region: eu-central-1
 
-                        - name: Build and deploy
+                        # Stack deploy first — picks up any IAM / env-var
+                        # changes in lambdas-badges.yml (e.g. the new
+                        # CREDITS_TABLE env + PutItem/UpdateItem perms for
+                        # the badge-buy path). Idempotent — no-op when
+                        # the template matches the live stack.
+                        - name: Deploy badges Lambda CFN
+                          run: |
+                                  aws cloudformation deploy \
+                                    --template-file infra/compute/lambdas-badges.yml \
+                                    --stack-name claudiu-badges-lambda \
+                                    --capabilities CAPABILITY_NAMED_IAM \
+                                    --no-fail-on-empty-changeset \
+                                    --s3-bucket claudiu-profile-pictures-507609143109 \
+                                    --s3-prefix cfn-templates
+
+                        - name: Build and deploy code
                           run: |
                                   cd backend/badges
                                   # The badges read Lambda imports the SAME catalog the

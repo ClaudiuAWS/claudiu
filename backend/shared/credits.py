@@ -192,12 +192,15 @@ CAPTAIN_DELIVERED_BONUS   = 100   # bumped 75→100 — rewards strategic captai
 DAILY_FIRST_MATCH_BONUS   = 100   # bumped 50→100 — habit hook
 
 # Badge unlock — paid once at the moment an earned (not bought) badge
-# fires. Earn payouts are always cheaper than the retail buy prices in
-# `backend/shared/breznCatalog.py` so users always prefer earning.
+# fires. The payout matches what the badge card visibly displays on
+# /badges (frontend/src/utils/badges.js TIER_PRICES) — i.e. the badge's
+# advertised value IS what the wallet gets credited. Buying a badge of
+# the same tier via the shop costs the same amount, so earning is
+# always equal-or-better value (no grind tax for paying).
 BADGE_EARN_PAYOUT = {
-    'bronze': 150,    # bumped 100→150 (buy: 300)
-    'silver': 400,    # bumped 300→400 (buy: 800)
-    'gold':   1000,   # bumped 750→1000 (buy: 2000)
+    'bronze': 300,    # was 150 — matches displayed TIER_PRICES.bronze
+    'silver': 800,    # was 400 — matches displayed TIER_PRICES.silver
+    'gold':   2000,   # was 1000 — matches displayed TIER_PRICES.gold
 }
 
 # Mini-game payouts, fired by the mini-game scoring path.

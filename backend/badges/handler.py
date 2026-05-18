@@ -1,14 +1,16 @@
 """
-Badges Lambda — read-only API.
+Badges Lambda — read API + the badge-buy purchase path.
 
 Routes:
     GET  /badges            — list current user's earned badges
     GET  /badges/catalog    — full catalog (so the FE has one source of truth)
+    POST /badges/buy        — claim a specific badge by paying its tier price
+                              from the user's brezn balance. Atomic across
+                              the badges + credits tables.
 
-Awarding NEVER happens here. The only writer is `backend/shared/badges.py`,
-imported by the Lambdas that observe the relevant signals (event-processor,
-etc.). Keeping the read path dumb means the FE can never accidentally
-self-award — every badge is server-derived from real match events.
+Match-event awarding still happens elsewhere (event-processor via
+`backend/shared/badges.py`). This Lambda owns the EXPLICIT buy path —
+the user has chosen to pay for a specific badge instead of grinding it.
 """
 
 import json
@@ -47,6 +49,17 @@ def handler(event, context):
     try:
         if method == 'GET' and path.endswith('/badges/catalog'):
             return _resp(200, {'catalog': service.get_catalog()})
+
+        if method == 'POST' and path.endswith('/badges/buy'):
+            try:
+                body = json.loads(event.get('body') or '{}')
+            except Exception:
+                return _resp(400, {'error': 'invalid body'})
+            badge_id = (body or {}).get('badgeId')
+            if not badge_id or not isinstance(badge_id, str):
+                return _resp(400, {'error': 'badgeId required'})
+            status, body_resp = service.buy_badge(user_id, badge_id)
+            return _resp(status, body_resp)
 
         if method == 'GET' and path.endswith('/badges'):
             return _resp(200, {'badges': service.list_user_badges(user_id)})

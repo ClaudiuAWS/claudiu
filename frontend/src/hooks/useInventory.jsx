@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import toast from 'react-hot-toast'
 import { creditsApi } from '../services/api'
 
 /**
@@ -62,15 +63,24 @@ export function InventoryProvider({ children }) {
       return result
     } catch (err) {
       // Re-throw with a normalized shape so the shop UI can map status
-      // codes to user-facing messages.
+      // codes to user-facing messages. Also toast so the user gets
+      // immediate feedback — the modal's catch is intentionally empty
+      // (keeps the modal open for retry) and this is the only signal.
       const status = err?.status || err?.code
-      const message = err?.message || (status === 402 ? 'Not enough brezn'
-                                     : status === 409 ? 'Already owned'
-                                     : 'Purchase failed')
-      const e = new Error(message)
-      e.code = status === 402 ? 'insufficient'
-            : status === 409 ? 'owned'
-            : 'failed'
+      const rawMessage = err?.message || ''
+      // Disambiguate the most common API responses by message content
+      // since the fetch wrapper doesn't expose status codes directly.
+      const m = String(rawMessage).toLowerCase()
+      const isInsufficient = m.includes('insufficient') || status === 402
+      const isOwned        = m.includes('already owned') || status === 409
+      const friendly = isInsufficient ? 'Not enough brezn'
+                     : isOwned        ? 'Already owned'
+                     : rawMessage     || 'Purchase failed'
+      toast.error(friendly)
+      const e = new Error(friendly)
+      e.code = isInsufficient ? 'insufficient'
+            :  isOwned        ? 'owned'
+            :  'failed'
       throw e
     }
   }, [refresh])
