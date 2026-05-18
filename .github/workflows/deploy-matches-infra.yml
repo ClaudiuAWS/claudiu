@@ -5,12 +5,8 @@ on:
                 branches: [main]
                 paths:
                         - "infra/compute/lambdas-matches.yml"
-        # Manual trigger from the GHA UI. Useful when the live CFN stack
-        # drifts from source (e.g. admin tweaked an IAM Sid outside of git)
-        # or when source-only changes need to be re-applied. Also fixes
-        # the "first run" chicken-and-egg where a workflow was added AFTER
-        # its target file was last edited — the only way to fire it is
-        # either a manual run here or a fresh edit to that file.
+        # Manual trigger from the GHA UI. Useful when the IAM in source
+        # needs to be re-applied without editing the YAML.
         workflow_dispatch:
 
 permissions:
@@ -18,7 +14,7 @@ permissions:
         contents: read
 
 jobs:
-        deploy:
+        patch:
                 runs-on: ubuntu-latest
                 steps:
                         - uses: actions/checkout@v4
@@ -29,19 +25,95 @@ jobs:
                                   role-to-assume: ${{ secrets.AWS_BACKEND_GITHUB_ACTIONS_ROLE_ARN }}
                                   aws-region: eu-central-1
 
-                        # The lambdas-matches CFN stack owns the IAM roles + Lambda
-                        # CFN resources for event-processor, replay-emitter, and the
-                        # matches API. Code zips for those Lambdas are pushed by
-                        # their per-feature workflows (deploy-event-processor.yml,
-                        # deploy-replay-emitter.yml, deploy-matches.yml). This
-                        # workflow is the missing piece — it propagates IAM/env
-                        # changes to AWS whenever lambdas-matches.yml is edited.
-                        - name: Deploy matches lambdas CFN
+                        # WHY THIS DOESN'T USE `cloudformation deploy`:
+                        # The IAM roles + Lambdas in lambdas-matches.yml were
+                        # bootstrapped manually outside any CFN stack. Running
+                        # `cloudformation deploy` here fails on changeset
+                        # creation with AWS::EarlyValidation::ResourceExistenceCheck
+                        # because CFN wants to CREATE resources that already
+                        # exist (RoleName conflicts, FunctionName conflicts).
+                        # Doing a proper CFN import-then-deploy would require
+                        # listing every existing resource in an import descriptor
+                        # — 8+ resources, fragile, one-shot. Until that gets
+                        # done, this workflow applies the IAM + env-var deltas
+                        # via direct CLI calls that are SAFE on bootstrapped
+                        # resources (PutRolePolicy + UpdateFunctionConfiguration
+                        # are idempotent, additive, and don't conflict with
+                        # existing inline policies / env vars).
+
+                        - name: Apply event-processor inline write policy
                           run: |
-                                  aws cloudformation deploy \
-                                    --template-file infra/compute/lambdas-matches.yml \
-                                    --stack-name claudiu-matches-lambda \
-                                    --capabilities CAPABILITY_NAMED_IAM \
-                                    --no-fail-on-empty-changeset \
-                                    --s3-bucket claudiu-profile-pictures-507609143109 \
-                                    --s3-prefix cfn-templates
+                                  set -e
+                                  aws iam put-role-policy \
+                                    --role-name claudiu-event-processor-role \
+                                    --policy-name claudiu-event-processor-writes \
+                                    --policy-document '{
+                                      "Version": "2012-10-17",
+                                      "Statement": [
+                                        {
+                                          "Sid": "BadgesWrite",
+                                          "Effect": "Allow",
+                                          "Action": ["dynamodb:PutItem", "dynamodb:UpdateItem"],
+                                          "Resource": "arn:aws:dynamodb:eu-central-1:507609143109:table/claudiu-badges"
+                                        },
+                                        {
+                                          "Sid": "MatchHistoryWrite",
+                                          "Effect": "Allow",
+                                          "Action": "dynamodb:PutItem",
+                                          "Resource": "arn:aws:dynamodb:eu-central-1:507609143109:table/claudiu-match-history"
+                                        },
+                                        {
+                                          "Sid": "LeaderboardWrite",
+                                          "Effect": "Allow",
+                                          "Action": "dynamodb:UpdateItem",
+                                          "Resource": "arn:aws:dynamodb:eu-central-1:507609143109:table/claudiu-leaderboard"
+                                        },
+                                        {
+                                          "Sid": "CreditsWrite",
+                                          "Effect": "Allow",
+                                          "Action": "dynamodb:UpdateItem",
+                                          "Resource": "arn:aws:dynamodb:eu-central-1:507609143109:table/claudiu-credits"
+                                        }
+                                      ]
+                                    }'
+
+                        - name: Merge required env vars into event-processor config
+                          run: |
+                                  set -e
+                                  CURRENT_ENV=$(aws lambda get-function-configuration \
+                                    --function-name claudiu-event-processor \
+                                    --query 'Environment.Variables' --output json)
+                                  # Lambda configs without env vars return null — fall back to {}
+                                  if [ "$CURRENT_ENV" = "null" ]; then CURRENT_ENV="{}"; fi
+                                  echo "Current env vars:"
+                                  echo "$CURRENT_ENV" | jq '.'
+                                  NEW_VARS=$(echo "$CURRENT_ENV" | jq '. + {
+                                    "BADGES_TABLE": "claudiu-badges",
+                                    "MATCH_HISTORY_TABLE": "claudiu-match-history",
+                                    "LEADERBOARD_TABLE": "claudiu-leaderboard",
+                                    "CREDITS_TABLE": "claudiu-credits"
+                                  }')
+                                  echo "New env vars:"
+                                  echo "$NEW_VARS" | jq '.'
+                                  echo "$NEW_VARS" | jq '{Variables: .}' > /tmp/env.json
+                                  aws lambda update-function-configuration \
+                                    --function-name claudiu-event-processor \
+                                    --environment file:///tmp/env.json
+
+                        - name: Verify the patches landed
+                          run: |
+                                  echo "=== Inline policies on event-processor role ==="
+                                  aws iam list-role-policies \
+                                    --role-name claudiu-event-processor-role
+                                  echo ""
+                                  echo "=== claudiu-event-processor-writes statements ==="
+                                  aws iam get-role-policy \
+                                    --role-name claudiu-event-processor-role \
+                                    --policy-name claudiu-event-processor-writes \
+                                    --query 'PolicyDocument.Statement[].Sid' --output json
+                                  echo ""
+                                  echo "=== event-processor env vars (relevant keys) ==="
+                                  aws lambda get-function-configuration \
+                                    --function-name claudiu-event-processor \
+                                    --query 'Environment.Variables | {BADGES_TABLE, MATCH_HISTORY_TABLE, LEADERBOARD_TABLE, CREDITS_TABLE}' \
+                                    --output json

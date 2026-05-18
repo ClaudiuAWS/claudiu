@@ -1,11 +1,15 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Claudiu Lambda Functions - Matches Feature
 
-# Last IAM revision: 2026-05-18 — re-applying the CreditsWrite Sid +
-# CREDITS_TABLE env (originally added in commit 86af855) so the
-# deploy-matches-infra.yml workflow actually fires. The workflow was
-# created AFTER that earlier edit, so it never had a real change to
-# react to and the stack stayed in its pre-credits-IAM state on AWS.
+# Last IAM revision: 2026-05-18 (rev 2) — the previous CFN-deploy
+# approach failed with AWS::EarlyValidation::ResourceExistenceCheck
+# because the IAM roles + Lambdas this template defines were
+# bootstrapped manually outside any CFN stack. The deploy workflow
+# has been switched to CLI-based patching (additive PutRolePolicy +
+# additive UpdateFunctionConfiguration). This file remains the
+# source-of-truth for what permissions SHOULD be applied; the
+# workflow translates them into safe CLI calls until the
+# resources can be properly imported into a stack.
 
 Resources:
         # 
