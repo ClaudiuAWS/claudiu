@@ -24,12 +24,31 @@ export default function HistoryPage() {
 
   return (
     <div className="px-6 pt-8 pb-12 max-w-md mx-auto">
-      <h1 className="text-white text-2xl font-bold tracking-tight mb-1">Match History</h1>
-      <p className="text-gray-500 text-sm mb-6">
-        {error
-          ? 'Couldn\'t load history.'
-          : `${items?.length ?? 0} match${(items?.length ?? 0) === 1 ? '' : 'es'} played`}
-      </p>
+      {/* Glossy header */}
+      <div className="relative overflow-hidden rounded-2xl mb-5">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-500/60 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.07] to-transparent pointer-events-none" />
+        <div
+          className="relative px-5 py-4"
+          style={{
+            background: 'linear-gradient(180deg, #1a0a0a 0%, #0d0606 100%)',
+            border: '1px solid rgba(220,38,38,0.25)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px -12px rgba(220,38,38,0.50)',
+          }}
+        >
+          <h1
+            className="text-white font-stadium text-2xl leading-none"
+            style={{ letterSpacing: '0.10em', textShadow: '0 2px 0 rgba(0,0,0,0.6), 0 -1px 0 rgba(255,255,255,0.05)' }}
+          >
+            MATCH HISTORY
+          </h1>
+          <p className="text-gray-400 text-[11px] mt-1.5 tracking-wider">
+            {error
+              ? 'Couldn\'t load history.'
+              : `${items?.length ?? 0} match${(items?.length ?? 0) === 1 ? '' : 'es'} played`}
+          </p>
+        </div>
+      </div>
 
       {error && (
         <div className="rounded-2xl p-4 mb-4" style={{ background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.25)' }}>
