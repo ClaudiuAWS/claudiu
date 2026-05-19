@@ -400,7 +400,17 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
   // handler falls back to a 30s reason/delta window match.
   const applyOptimisticDeltas = useCallback((deltas) => {
     if (!Array.isArray(deltas) || !deltas.length) return
-    const byUid = Object.fromEntries(deltas.map(d => [d.userId, Number(d.delta) || 0]))
+    // SUM per-user — a single goal produces up to 3 per-component
+    // entries (scorer, assist, concede) for the same user. The earlier
+    // `Object.fromEntries(deltas.map(...))` collapsed them to the LAST
+    // entry, so the leaderboard only bumped by the concede (-1) instead
+    // of by the full (+5 + +3 - 1 = +7). The score timeline below
+    // already appends per-component rows correctly; only this bump path
+    // was wrong.
+    const byUid = {}
+    for (const d of deltas) {
+      byUid[d.userId] = (byUid[d.userId] || 0) + (Number(d.delta) || 0)
+    }
     setRoom(prev => prev ? {
       ...prev,
       members: prev.members.map(m => {
