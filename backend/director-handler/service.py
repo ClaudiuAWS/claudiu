@@ -85,6 +85,17 @@ def _ask_model(snapshot: dict) -> dict:
         decision = json.loads(text)
         # Structured log so judges / debugging eyes can scan reasoning quickly.
         print(f"bedrock latency={elapsed_ms:.0f}ms action={decision.get('action')} reasoning={decision.get('reasoning')!r}")
+        # On HALFTIME_QUIZ specifically, also surface the raw question
+        # snippets so we can tell from CloudWatch whether Nova is producing
+        # anything at all (the frontend stays on static fallback when this
+        # path silently drops the response).
+        if decision.get('gameType') == 'HALFTIME_QUIZ':
+                qs = (decision.get('config') or {}).get('questions') or []
+                summaries = [
+                    f"{q.get('type', '?')}/conf={q.get('confidence', 'missing')}/{(q.get('q') or '')[:60]}"
+                    for q in qs
+                ]
+                print(f"[director] AI HALFTIME_QUIZ raw count={len(qs)} questions={summaries}")
         return decision
 
 
@@ -159,7 +170,17 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                                 for q in qs
                         )
                         if not valid_schema:
-                                print("director: HALFTIME_QUIZ schema failed, dropping -> wait")
+                                # Surface WHAT failed so the next deploy doesn't
+                                # have to guess. Cap each field at a short
+                                # snippet — the structured prints are easier
+                                # to scan in CloudWatch than full JSON dumps.
+                                dir_sample = list((snapshot.get('playerDirectory') or {}).keys())[:6]
+                                print(
+                                    f"[director] HALFTIME_QUIZ schema FAILED, dropping -> wait. "
+                                    f"qs_type={type(qs).__name__} qs_len={len(qs) if isinstance(qs, list) else 'n/a'} "
+                                    f"directory_size={len((snapshot.get('playerDirectory') or {}))} "
+                                    f"directory_sample={dir_sample}"
+                                )
                                 return
 
                         # Anti-hallucination gate (post-schema):

@@ -407,6 +407,19 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
   // Handle WS messages forwarded by useRoom.
   const onMinigameMessage = useCallback((msg) => {
     if (msg.type === 'minigame_start') {
+      // Surface every minigame_start broadcast to the browser console so
+      // the user can confirm from DevTools whether the AI Director's
+      // broadcast (source: 'ai-director') is actually reaching their tab
+      // — a long-running diagnostic that survives across deploys.
+      if (msg.gameType === 'HALFTIME_QUIZ') {
+        const qCount = msg.config?.questions?.length ?? 0
+        const sample = (msg.config?.questions || []).slice(0, 1).map(q => q?.q?.slice(0, 60))
+        // eslint-disable-next-line no-console
+        console.info(
+          '[minigame_start] HALFTIME_QUIZ received',
+          { source: msg.source || 'event-processor', qCount, sample, gameId: msg.gameId },
+        )
+      }
       // Frontend-driven trigger now opens the modal locally on event reveal.
       // Backend's push only wins as a fallback when the frontend hadn't fired
       // (e.g. user joined the room mid-event). If we already have local state,
