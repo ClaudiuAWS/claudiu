@@ -64,12 +64,46 @@ export default function MatchEndCelebration({ shown, match, room, scoreEvents = 
 
     // 2. Start celebration song (looped sfx-match-end). Volume ramps
     //    up so it doesn't slam in on top of the residual app music.
+    //
+    // Chrome / Safari autoplay policies sometimes reject the first
+    // `a.play()` even when the audio context is unlocked by ongoing
+    // app music — the celebration is fired from a React effect, not
+    // a direct user gesture. We:
+    //   - log the rejection (the old code silently swallowed it, so
+    //     the bug surfaced as "no celebration song" with zero diag),
+    //   - register a one-shot gesture listener that retries play()
+    //     the next time the user touches the modal (any pointerdown
+    //     anywhere on the document counts).
+    let releaseGesture = null
     try {
       const a = new Audio('/songs/sfx-match-end.mp3')
       a.loop = true
       a.volume = 0
+      // Preload so the play() call doesn't race with the network
+      // fetch — fewer rejection modes that way.
+      a.preload = 'auto'
       celebrationAudioRef.current = a
-      a.play().catch(() => { /* autoplay blocked — silent failure */ })
+
+      const tryPlay = () => a.play().then(
+        () => { /* eslint-disable-next-line no-console */ console.info('[match-end] celebration song playing') },
+        (err) => { /* eslint-disable-next-line no-console */ console.warn('[match-end] celebration play rejected:', err?.name, err?.message) },
+      )
+
+      tryPlay().then(() => {
+        // If first play() rejected, schedule a retry on the next user
+        // gesture. The pointerdown listener self-removes after the
+        // first fire.
+        if (a.paused) {
+          const onGesture = () => {
+            window.removeEventListener('pointerdown', onGesture, true)
+            releaseGesture = null
+            if (celebrationAudioRef.current === a) tryPlay()
+          }
+          window.addEventListener('pointerdown', onGesture, true)
+          releaseGesture = () => window.removeEventListener('pointerdown', onGesture, true)
+        }
+      })
+
       const start = performance.now()
       const tick = (now) => {
         const t = Math.min(1, (now - start) / 800)
@@ -77,7 +111,10 @@ export default function MatchEndCelebration({ shown, match, room, scoreEvents = 
         if (t < 1 && celebrationAudioRef.current === a) requestAnimationFrame(tick)
       }
       requestAnimationFrame(tick)
-    } catch { /* Audio ctor unavailable */ }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[match-end] Audio ctor unavailable:', e?.message)
+    }
 
     // 3. Confetti for 5s, then it unmounts itself.
     setConfettiOn(true)
@@ -101,6 +138,10 @@ export default function MatchEndCelebration({ shown, match, room, scoreEvents = 
 
     return () => {
       clearTimeout(confettiTimer)
+      // If the gesture-retry listener is still armed (first play()
+      // rejected and the user never tapped), tear it down so we don't
+      // leak it past the overlay.
+      releaseGesture?.()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active])
