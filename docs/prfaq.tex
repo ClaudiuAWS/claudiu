@@ -1,0 +1,119 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{hyperref}
+
+\title{\textbf{Bundesliga Brezn Make Football Matches More Memorable Between Friends}}
+\author{Robert Béres, Mihai Ciorascu}
+\date{19 May 2026}
+
+\begin{document}
+
+\maketitle
+
+\textit{Watching a live game with your friends is fun. Competing, predicting, and reacting to it together in real time is even better.}
+
+\bigskip
+\noindent Bundesliga Brezn is a real-time multiplayer web app that turns 
+passive match-watching into a shared, competitive experience for groups of friends. 
+Fans have always watched matches together, but digital fan products treat each 
+user in isolation. Bundesliga Brezn turns watching football into something you 
+actually play.
+
+Before kick-off, fans draft their starting lineup from the players available in 
+that day's match — competing against friends to build the best squad. As the game 
+unfolds, your chosen players earn you points in real time: your striker scores, 
+you climb the leaderboard. Between the action, minigames keep the energy up — 
+test your offside reflexes, answer trivia, or go head-to-head in a penalty shootout 
+where one friend shoots and another defends.
+The goal is simple: make every matchday feel like it was worth showing up for.
+\newpage
+
+\section*{Frequently Asked Questions}
+
+\subsection*{Customer FAQs}
+
+\textbf{Do I need an account to join a Bundesliga Brezn session?}
+
+Yes, you do need an account. Thankfully it is easy to create, you just enter your email and pick a password, confirm your email by a code your receive, and you're in.
+
+\textbf{How many friends can I play with at once?}
+
+There is no restriction on the amount of friends you can play with.
+
+\textbf{How does team drafting work?}
+
+Once you and your friends have created a party and everyone marks themselves 
+as ready, the draft begins. Each round presents all players with the same two 
+choices: if you and a friend pick different players, each of you keeps your own. 
+If you both pick the same player, a coinflip decides who gets them — the loser 
+receives the player neither side chose.
+
+After the draft, you arrange your squad on the pitch and choose who starts 
+and who sits in reserve. Only active players earn you points. Your lineup can 
+mix players from both teams — points are awarded whenever any of your picked 
+players perform well in the real match.
+
+\textbf{How do I earn points?}
+
+Points are earned on specific events such as when one of your player scores a goal, your goalkeeper saves a goal, etc.
+You can also lose points in the case that one of your players earns a yellow card for example.
+
+\textbf{What do I do with points?}
+
+Points can be used to purchase custom music discs that play specific songs while you're in the app,
+or you can choose to purchase powerups that boost your points intake for specific events during your
+next game.
+
+\textbf{How do minigames work?}
+Minigames appear throughout the match to keep things competitive between events. 
+There are three types:
+
+\begin{itemize}
+    \item \textbf{Offside Reflex} --- A player walks across the pitch and you must 
+    react the moment they cross the offside line. The faster your reaction, the 
+    more points you earn.
+
+    \item \textbf{Penalty Shootout} --- Two players from your party go head-to-head: 
+    one shoots, one defends. The striker picks a side to shoot, the goalkeeper picks 
+    a side to dive — if they differ, the striker scores; if they match, the keeper saves. 
+    Roles then swap.
+
+    \item \textbf{Trivia} --- Football knowledge questions appear at regular intervals 
+    throughout the match. Answer correctly and quickly to earn bonus points.
+\end{itemize}
+\subsection*{Technical \& Internal FAQs}
+
+\textbf{How does the app stay in sync during a live match?}
+
+Websocket connections are leveraged all throughout the app, whenever live updates need to happen.
+Persistent storage in the AWS cloud ensures that your data is not lost if you accidentally refresh the
+page or exit the application and come back.
+
+\textbf{What happens if a user loses connection mid-game?}
+
+They can just reconnect. State is persistently stored in DynamoDB on AWS, no worries on losing connection.
+
+\textbf{How are live events processed without race conditions or timing issues?}
+
+A fully cloud-native approach on AWS ensures events are handled in strict order. 
+EventBridge feeds into an SQS FIFO queue, guaranteeing that match events are 
+delivered and processed in exactly the sequence they occur — keeping every 
+connected client's experience consistent and true to the live match.
+
+\textbf{Can the application handle sudden traffic spikes?}
+
+Yes. The entire solution adopted for Bundesliga Brezn is serverless, leveraging services such as AWS Lambda, AWS DynamoDB on-demand, S3, etc.
+
+\textbf{How is artificial intelligence integrated into the app?}
+
+AWS Bedrock is used to generate live match commentary throughout the game. 
+As events unfold --- a goal, a red card, a last-minute substitution --- 
+Bedrock interprets the event data and produces a short, natural-language 
+comment that appears in the app, giving the experience a broadcast-style 
+voice without requiring a human commentator. This keeps the atmosphere 
+alive between minigames and reinforces the feeling that something is always 
+happening.
+
+\end{document}
