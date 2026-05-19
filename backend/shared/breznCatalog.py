@@ -40,6 +40,12 @@ CATALOG = {
         'kind':     'cosmetic',
         'category': 'avatar-frame',
     },
+    'reaction-pack': {
+        'id':       'reaction-pack',
+        'cost':     800,            # was 200 — flipped to permanent; matches name-red tier
+        'kind':     'cosmetic',
+        'category': 'reactions',
+    },
 
     # ─── Premium discs — alternative path to badge-locked tracks ──────────
     'disc-waka-waka': {
@@ -68,8 +74,7 @@ CATALOG = {
     # ─── Match perks — consumables, armed for the next match ──────────────
     # Pricing reflects in-match power. captain-triple and free-hit
     # influence the leaderboard heavily — they cost more so users have
-    # to commit. reaction-pack is cosmetic only, dropped to impulse-buy
-    # pricing.
+    # to commit. pick-reroll is the cheapest in-draft perk.
     'captain-triple': {
         'id':       'captain-triple',
         'cost':     800,            # was 500 — 1.5× captain multiplier is heavy
@@ -85,12 +90,6 @@ CATALOG = {
     'free-hit': {
         'id':       'free-hit',
         'cost':     1500,           # was 800 — single most powerful perk
-        'kind':     'consumable',
-        'category': 'match-perk',
-    },
-    'reaction-pack': {
-        'id':       'reaction-pack',
-        'cost':     200,            # was 300 — pure cosmetic, impulse-buy tier
         'kind':     'consumable',
         'category': 'match-perk',
     },

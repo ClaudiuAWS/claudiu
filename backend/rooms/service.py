@@ -618,8 +618,8 @@ def mark_draft_ready(room_code: str, user_id: str) -> dict:
     # (pick-reroll) need to be available during the draft phase — by
     # the time select_team fires it's already too late. The same call
     # at select_team is idempotent for the same match, so match-time
-    # perks (captain-triple, free-hit, reaction-pack) still get
-    # stamped on the final member entry there too.
+    # perks (captain-triple, free-hit) still get stamped on the final
+    # member entry there too.
     match_id = room.get('matchId') or ''
     armed_perks = _arm_user_perks(user_id, match_id)
     if armed_perks:
@@ -1181,7 +1181,6 @@ _CONSUMABLE_PERK_IDS = {
     'captain-triple',
     'pick-reroll',
     'free-hit',
-    'reaction-pack',
 }
 
 
