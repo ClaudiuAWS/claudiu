@@ -6,20 +6,21 @@ import toast from 'react-hot-toast'
  *
  * Strategy:
  *   - Primary: `navigator.share()` (Web Share API). On modern mobile,
- *     this opens the OS share sheet so the user can pick Messenger,
- *     WhatsApp, Instagram, SMS, Telegram, email — anything they have
- *     installed — in one tap.
- *   - Fallback row: explicit deep-link buttons for WhatsApp, Messenger
- *     (Facebook share dialog), and SMS. Instagram does NOT support
- *     prefilled text via deep-link, so we surface "Copy link" as the
- *     Insta-friendly path: copy then paste into a DM.
+ *     this opens the OS share sheet so the user can pick WhatsApp,
+ *     Instagram, SMS, Telegram, email — anything they have installed —
+ *     in one tap.
+ *   - Fallback row: explicit deep-link buttons for WhatsApp and SMS.
+ *     Instagram has no public DM-prefill deep link, so its tile routes
+ *     through `navigator.share()` (same path as the primary button)
+ *     and falls back to copy-link on desktop browsers without
+ *     `navigator.share`.
  *
  * Recipient flow: tapping the shared link opens `/invite/<inviterUserId>`,
  * which auto-friends both users if the recipient is signed in, or stashes
  * the inviter id in localStorage to consume right after signup.
  *
  * Brand icons below are Simple Icons SVG paths (CC0). Inlined to avoid an
- * icon-library dependency for just four marks.
+ * icon-library dependency for just three marks.
  */
 export default function InviteShareSheet({ open, onClose, inviterUserId, inviterName }) {
   const [copied, setCopied] = useState(false)
@@ -52,26 +53,32 @@ export default function InviteShareSheet({ open, onClose, inviterUserId, inviter
     onClose()
   }
 
-  const handleMessenger = () => {
-    // No reliable web-share-with-text endpoint without a registered FB app.
-    // The Facebook share dialog is the closest free fallback — opens with
-    // the link prefilled; the user adds context themselves.
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(inviteUrl)}`, '_blank', 'noopener,noreferrer')
-    onClose()
-  }
-
   const handleSMS = () => {
     window.location.href = `sms:?&body=${encodeURIComponent(shareText)}`
     onClose()
   }
 
-  const handleInstagramHint = async () => {
-    // Instagram deep links don't allow prefilled text/links. The realistic
-    // path is: copy the link → open Instagram → paste in DM. Do the copy
-    // for them so the next step is one tap.
+  const handleInstagram = async () => {
+    // No reliable Instagram DM-prefill deep link exists (no public
+    // `https://instagram.com/direct/new?text=…` and the
+    // `instagram://sharesheet` URL scheme isn't documented or stable
+    // across iOS / Android versions). So we route through the OS share
+    // sheet — same path the big SHARE VIA… button uses. On mobile the
+    // user picks Instagram from the OS sheet and lands in DMs with the
+    // invite text prefilled. Desktops without `navigator.share` fall
+    // back to the historical copy-link behaviour.
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Brezn', text: shareText, url: inviteUrl })
+        onClose()
+      } catch {
+        // User cancelled — leave the sheet open so they can pick another channel.
+      }
+      return
+    }
     try {
       await navigator.clipboard.writeText(inviteUrl)
-      toast.success('Link copied — now paste it in an Instagram DM.')
+      toast.success('Link copied — paste it in an Instagram DM.')
     } catch {
       toast.error('Copy failed — long-press the link below to copy manually.')
     }
@@ -135,11 +142,10 @@ export default function InviteShareSheet({ open, onClose, inviterUserId, inviter
           </button>
 
           {/* Per-platform deep-link grid */}
-          <div className="grid grid-cols-4 gap-2 mt-5">
-            <ChannelButton label="WhatsApp"  onClick={handleWhatsApp}      icon={<WhatsAppIcon />}  brand="#25D366" />
-            <ChannelButton label="Messenger" onClick={handleMessenger}     icon={<MessengerIcon />} brand="#0084FF" />
-            <ChannelButton label="SMS"       onClick={handleSMS}           icon={<SMSIcon />}       brand="#34C759" />
-            <ChannelButton label="Instagram" onClick={handleInstagramHint} icon={<InstagramIcon />} brand="#E4405F" />
+          <div className="grid grid-cols-3 gap-2 mt-5">
+            <ChannelButton label="WhatsApp"  onClick={handleWhatsApp}  icon={<WhatsAppIcon />}  brand="#25D366" />
+            <ChannelButton label="SMS"       onClick={handleSMS}       icon={<SMSIcon />}       brand="#34C759" />
+            <ChannelButton label="Instagram" onClick={handleInstagram} icon={<InstagramIcon />} brand="#E4405F" />
           </div>
 
           {/* Link preview + copy — matches the gradient card style used
@@ -209,14 +215,6 @@ function WhatsAppIcon({ size = 22 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.695.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
-    </svg>
-  )
-}
-
-function MessengerIcon({ size = 22 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M.001 11.639C.001 4.949 5.241 0 12.001 0S24 4.95 24 11.639c0 6.689-5.24 11.638-12 11.638-1.21 0-2.38-.16-3.47-.46a.96.96 0 0 0-.64.05l-2.39 1.05a.96.96 0 0 1-1.35-.85l-.07-2.14a.97.97 0 0 0-.32-.68A11.39 11.39 0 0 1 0 11.639zm8.32-2.19l-3.52 5.6c-.35.53.32 1.139.82.75l3.79-2.87c.26-.2.6-.2.87 0l2.8 2.1c.84.63 2.04.4 2.6-.48l3.52-5.6c.35-.53-.32-1.13-.82-.74l-3.79 2.87c-.25.2-.6.2-.86 0l-2.8-2.1a1.84 1.84 0 0 0-2.61.48z" />
     </svg>
   )
 }
