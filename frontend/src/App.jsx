@@ -24,6 +24,7 @@ import BreznShopPage from './pages/BreznShopPage'
 import InvitePage from './pages/InvitePage'
 import InviteListener from './components/InviteListener'
 import BadgeListener from './components/BadgeListener'
+import NewVersionBanner from './components/NewVersionBanner'
 import PendingInviteConsumer from './components/PendingInviteConsumer'
 import { InventoryProvider } from './hooks/useInventory'
 
@@ -81,6 +82,7 @@ export default function App() {
       <ToastProvider />
       <InviteListener />
       <BadgeListener />
+      <NewVersionBanner />
       {showIntro && <IntroSplash onFinish={() => setShowIntro(false)} />}
       <ErrorBoundary>
         <Routes>
