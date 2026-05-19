@@ -45,7 +45,7 @@ def buy_badge(user_id: str, badge_id: str) -> tuple[int, dict]:
         return (404, {'error': 'unknown badge', 'badgeId': badge_id})
 
     tier = (catalog_entry.get('tier') or '').lower()
-    price = badges_shared.BADGE_BUY_PRICES.get(tier)
+    price = catalog_entry.get('buyPrice') or badges_shared.BADGE_BUY_PRICES.get(tier)
     if not price or price <= 0:
         return (404, {'error': 'tier has no buy price', 'tier': tier})
 

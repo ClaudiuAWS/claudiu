@@ -28,6 +28,7 @@ export const BADGE_CATALOG = [
     image: '/badge-hattrick.png?v=4',
     tier: 'gold',
     discReward: 'pitbull-we-are-one',
+    buyPrice: 2500,
   },
   {
     id: 'golden_boot',
@@ -120,6 +121,7 @@ export const BADGE_CATALOG = [
     image: '/badge-first-win.png?v=4',
     tier: 'bronze',
     discReward: 'shakira-waka-waka',
+    buyPrice: 2000,
   },
   {
     id: 'comeback_win',
@@ -172,6 +174,7 @@ export const BADGE_CATALOG = [
     image: '/badge-quiz-master.png?v=4',
     tier: 'silver',
     discReward: 'kwabs-walk',
+    buyPrice: 2000,
   },
   {
     id: 'quiz_perfect_5',
@@ -321,7 +324,7 @@ export const TIER_PRICES = {
 
 export function getBadgePrice(badge) {
   if (!badge) return 0
-  return TIER_PRICES[badge.tier] ?? 0
+  return badge.buyPrice ?? TIER_PRICES[badge.tier] ?? 0
 }
 
 // Tier sort key — used by BadgesPage to order cards bronze → silver → gold.

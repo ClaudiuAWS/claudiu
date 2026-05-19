@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { TIER_COLORS, TIER_PRICES } from '../utils/badges'
+import { TIER_COLORS, getBadgePrice } from '../utils/badges'
 import { TRACKS } from '../utils/tracks'
 import { markSeen } from '../utils/badgesUnseen'
 import { badgesApi } from '../services/api'
@@ -43,7 +43,7 @@ export default function BadgePreviewModal({ preview, onClose }) {
   const rewardTrack = badge.discReward
     ? TRACKS.find(t => t.id === badge.discReward)
     : null
-  const price = TIER_PRICES[badge.tier] ?? 0
+  const price = getBadgePrice(badge)
   const canAfford = balance >= price
 
   const handleBuy = async () => {
