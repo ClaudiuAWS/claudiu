@@ -1213,12 +1213,22 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
           })()}
 
           {/* Captain hint — sits above the pitch so the prompt is the first
-              thing the user reads when entering preview. */}
-          <p className="flex-shrink-0 px-4 pt-2 text-[10px] font-bold tracking-widest uppercase text-amber-300/80 text-center">
-            {captainPlayerId
-              ? '✓ Captain picked — 2× boost armed'
-              : 'Tap a starter — they get a 2× scoring boost as your captain'}
-          </p>
+              thing the user reads when entering preview. Multiplier mirrors
+              the same `armedPerks` source backend scoring uses (see
+              `frontend/src/utils/fplScoring.js` and event-processor's
+              `_calculate_member_changes`) so what the user reads matches
+              what gets scored. */}
+          {(() => {
+            const myMember = (room?.members || []).find(m => m.userId === currentUserId)
+            const capMult = (myMember?.armedPerks || []).includes('captain-triple') ? 3 : 2
+            return (
+              <p className="flex-shrink-0 px-4 pt-2 text-[10px] font-bold tracking-widest uppercase text-amber-300/80 text-center">
+                {captainPlayerId
+                  ? `✓ Captain picked — ${capMult}× boost armed`
+                  : `Tap a starter — they get a ${capMult}× scoring boost as your captain`}
+              </p>
+            )
+          })()}
 
           <div className="flex-1 overflow-y-auto px-4 pt-2 pb-4">
             <PitchView

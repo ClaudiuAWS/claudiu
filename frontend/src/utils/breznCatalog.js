@@ -121,13 +121,6 @@ export const SPEND_CATALOG = {
         detail: 'After your squad is locked, swap one drafted player for any other in the same position bucket. One use per match.',
         status: 'live',
       },
-      {
-        id:     'reaction-pack',
-        label:  'Premium reactions pack',
-        cost:   200,
-        detail: 'Six extra Bundesliga reactions (🍺 🌭 👑 🐐 🎺 🏆) prepended to your reaction picker.',
-        status: 'live',
-      },
     ],
   },
 
@@ -163,6 +156,13 @@ export const SPEND_CATALOG = {
         label:  'Rainbow display name',
         cost:   2500,
         detail: 'Animated gradient name (rainbow flows left → right). Loud, but unmistakable.',
+        status: 'live',
+      },
+      {
+        id:     'reaction-pack',
+        label:  'Premium reactions pack',
+        cost:   800,
+        detail: 'Permanent. Six extra Bundesliga reactions (🍺 🌭 👑 🐐 🎺 🏆) prepended to your reaction picker, every match.',
         status: 'live',
       },
     ],

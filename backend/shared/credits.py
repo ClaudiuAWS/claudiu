@@ -34,6 +34,14 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 
+# Catalog lookup — single source of truth for kind/cost. Bundled alongside
+# this module by every Lambda that imports credits (credits handler,
+# event-processor) so the import always resolves at runtime.
+try:
+    import breznCatalog as _catalog  # type: ignore
+except ImportError:
+    _catalog = None
+
 
 _dynamodb = boto3.resource('dynamodb')
 _TABLE_NAME = os.environ.get('CREDITS_TABLE', 'claudiu-credits')
@@ -369,9 +377,18 @@ def consume_perks_for_match(user_id: str, match_id: str) -> None:
         print(f"[credits] consume_perks_for_match read failed for {user_id}: {e}")
         return
     inventory = item.get('inventory') or {}
+    # Catalog is the source of truth for "is this consumable?". The stored
+    # `kind` on a row can lag behind a catalog flip (e.g. reaction-pack
+    # was once consumable, now permanent — pre-existing owners still have
+    # `kind: 'consumable'` on their row but must NOT be deleted).
+    def _is_consumable(iid: str, entry: dict) -> bool:
+        if _catalog is not None:
+            return _catalog.is_consumable(iid)
+        return (entry or {}).get('kind') == 'consumable'
+
     to_remove = [
         iid for iid, e in inventory.items()
-        if (e or {}).get('kind') == 'consumable'
+        if _is_consumable(iid, e)
         and (e or {}).get('consumedForMatch') == match_id
     ]
     if not to_remove:
