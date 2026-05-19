@@ -517,18 +517,41 @@ def _apply_member_changes(
 ) -> None:
     members       = room.get('members', [])
     score_changes = []
-    by_user       = {c['userId']: c for c in member_changes}
 
-    for m in members:
-        c = by_user.get(m['userId'])
-        if not c or c['delta'] == 0:
+    # Sum per-user totals so the DDB row reflects EVERY component a user
+    # has a stake in (scorer + assist + concede, etc.). The earlier
+    # version did `by_user = {c['userId']: c for c in member_changes}`,
+    # which silently kept only the last entry — the stored score grew
+    # by `-1` (concede) instead of `+5 + +3 - 1 = +7` for a goal you
+    # both scored on AND assisted. That stale-total then leaked into
+    # the WS leaderboard, which the frontend regression-guard happily
+    # accepted because the matching delta was negative.
+    totals_by_user = {}
+    for c in member_changes:
+        if c['delta'] == 0:
             continue
-        new_score  = int(m.get('score', 0)) + c['delta']
-        m['score'] = new_score
+        totals_by_user[c['userId']] = totals_by_user.get(c['userId'], 0) + c['delta']
+
+    new_score_by_user = {}
+    for m in members:
+        total = totals_by_user.get(m['userId'])
+        if not total:
+            continue
+        m['score'] = int(m.get('score', 0)) + total
+        new_score_by_user[m['userId']] = int(m['score'])
+
+    # Broadcast every per-component entry — the frontend score_update
+    # handler dedups against optimistic appends via
+    # (sourceEventId, reason, userId), so multiple entries per user in
+    # one WS message are intentional and render as distinct timeline
+    # rows: "scored for your squad +5", "assisted +3", "conceded -1".
+    for c in member_changes:
+        if c['delta'] == 0:
+            continue
         score_changes.append({
-            'userId':        m['userId'],
+            'userId':        c['userId'],
             'delta':         c['delta'],
-            'newScore':      new_score,
+            'newScore':      new_score_by_user.get(c['userId'], 0),
             'eventType':     event_type,
             'reason':        c.get('reason') or '',
             'playerName':    c.get('playerName') or '',
