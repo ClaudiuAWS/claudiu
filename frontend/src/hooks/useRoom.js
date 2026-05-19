@@ -512,6 +512,12 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       playerName:  change.playerName || change.displayName || '',
       displayName: change.displayName || '',
       source:      change.source || '',
+      // Stamp the source-event id so the upcoming WS score_update for
+      // the same reaction tap dedups via the ironclad first branch in
+      // the score_update handler — instead of falling through to the
+      // 2.5-second fingerprint check, which loses the race on cold-
+      // start Lambdas and lets a second "REACTED TO NUTMEG" row land.
+      _sourceEventId: change.sourceEventId || change.eventId || '',
       ts:          Date.now(),
     }
     setScoreEvents(prev => {
