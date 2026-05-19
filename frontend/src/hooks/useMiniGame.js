@@ -345,8 +345,24 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
   stateRef.current      = state
 
   const _resolve = useCallback((userPayload) => {
-    // Two cases: bot already submitted (we have _botPayload) → resolve now.
-    // Otherwise wait for bot (or expire timer falls through with empty deltas).
+    // OFFSIDE_REFLEX is a non-mutual game — the submitter's own tap is fully
+    // scorable on its own (bracket score from clickedAt vs. offsideMomentMs).
+    // Resolve immediately so the modal transitions to ResultBanner inside
+    // the same React commit as the tap. Without this short-circuit the user
+    // sat on "Waiting for opponent…" until the hard fail-safe flipped status
+    // to 'resolved' with empty deltas, and `_outcomeFor` fell through to the
+    // "TOO LATE" sentinel — which is wrong when the user's actual delta is
+    // positive. Bot's delta in solo mode was already cosmetic-only (backend's
+    // apply_minigame_score filters every POST to submitter_user_id's delta),
+    // so dropping the wait-for-bot path doesn't change persisted state.
+    if (state?.gameType === 'OFFSIDE_REFLEX') {
+      _resolveBoth(userPayload, state?._botPayload ?? null)
+      return
+    }
+
+    // Other games (PENALTY_SHOOTOUT is mutual — needs both picks before
+    // outcome is known; HALFTIME_QUIZ uses the same stash-then-resolve
+    // pattern). Keep the existing gating.
     const botPayload = state?._botPayload ?? null
     if (botPayload || (room?.members || []).length > 1 || resolvedRef.current) {
       _resolveBoth(userPayload, botPayload)
@@ -394,9 +410,34 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
       // Frontend-driven trigger now opens the modal locally on event reveal.
       // Backend's push only wins as a fallback when the frontend hadn't fired
       // (e.g. user joined the room mid-event). If we already have local state,
-      // ignore — frontend beat backend, no need to clobber the active game.
+      // we normally ignore — frontend beat backend. EXCEPTION: HALFTIME_QUIZ.
+      // The local trigger pre-fills `config.questions` with the static
+      // `pickFallbackQuestions` set so the modal opens instantly. The AI
+      // Director's broadcast arrives a moment later with match-specific
+      // questions (player-bio + match-event grounded). When that happens
+      // AND the user hasn't started answering yet, upgrade the questions
+      // in-place so they see the AI's set instead of the fallback.
       setState(prev => {
-        if (prev) return prev
+        if (prev) {
+          const isQuizUpgrade =
+            prev.gameType === 'HALFTIME_QUIZ'
+            && msg.gameType === 'HALFTIME_QUIZ'
+            && Array.isArray(msg.config?.questions)
+            && msg.config.questions.length > 0
+            && !submittedRef.current
+            && !resolvedRef.current
+          if (isQuizUpgrade) {
+            return {
+              ...prev,
+              title:     msg.title     || prev.title,
+              prompt:    msg.prompt    || prev.prompt,
+              source:    msg.source    || prev.source,
+              reasoning: msg.reasoning || prev.reasoning,
+              config:    { ...prev.config, ...msg.config },
+            }
+          }
+          return prev
+        }
         // firedEvents guard: a late-arriving WS broadcast for an event that
         // already played and dismissed used to open a fresh duplicate modal.
         // Drop the broadcast if firedEvents already contains the event id.
