@@ -31,6 +31,31 @@ export default function InviteListener() {
 
   useWebSocket(user?.userId ? `user#${user.userId}` : null, handleMessage)
 
+  // Join roomCode, transparently recovering from the backend's "you are
+  // already in another room" error by auto-leaving the stale room and
+  // retrying once. Pass in `prevRoomCode` captured BEFORE the new code is
+  // written to sessionStorage so the recovery path knows which room to
+  // leave. `roomsApi.join` is idempotent if the user is already a member
+  // of `roomCode` itself (backend returns 200, not an error), so the
+  // recovery branch only fires on the genuine "different room" case.
+  const joinWithRecovery = async (roomCode, prevRoomCode) => {
+    try {
+      return await roomsApi.join(roomCode)
+    } catch (err) {
+      const msg = String(err?.message || '').toLowerCase()
+      const isAnotherRoom = msg.includes('another room')
+      if (isAnotherRoom && prevRoomCode && prevRoomCode !== roomCode) {
+        console.info('[invite] auto-leaving stale room %s and rejoining %s', prevRoomCode, roomCode)
+        // Leave can 404 if the stale room TTL'd out — ignore and proceed.
+        await roomsApi.leave(prevRoomCode).catch(e => {
+          console.info('[invite] auto-leave ignored (probably gone):', e?.message)
+        })
+        return await roomsApi.join(roomCode)
+      }
+      throw err
+    }
+  }
+
   const handleAccept = () => {
     if (!pending) return
     // Optimistic navigation: the WS payload already carries roomCode +
@@ -44,7 +69,11 @@ export default function InviteListener() {
     // acknowledges, so a slow join just delays "you're in the
     // members list" — the user never waits to navigate.
     const { roomCode, matchId: payloadMatchId } = pending
-    console.info('[invite] accept tapped — roomCode=%s matchId=%s', roomCode, payloadMatchId)
+    // Capture BEFORE we overwrite sessionStorage with the new room code
+    // — joinWithRecovery uses this to auto-leave a stale prior room when
+    // the backend rejects with "you are already in another room".
+    const prevRoomCode = sessionStorage.getItem('fan_squad_room_code')
+    console.info('[invite] accept tapped — roomCode=%s matchId=%s prev=%s', roomCode, payloadMatchId, prevRoomCode)
     if (!roomCode) {
       toast.error("Invite is missing a room code — ask your friend to resend.")
       setPending(null)
@@ -60,7 +89,7 @@ export default function InviteListener() {
       setAccepting(true)
       ;(async () => {
         try {
-          const joined = await roomsApi.join(roomCode)
+          const joined = await joinWithRecovery(roomCode, prevRoomCode)
           const fullRoom = joined?.room || joined  // some shapes return room at top level
           const mid = fullRoom?.matchId
           if (!mid) {
@@ -136,17 +165,9 @@ export default function InviteListener() {
     setPending(null)
 
     console.info('[invite] background join started')
-    roomsApi.join(roomCode)
+    joinWithRecovery(roomCode, prevRoomCode)
       .then(() => console.info('[invite] background join succeeded'))
       .catch(err => {
-        const msg = String(err?.message || '').toLowerCase()
-        // 409 "Already a member" is NOT a failure — the backend's
-        // invite_to_room path may have already added the user. Stay on
-        // the lobby; the WS room_update will populate normally.
-        if (msg.includes('already')) {
-          console.info('[invite] background join skipped — already in the room')
-          return
-        }
         console.warn('[invite] background join failed', err)
         toast.error(err?.message || 'Failed to join — sent you back home.')
         navigate('/')

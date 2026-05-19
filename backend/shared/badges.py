@@ -86,6 +86,7 @@ BADGE_CATALOG = {
         'image':       '/badge-hattrick.png?v=4',
         'tier':        'gold',
         'discReward':  'pitbull-we-are-one',
+        'buyPrice':    2500,            # disc-granting premium over tier 2000
     },
     'golden_boot': {
         'id':          'golden_boot',
@@ -178,6 +179,7 @@ BADGE_CATALOG = {
         'image':       '/badge-first-win.png?v=4',
         'tier':        'bronze',
         'discReward':  'shakira-waka-waka',
+        'buyPrice':    2000,            # disc-granting premium over tier 300
     },
     'comeback_win': {
         'id':          'comeback_win',
@@ -230,6 +232,7 @@ BADGE_CATALOG = {
         'image':       '/badge-quiz-master.png?v=4',
         'tier':        'silver',
         'discReward':  'kwabs-walk',
+        'buyPrice':    2000,            # disc-granting premium over tier 800
     },
     'quiz_perfect_5': {
         'id':          'quiz_perfect_5',
