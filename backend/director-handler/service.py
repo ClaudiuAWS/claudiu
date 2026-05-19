@@ -99,11 +99,35 @@ def _ask_model(snapshot: dict) -> dict:
         return decision
 
 
+def _push_director_diag(room_code: str, snapshot: dict, decision: dict, outcome: str, raw_count: int = 0, kept: int = 0) -> None:
+        """Emit a halftime-quiz observability breadcrumb to the room over WS.
+        The frontend prints these to the browser console (`[director_diag]`)
+        so the user can see WHY the AI quiz did or didn't broadcast without
+        needing CloudWatch access. Only fires when the trigger was a
+        halftime event so the rest of the match isn't spammed."""
+        try:
+                ws.push_to_channel(f"room#{room_code}", {
+                    'type':          'director_diag',
+                    'gameType':      'HALFTIME_QUIZ',
+                    'outcome':       outcome,
+                    'rawCount':      raw_count,
+                    'kept':          kept,
+                    'action':        decision.get('action'),
+                    'reasoning':     decision.get('reasoning') or '',
+                    'directorySize': len(snapshot.get('playerDirectory') or {}),
+                })
+        except Exception as e:
+                print(f"[director] failed to push director_diag: {e}")
+
+
 def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
         action = decision.get('action')
         trigger_event = snapshot.get('triggerEvent') or {}
         related_event_id = trigger_event.get('eventId')
         trigger_type = trigger_event.get('eventType')
+        # Halftime events should always emit a director_diag breadcrumb at the
+        # end so the frontend can show WHY the AI broadcast did or didn't fire.
+        is_halftime = trigger_type == 'halftime'
 
         # Validate AI start_minigame against the trigger event's type. Nova Micro
         # sometimes picks OFFSIDE_REFLEX for unrelated events (nutmegs, saves)
@@ -133,10 +157,14 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                                 print(f"director: downgrading start_minigame ({game_type}) on {trigger_type} -> commentate")
                                 action = 'commentate'
                                 decision = {**decision, 'action': 'commentate', 'text': downgrade_text}
+                                if is_halftime:
+                                        _push_director_diag(room_code, snapshot, decision, outcome='downgrade_to_commentate')
                         else:
                                 print(f"director: dropping start_minigame ({game_type}) on {trigger_type} -> wait")
                                 action = 'wait'
                                 decision = {**decision, 'action': 'wait', 'reason': 'gameType-event mismatch'}
+                                if is_halftime:
+                                        _push_director_diag(room_code, snapshot, decision, outcome='drop_gametype_mismatch')
 
         if action == 'start_minigame':
                 config = dict(decision.get('config') or {})
@@ -181,6 +209,11 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                                     f"directory_size={len((snapshot.get('playerDirectory') or {}))} "
                                     f"directory_sample={dir_sample}"
                                 )
+                                _push_director_diag(
+                                    room_code, snapshot, decision,
+                                    outcome='drop_schema',
+                                    raw_count=len(qs) if isinstance(qs, list) else 0,
+                                )
                                 return
 
                         # Anti-hallucination gate (post-schema):
@@ -216,6 +249,12 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
 
                         if len(grounded_qs) == 0:
                                 print("[director] HALFTIME_QUIZ all questions dropped; nothing to broadcast -> wait")
+                                _push_director_diag(
+                                    room_code, snapshot, decision,
+                                    outcome='drop_no_grounded',
+                                    raw_count=len(qs) if isinstance(qs, list) else 0,
+                                    kept=0,
+                                )
                                 return
                         config['questions'] = grounded_qs[:3]
                         print(f"[director] HALFTIME_QUIZ broadcasting {len(config['questions'])} AI questions")
@@ -233,6 +272,13 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                     'source':           'ai-director',
                     'reasoning':        decision.get('reasoning') or '',
                 })
+                if is_halftime and game_type_dec == 'HALFTIME_QUIZ':
+                        _push_director_diag(
+                            room_code, snapshot, decision,
+                            outcome='broadcast',
+                            raw_count=len(qs) if isinstance(qs, list) else 0,
+                            kept=len(config.get('questions') or []),
+                        )
                 # End of HALFTIME_QUIZ-specific validation. Fall through to the
                 # ws.push_to_channel below.
         elif action == 'commentate':
@@ -252,7 +298,11 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                     'reasoning':      decision.get('reasoning') or '',
                     'forUserIds':     for_user_ids,
                 })
-        # 'wait' -> no-op
+                if is_halftime:
+                        _push_director_diag(room_code, snapshot, decision, outcome='commentate_on_halftime')
+        # 'wait' -> no-op (but surface it as a halftime diag if relevant)
+        if action == 'wait' and is_halftime:
+                _push_director_diag(room_code, snapshot, decision, outcome='wait')
 
 
 # ─── Captain-suggestion mode ─────────────────────────────────────────────
