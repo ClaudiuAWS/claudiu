@@ -30,10 +30,11 @@ const TEAM_RING = {
 }
 
 // Each tile renders with a captain indicator. When the squad belongs to
-// the current user, tapping a tile sets that player as captain (2x boost).
+// the current user, tapping a tile sets that player as captain (boost
+// multiplier is 2× baseline, 3× when the user has captain-triple armed).
 // The `onPickCaptain` prop being defined toggles "interactive" mode — for
 // other members' squads, it's display-only.
-function SquadList({ details = [], captainPlayerId = '', onPickCaptain = null }) {
+function SquadList({ details = [], captainPlayerId = '', onPickCaptain = null, capMult = 2 }) {
   if (!details.length) {
     return <p className="text-gray-600 text-xs text-center py-3">No squad selected</p>
   }
@@ -48,7 +49,7 @@ function SquadList({ details = [], captainPlayerId = '', onPickCaptain = null })
     <div className="mt-2 mb-1 space-y-1.5">
       {onPickCaptain && (
         <p className="text-[9px] text-amber-300/80 tracking-widest uppercase mb-1">
-          Tap a player to set as captain (2× boost)
+          Tap a player to set as captain ({capMult}× boost)
         </p>
       )}
       {['GK', 'DEF', 'MID', 'FWD'].map(g => {
@@ -106,10 +107,16 @@ export default function LeaderboardPanel({ members = [], currentUserId, roomCode
   const [expandedId, setExpandedId] = useState(null)
   const sorted = [...members].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
 
+  // 3× when this user has captain-triple armed, else baseline 2×. Mirrors
+  // TeamSelectionModal and the backend scoring path in event-processor's
+  // _calculate_member_changes — keep all three in sync.
+  const me = members.find(m => m.userId === currentUserId)
+  const capMult = (me?.armedPerks || []).includes('captain-triple') ? 3 : 2
+
   const handlePickCaptain = async (playerId) => {
     try {
       await roomsApi.setCaptain(roomCode, playerId)
-      toast.success('Captain set — 2× boost active')
+      toast.success(`Captain set — ${capMult}× boost active`)
     } catch (err) {
       toast.error(err?.message || 'Could not set captain')
     }
@@ -179,6 +186,7 @@ export default function LeaderboardPanel({ members = [], currentUserId, roomCode
                 details={member.teamSelectionDetails ?? []}
                 captainPlayerId={member.captainPlayerId || ''}
                 onPickCaptain={isMe && roomCode ? handlePickCaptain : null}
+                capMult={capMult}
               />
             )}
           </div>
