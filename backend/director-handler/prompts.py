@@ -65,21 +65,25 @@ hallucinations):
 - "Latest" stats of any kind
 
 CONFIDENCE RULES (per question):
-- Match-event questions: confidence MUST be >= 0.9 (you can see the
-  events; you're sure).
-- Player-bio questions: confidence reflects how widely-known the fact is.
-  Use >= 0.9 only for canonical, encyclopedic facts (e.g., "Kane plays
-  for England"). If you have ANY doubt, set < 0.7 and the server will
-  drop the question.
+- Default confidence is 0.85 when you omit the field — the server fills
+  it in. Only set an explicit lower value when you're genuinely unsure
+  of the fact; the server drops anything < 0.5.
+- Match-event questions: you can see the events in the snapshot, so use
+  >= 0.9.
+- Player-bio questions: >= 0.8 for canonical encyclopedic facts (Kane
+  plays for England, Müller's debut year). Drop to < 0.5 only when
+  you're guessing.
 
 NAME-GROUNDING for player-bio questions:
 - The question text MUST contain a player name from playerDirectory.
 - DO NOT ask about a player who isn't in playerDirectory, even if you
   know facts about them. They aren't in THIS match.
 
-If you cannot produce 3 strong questions meeting all rules (at least 1
-match-event + valid type/confidence on the rest), choose action: "wait"
-and the static fallback fires.
+Return start_minigame whenever you have at least 1 grounded question
+(player-bio names from playerDirectory or any match-event). The server
+uses what survives and pads from the static pool if you return fewer
+than 3. Only choose "wait" when you genuinely have nothing to offer
+for this trigger.
 
 Example (Kane scored for Bayern in 1H, Müller assisted, Soumahoro booked):
   {"action":"start_minigame","gameType":"HALFTIME_QUIZ",
