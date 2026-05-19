@@ -163,20 +163,25 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                                 return
 
                         # Anti-hallucination gate (post-schema):
-                        #   1. Drop questions with confidence < 0.7. Unmarked
-                        #      questions default to 0.0 so they get dropped — the
-                        #      model is expected to self-rate.
+                        #   1. Drop questions with confidence < 0.5. Missing
+                        #      `confidence` defaults to 0.85 — Nova Micro
+                        #      regularly omits the field, and using 0.0 there
+                        #      meant the entire AI response got rejected. The
+                        #      prompt now tells the model "missing = 0.85" so
+                        #      its self-rating intent matches what we apply.
                         #   2. For type='player-bio', the question text must
                         #      contain a name from playerDirectory. This prevents
                         #      the model from asking about a famous player who
                         #      isn't actually in this match.
-                        #   3. After filtering, at least one survivor must be
-                        #      type='match-event' (or unmarked, which we treat
-                        #      as event-based). If only risky bio questions
-                        #      survive, drop the whole quiz so the static
-                        #      fallback fires instead.
+                        #   3. After filtering, we accept whatever survives — no
+                        #      "must have ≥1 match-event" requirement any more.
+                        #      A pure player-bio quiz (all names grounded in the
+                        #      directory) is fine. The earlier rule was rejecting
+                        #      perfectly valid quizzes when Nova returned three
+                        #      good bio questions.
                         directory_names = set((snapshot.get('playerDirectory') or {}).keys())
-                        confident_qs = [q for q in qs if float(q.get('confidence', 0.0)) >= 0.7]
+                        confident_qs = [q for q in qs if float(q.get('confidence', 0.85)) >= 0.5]
+                        print(f"[director] HALFTIME_QUIZ confidence filter: {len(qs)} -> {len(confident_qs)}")
                         grounded_qs = []
                         for q in confident_qs:
                                 qtype = q.get('type', 'match-event')
@@ -186,12 +191,13 @@ def _dispatch(room_code: str, snapshot: dict, decision: dict) -> None:
                                                 # Player-bio about someone not in this match — drop.
                                                 continue
                                 grounded_qs.append(q)
+                        print(f"[director] HALFTIME_QUIZ grounding filter: {len(confident_qs)} -> {len(grounded_qs)}")
 
-                        has_safe = any(q.get('type', 'match-event') == 'match-event' for q in grounded_qs)
-                        if len(grounded_qs) == 0 or not has_safe:
-                                print("director: HALFTIME_QUIZ confidence/grounding failed, dropping -> wait")
+                        if len(grounded_qs) == 0:
+                                print("[director] HALFTIME_QUIZ all questions dropped; nothing to broadcast -> wait")
                                 return
                         config['questions'] = grounded_qs[:3]
+                        print(f"[director] HALFTIME_QUIZ broadcasting {len(config['questions'])} AI questions")
                 ws.push_to_channel(f"room#{room_code}", {
                     'type':             'minigame_start',
                     'gameId':           f"director-{related_event_id}-{room_code}",
