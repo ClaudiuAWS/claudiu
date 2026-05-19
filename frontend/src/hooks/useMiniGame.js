@@ -410,9 +410,34 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
       // Frontend-driven trigger now opens the modal locally on event reveal.
       // Backend's push only wins as a fallback when the frontend hadn't fired
       // (e.g. user joined the room mid-event). If we already have local state,
-      // ignore — frontend beat backend, no need to clobber the active game.
+      // we normally ignore — frontend beat backend. EXCEPTION: HALFTIME_QUIZ.
+      // The local trigger pre-fills `config.questions` with the static
+      // `pickFallbackQuestions` set so the modal opens instantly. The AI
+      // Director's broadcast arrives a moment later with match-specific
+      // questions (player-bio + match-event grounded). When that happens
+      // AND the user hasn't started answering yet, upgrade the questions
+      // in-place so they see the AI's set instead of the fallback.
       setState(prev => {
-        if (prev) return prev
+        if (prev) {
+          const isQuizUpgrade =
+            prev.gameType === 'HALFTIME_QUIZ'
+            && msg.gameType === 'HALFTIME_QUIZ'
+            && Array.isArray(msg.config?.questions)
+            && msg.config.questions.length > 0
+            && !submittedRef.current
+            && !resolvedRef.current
+          if (isQuizUpgrade) {
+            return {
+              ...prev,
+              title:     msg.title     || prev.title,
+              prompt:    msg.prompt    || prev.prompt,
+              source:    msg.source    || prev.source,
+              reasoning: msg.reasoning || prev.reasoning,
+              config:    { ...prev.config, ...msg.config },
+            }
+          }
+          return prev
+        }
         // firedEvents guard: a late-arriving WS broadcast for an event that
         // already played and dismissed used to open a fresh duplicate modal.
         // Drop the broadcast if firedEvents already contains the event id.

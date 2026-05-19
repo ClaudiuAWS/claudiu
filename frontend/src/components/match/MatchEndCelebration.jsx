@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppAudio } from '../../hooks/useAppAudio'
 import { useAuth } from '../../hooks/useAuth'
-import { historyApi, badgesApi } from '../../services/api'
+import { historyApi } from '../../services/api'
 import MemberAvatar from '../ui/MemberAvatar'
 
 // Mirrors backend CREDITS_PER_POINT in backend/shared/credits.py
@@ -41,7 +41,6 @@ export default function MatchEndCelebration({ shown, match, room, scoreEvents = 
   const [active, setActive] = useState(false)
   const [confettiOn, setConfettiOn] = useState(false)
   const [streak, setStreak] = useState(null)        // number, or null while loading
-  const [matchBadges, setMatchBadges] = useState([]) // current user's badges from THIS match
   const [closing, setClosing] = useState(false)
 
   const celebrationAudioRef = useRef(null)
@@ -100,21 +99,8 @@ export default function MatchEndCelebration({ shown, match, room, scoreEvents = 
       })
       .catch(() => setStreak(0))
 
-    // 5. Fetch this user's badges, filter to ones earned in THIS match.
-    //    Slight delay so any last-instant badge_earned writes from the
-    //    final-whistle event have time to land in DDB before we read.
-    const badgesTimer = setTimeout(() => {
-      badgesApi.list()
-        .then(({ badges = [] }) => {
-          const here = badges.filter(b => b.matchId === match?.matchId)
-          setMatchBadges(here)
-        })
-        .catch(() => setMatchBadges([]))
-    }, 500)
-
     return () => {
       clearTimeout(confettiTimer)
-      clearTimeout(badgesTimer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active])
@@ -309,31 +295,6 @@ export default function MatchEndCelebration({ shown, match, room, scoreEvents = 
               </p>
             </div>
           </div>
-
-          {/* Badges earned this match */}
-          {matchBadges.length > 0 && (
-            <div className="px-5 pb-3">
-              <p className="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-2 px-1">
-                Badges earned this match
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {matchBadges.map(b => (
-                  <div
-                    key={b.badgeId}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold"
-                    style={{
-                      background: 'rgba(252,211,77,0.10)',
-                      border: '1px solid rgba(252,211,77,0.35)',
-                      color: '#fcd34d',
-                    }}
-                  >
-                    {b.image && <img src={b.image} alt="" className="w-4 h-4" />}
-                    {b.title || b.badgeId}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* CTA */}
           <div className="px-5 pb-5 pt-2">

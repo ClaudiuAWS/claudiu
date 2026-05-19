@@ -13,9 +13,25 @@ const STATUS = {
   fulltime: { label: 'Full Time', pill: 'bg-white/5 text-gray-500',                 dot: null },
 }
 
+// A match is finished when EITHER its status field has propagated to
+// 'fulltime', OR a finalResult is set (set by the event-processor
+// before the status flip), OR the displayed minute has crossed past
+// the full-time mark. Belt-and-braces because the three signals
+// don't all arrive at the same instant — if any one of them says
+// "done", we treat the card as unavailable so the user can't re-join
+// a match that has already concluded.
+function isMatchFinished(match) {
+  if (!match) return false
+  if (match.status === 'fulltime') return true
+  if (match.finalResult) return true
+  const mm = String(match.currentMinute || '').match(/^(\d+)/)
+  if (mm && Number(mm[1]) >= 90) return true
+  return false
+}
+
 function MatchCard({ match, onSelect }) {
   const s = STATUS[match.status] ?? STATUS.upcoming
-  const isFinished = match.status === 'fulltime'
+  const isFinished = isMatchFinished(match)
   const hasScore = match.status !== 'upcoming'
 
   return (
@@ -104,8 +120,16 @@ export default function HomePage() {
 
   if (loading) return <LoadingSpinner />
 
-  const live = matches.filter(m => m.status === 'live' || m.status === 'halftime')
-  const rest = matches.filter(m => m.status !== 'live' && m.status !== 'halftime')
+  // A match still counts as "live now" only if it hasn't already
+  // concluded (status fulltime, finalResult set, or clock past 90).
+  // Otherwise the LIVE NOW band shows a 5-0 final-whistle match with
+  // a joinable CTA — which is what users were running into.
+  const live = matches.filter(m =>
+    (m.status === 'live' || m.status === 'halftime') && !isMatchFinished(m),
+  )
+  const rest = matches.filter(m =>
+    !(m.status === 'live' || m.status === 'halftime') || isMatchFinished(m),
+  )
 
   return (
     <div className="px-4 pt-10 pb-4 space-y-8">

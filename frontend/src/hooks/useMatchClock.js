@@ -53,7 +53,20 @@ export function useMatchClock(match, events) {
   useEffect(() => {
     lastServerMinuteRef.current = ''
     lastAcceptedServerSecRef.current = -1
-    anchorRef.current = { gameSec: 0, wallMs: Date.now() }
+    // Anchor the clock on the SERVER's match.startedAt — NOT Date.now() at
+    // mount. Both anchors share the same gameSec=0 origin, but using the
+    // server timestamp keeps host + guest in lockstep no matter how late
+    // either mounts. Without this, a guest who navigates to the match
+    // ~1-2 wall-seconds after the host (WS broadcast delay + route
+    // transition) would render their clock anchored to their own
+    // mount-time and read ~5-10 game-seconds (at 5× speed) BEHIND the
+    // host for the rest of the match. Fall back to Date.now() if
+    // startedAt isn't on the match record yet — the upcoming clock just
+    // ticks from "now" until the real anchor lands via a match_update.
+    const startMs = match?.startedAt
+      ? new Date(match.startedAt).getTime()
+      : Date.now()
+    anchorRef.current = { gameSec: 0, wallMs: startMs }
     sh2hSnappedRef.current = false
   }, [match?.matchId, match?.startedAt])
 

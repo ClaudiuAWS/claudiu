@@ -218,8 +218,9 @@ export default function LobbyPage() {
           <RoomCodeDisplay code={room.roomCode} />
           <MembersList members={room.members} hostUserId={room.hostUserId} teamReadyIds={teamReadyIds} />
 
-          {/* Invite friends button */}
-          {!isLive && (
+          {/* Invite friends button — hidden once the party is full
+              (2 members) or the match has kicked off. */}
+          {!isLive && memberCount < 2 && (
             <button
               onClick={() => setInviteModalOpen(true)}
               className="w-full py-3.5 rounded-2xl text-sm font-semibold tracking-wide transition-all active:scale-[0.98]"
