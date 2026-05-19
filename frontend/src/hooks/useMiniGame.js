@@ -345,8 +345,24 @@ export function useMiniGame(room, currentUserId, events, matchId, matchStartedAt
   stateRef.current      = state
 
   const _resolve = useCallback((userPayload) => {
-    // Two cases: bot already submitted (we have _botPayload) → resolve now.
-    // Otherwise wait for bot (or expire timer falls through with empty deltas).
+    // OFFSIDE_REFLEX is a non-mutual game — the submitter's own tap is fully
+    // scorable on its own (bracket score from clickedAt vs. offsideMomentMs).
+    // Resolve immediately so the modal transitions to ResultBanner inside
+    // the same React commit as the tap. Without this short-circuit the user
+    // sat on "Waiting for opponent…" until the hard fail-safe flipped status
+    // to 'resolved' with empty deltas, and `_outcomeFor` fell through to the
+    // "TOO LATE" sentinel — which is wrong when the user's actual delta is
+    // positive. Bot's delta in solo mode was already cosmetic-only (backend's
+    // apply_minigame_score filters every POST to submitter_user_id's delta),
+    // so dropping the wait-for-bot path doesn't change persisted state.
+    if (state?.gameType === 'OFFSIDE_REFLEX') {
+      _resolveBoth(userPayload, state?._botPayload ?? null)
+      return
+    }
+
+    // Other games (PENALTY_SHOOTOUT is mutual — needs both picks before
+    // outcome is known; HALFTIME_QUIZ uses the same stash-then-resolve
+    // pattern). Keep the existing gating.
     const botPayload = state?._botPayload ?? null
     if (botPayload || (room?.members || []).length > 1 || resolvedRef.current) {
       _resolveBoth(userPayload, botPayload)

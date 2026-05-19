@@ -168,7 +168,11 @@ function _outcomeFor(gameType, deltas) {
   }
   if (gameType === 'OFFSIDE_REFLEX') {
     if (total > 0)                              return { verb: 'OFFSIDE!', emoji: '🚩', tone: 'orange',  sub: 'Sharp eye on the line' }
-    return                                              { verb: 'TOO LATE', emoji: '🐢', tone: 'slate',   sub: 'Reaction was off' }
+    // Empty-deltas / zero-total fallback: the user's tap was outside every
+    // bracket OR the modal closed without any tap. Don't claim "TOO LATE"
+    // here — that text falsely accuses a perfect-tapper if their delta
+    // never made it into state.deltas for any reason.
+    return                                              { verb: 'NO POINTS', emoji: '🐢', tone: 'slate',   sub: 'Round closed' }
   }
   if (gameType === 'HALFTIME_QUIZ') {
     if (total > 0)                              return { verb: 'QUIZ',     emoji: '🧠', tone: 'indigo',  sub: 'Brain power on form' }
