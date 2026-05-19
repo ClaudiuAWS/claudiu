@@ -437,14 +437,30 @@ def claim_reaction(room_code: str, user_id: str, event_id: str, reaction_type: s
             m['score'] = new_score
             break
 
-    rooms_table.update_item(
-        Key={'roomCode': room_code},
-        UpdateExpression='SET members = :m ADD reactionsClaimed :v',
-        ExpressionAttributeValues={
-            ':m': members,
-            ':v': {claim_key},
-        },
-    )
+    # Atomic claim — without ConditionExpression, two near-simultaneous
+    # POSTs from the same user could both pass the in-memory `claim_key
+    # in claimed` check above (read-then-write race), both `update_item`
+    # the score, and both broadcast a `score_update`, producing two
+    # REACTED TO NUTMEG rows even though backend idempotency was the
+    # whole point of the claim set. The condition tells DDB "only
+    # succeed if this claim_key isn't already in the set"; the second
+    # request gets ConditionalCheckFailedException and we surface it as
+    # the existing `duplicate` response.
+    try:
+        rooms_table.update_item(
+            Key={'roomCode': room_code},
+            UpdateExpression='SET members = :m ADD reactionsClaimed :v',
+            ConditionExpression='attribute_not_exists(reactionsClaimed) OR NOT contains(reactionsClaimed, :claim_str)',
+            ExpressionAttributeValues={
+                ':m':         members,
+                ':v':         {claim_key},
+                ':claim_str': claim_key,
+            },
+        )
+    except ClientError as e:
+        if e.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
+            return {'ok': True, 'duplicate': True}
+        raise
 
     label = 'nutmeg' if reaction_type == 'nutmeg' else 'spectacular play'
     score_changes = [{

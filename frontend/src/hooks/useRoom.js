@@ -260,6 +260,14 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       // single-purpose for state sync; mini-game UI lives elsewhere.
       onMinigameMessage?.(msg)
       logger.info('useRoom', `WS ${msg.type}`, msg)
+    } else if (msg.type === 'director_diag') {
+      // Halftime-quiz observability breadcrumb from the Director Lambda.
+      // Open Chrome DevTools console on the device to see WHY the AI quiz
+      // did or didn't fire (outcome: 'broadcast' | 'drop_schema' |
+      // 'drop_no_grounded' | 'wait' | …). Pure observability — no state
+      // change. See backend/director-handler/service.py::_push_director_diag.
+      // eslint-disable-next-line no-console
+      console.info('[director_diag]', msg)
     } else if (msg.type === 'commentary_update') {
       // AI Match Director commentary — push onto a stack. Newest first (top),
       // older entries flow down. Each entry self-purges after 7s. Cap at 5

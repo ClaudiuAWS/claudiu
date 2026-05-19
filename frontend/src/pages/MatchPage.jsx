@@ -225,8 +225,18 @@ export default function MatchPage() {
   //     ±2.5s dedup on (userId, reason, delta) drops the duplicate.
   // Other room members still see this user's reaction via the WS path
   // (their tab didn't run #1 so no dedup conflict on their end).
+  //
+  // Per-eventId in-flight guard: stops touch+click double-fire on
+  // mobile, rapid double-taps, and React's synthetic event bubbling
+  // from POSTing twice. Once an event has been reacted to (success or
+  // fail), the entry stays in the set — re-tapping it is always a
+  // no-op. Backend `claim_reaction` is also conditional-write atomic
+  // now, but this guard removes the round-trip entirely.
+  const inFlightReactsRef = useRef(new Set())
   const handleReactTap = useCallback((event) => {
     if (!room?.roomCode || !event?.eventId) return
+    if (inFlightReactsRef.current.has(event.eventId)) return
+    inFlightReactsRef.current.add(event.eventId)
     roomsApi.react(room.roomCode, event.eventId, event.eventType)
       .then(result => {
         if (result?.duplicate) return
