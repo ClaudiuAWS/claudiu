@@ -12,22 +12,27 @@
 
 \maketitle
 
-\textit{Watching a live game with your friends is fun. Competing, predicting, and reacting to it together in real time is even better.}
+\textit{Watching a live game with a friend is fun. Reacting to it together in real time is even better.}
 
 \bigskip
 \noindent Bundesliga Brezn is a real-time multiplayer web app that turns 
-passive match-watching into a shared, competitive experience for groups of friends. 
+passive match-watching into a shared, competitive experience between two fans. 
 Fans have always watched matches together, but digital fan products treat each 
 user in isolation. Bundesliga Brezn turns watching football into something you 
 actually play.
 
 Before kick-off, fans draft their starting lineup from the players available in 
-that day's match — competing against friends to build the best squad. As the game 
-unfolds, your chosen players earn you points in real time: your striker scores, 
-you climb the leaderboard. Between the action, minigames keep the energy up — 
-test your offside reflexes, answer trivia, or go head-to-head in a penalty shootout 
-where one friend shoots and another defends.
+that day's match — competing against a friend to build the best squad. The app 
+encourages users to build mixed squads from both clubs, meaning no two lineups 
+will ever look the same. As the game unfolds, your chosen players earn you points 
+in real time: your striker scores, you climb the leaderboard — but if your 
+goalkeeper concedes or one of your players is booked, you lose points too. 
+Between the action, minigames keep the energy up — test your offside reflexes, 
+answer trivia, or go head-to-head in a penalty shootout where one friend shoots 
+and another defends.
+
 The goal is simple: make every matchday feel like it was worth showing up for.
+
 \newpage
 
 \section*{Frequently Asked Questions}
@@ -36,37 +41,47 @@ The goal is simple: make every matchday feel like it was worth showing up for.
 
 \textbf{Do I need an account to join a Bundesliga Brezn session?}
 
-Yes, you do need an account. Thankfully it is easy to create, you just enter your email and pick a password, confirm your email by a code your receive, and you're in.
+Yes, you do need an account. Thankfully it is easy to create — just enter your 
+email, pick a password, and confirm your address with the code you receive. 
+You're in within minutes.
 
 \textbf{How many friends can I play with at once?}
 
-There is no restriction on the amount of friends you can play with.
+Currently Bundesliga Brezn supports 1v1 matches. Support for larger groups 
+is planned as a future extension.
 
 \textbf{How does team drafting work?}
 
-Once you and your friends have created a party and everyone marks themselves 
-as ready, the draft begins. Each round presents all players with the same two 
-choices: if you and a friend pick different players, each of you keeps your own. 
-If you both pick the same player, a coinflip decides who gets them — the loser 
-receives the player neither side chose.
+Once you and your friend have created a party and both mark yourselves as ready, 
+the draft begins. Each round presents both players with a choice between two 
+players of identical or similar positions. If you and your opponent pick 
+different players, each of you keeps their own. If you both pick the same player, 
+a coinflip decides who gets them — the loser receives the player neither side chose.
 
-After the draft, you arrange your squad on the pitch and choose who starts 
-and who sits in reserve. Only active players earn you points. Your lineup can 
-mix players from both teams — points are awarded whenever any of your picked 
-players perform well in the real match.
+After the draft, you select which players make your starting eleven — the app 
+automatically identifies a valid real football formation and positions your 
+players on the pitch accordingly, no manual arrangement needed. Once you lock 
+in your squad, you must select a captain: your captain earns you double points 
+for every event they are involved in. The app encourages building mixed squads 
+from both clubs, ensuring every lineup is unique.
 
 \textbf{How do I earn points?}
 
-Points are earned on specific events such as when one of your player scores a goal, your goalkeeper saves a goal, etc.
-You can also lose points in the case that one of your players earns a yellow card for example.
+Points are earned on specific match events — your striker scores, your 
+goalkeeper makes a save, one of your players wins a tackle. However, points 
+can also be lost: if your goalkeeper concedes or one of your players receives 
+a yellow card, your score takes a hit. Reaction events also appear on the right 
+side of the screen during spectacular plays and nutmegs — react quickly enough 
+and you earn bonus points.
 
 \textbf{What do I do with points?}
 
-Points can be used to purchase custom music discs that play specific songs while you're in the app,
-or you can choose to purchase powerups that boost your points intake for specific events during your
-next game.
+Points can be used to purchase customisable music discs that play specific songs 
+while you are in the app, or perks that give you an advantage over your opponent 
+in future matches.
 
 \textbf{How do minigames work?}
+
 Minigames appear throughout the match to keep things competitive between events. 
 There are three types:
 
@@ -77,23 +92,24 @@ There are three types:
 
     \item \textbf{Penalty Shootout} --- Two players from your party go head-to-head: 
     one shoots, one defends. The striker picks a side to shoot, the goalkeeper picks 
-    a side to dive — if they differ, the striker scores; if they match, the keeper saves. 
-    Roles then swap.
+    a side to dive — if they differ, the striker scores; if they match, the keeper saves.
 
     \item \textbf{Trivia} --- Football knowledge questions appear at regular intervals 
     throughout the match. Answer correctly and quickly to earn bonus points.
 \end{itemize}
+
 \subsection*{Technical \& Internal FAQs}
 
 \textbf{How does the app stay in sync during a live match?}
 
-Websocket connections are leveraged all throughout the app, whenever live updates need to happen.
-Persistent storage in the AWS cloud ensures that your data is not lost if you accidentally refresh the
-page or exit the application and come back.
+WebSocket connections are used throughout the app whenever live updates need 
+to happen. Persistent storage in the AWS cloud ensures that your data is not 
+lost if you accidentally refresh the page or exit and return.
 
 \textbf{What happens if a user loses connection mid-game?}
 
-They can just reconnect. State is persistently stored in DynamoDB on AWS, no worries on losing connection.
+They can simply reconnect. All game state is persistently stored in DynamoDB, 
+so nothing is lost if a player drops out and rejoins mid-match.
 
 \textbf{How are live events processed without race conditions or timing issues?}
 
@@ -104,7 +120,8 @@ connected client's experience consistent and true to the live match.
 
 \textbf{Can the application handle sudden traffic spikes?}
 
-Yes. The entire solution adopted for Bundesliga Brezn is serverless, leveraging services such as AWS Lambda, AWS DynamoDB on-demand, S3, etc.
+Yes. The entire solution is serverless, leveraging AWS Lambda, DynamoDB 
+on-demand, S3, and other managed services that scale automatically with demand.
 
 \textbf{How is artificial intelligence integrated into the app?}
 
