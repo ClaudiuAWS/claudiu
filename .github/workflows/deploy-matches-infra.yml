@@ -5,6 +5,11 @@ on:
                 branches: [main]
                 paths:
                         - "infra/compute/lambdas-matches.yml"
+                        # Also trigger when this workflow itself changes —
+                        # without this, edits to the CLI-applied policies
+                        # below land in main but never get re-applied to AWS
+                        # until something else touches lambdas-matches.yml.
+                        - ".github/workflows/deploy-matches-infra.yml"
         # Manual trigger from the GHA UI. Useful when the IAM in source
         # needs to be re-applied without editing the YAML.
         workflow_dispatch:
@@ -77,6 +82,44 @@ jobs:
                                       ]
                                     }'
 
+                        # Separate policy because put-role-policy OVERWRITES the named
+                        # policy each call. Keeping Bedrock in its own inline policy
+                        # lets the DynamoDB writes above stay untouched if we ever
+                        # tweak only one or the other. Mirrors the BedrockInvoke
+                        # statement on the director Lambda
+                        # (infra/compute/lambdas-director.yml:27-43) which is the
+                        # proven-working baseline — same actions, same resource ARN
+                        # pattern. Needed by backend/event-processor/service.py
+                        # `_generate_ai_halftime_quiz` to call bedrock.converse(...).
+                        - name: Apply event-processor bedrock invoke policy
+                          run: |
+                                  set -e
+                                  aws iam put-role-policy \
+                                    --role-name claudiu-event-processor-role \
+                                    --policy-name claudiu-event-processor-bedrock \
+                                    --policy-document '{
+                                      "Version": "2012-10-17",
+                                      "Statement": [
+                                        {
+                                          "Sid": "BedrockInvoke",
+                                          "Effect": "Allow",
+                                          "Action": [
+                                            "bedrock:InvokeModel",
+                                            "bedrock:InvokeModelWithResponseStream",
+                                            "bedrock:Converse",
+                                            "bedrock:ConverseStream"
+                                          ],
+                                          "Resource": [
+                                            "arn:aws:bedrock:eu-central-1:507609143109:inference-profile/eu.amazon.*",
+                                            "arn:aws:bedrock:eu-central-1::foundation-model/amazon.*",
+                                            "arn:aws:bedrock:eu-west-1::foundation-model/amazon.*",
+                                            "arn:aws:bedrock:eu-west-3::foundation-model/amazon.*",
+                                            "arn:aws:bedrock:eu-north-1::foundation-model/amazon.*"
+                                          ]
+                                        }
+                                      ]
+                                    }'
+
                         - name: Merge required env vars into event-processor config
                           run: |
                                   set -e
@@ -87,11 +130,19 @@ jobs:
                                   if [ "$CURRENT_ENV" = "null" ]; then CURRENT_ENV="{}"; fi
                                   echo "Current env vars:"
                                   echo "$CURRENT_ENV" | jq '.'
+                                  # BEDROCK_MODEL_ID is set to nova-micro to match the
+                                  # director Lambda which is proven to invoke this
+                                  # model successfully under the BedrockInvoke policy
+                                  # above. nova-lite would require explicit account-
+                                  # level model access enablement; nova-micro is
+                                  # already enabled because director uses it.
                                   NEW_VARS=$(echo "$CURRENT_ENV" | jq '. + {
                                     "BADGES_TABLE": "claudiu-badges",
                                     "MATCH_HISTORY_TABLE": "claudiu-match-history",
                                     "LEADERBOARD_TABLE": "claudiu-leaderboard",
-                                    "CREDITS_TABLE": "claudiu-credits"
+                                    "CREDITS_TABLE": "claudiu-credits",
+                                    "BEDROCK_MODEL_ID": "eu.amazon.nova-micro-v1:0",
+                                    "BEDROCK_REGION": "eu-central-1"
                                   }')
                                   echo "New env vars:"
                                   echo "$NEW_VARS" | jq '.'
@@ -112,7 +163,13 @@ jobs:
                                     --policy-name claudiu-event-processor-writes \
                                     --query 'PolicyDocument.Statement[].Sid' --output json
                                   echo ""
-                                  echo "=== event-processor env vars (full map — grep for BADGES_TABLE / MATCH_HISTORY_TABLE / LEADERBOARD_TABLE / CREDITS_TABLE) ==="
+                                  echo "=== claudiu-event-processor-bedrock statements ==="
+                                  aws iam get-role-policy \
+                                    --role-name claudiu-event-processor-role \
+                                    --policy-name claudiu-event-processor-bedrock \
+                                    --query 'PolicyDocument.Statement[].Sid' --output json
+                                  echo ""
+                                  echo "=== event-processor env vars (full map — grep for BEDROCK_MODEL_ID / BEDROCK_REGION / BADGES_TABLE / MATCH_HISTORY_TABLE / LEADERBOARD_TABLE / CREDITS_TABLE) ==="
                                   aws lambda get-function-configuration \
                                     --function-name claudiu-event-processor \
                                     --query 'Environment.Variables' \

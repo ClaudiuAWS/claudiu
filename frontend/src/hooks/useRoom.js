@@ -173,6 +173,14 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       const scoreMap = Object.fromEntries(
         (msg.leaderboard || []).map(e => [e.userId, Number(e.score) || 0])
       )
+      // Per-match credits absolute total, stamped by event-processor on
+      // every member after each scoring event. Frontend reads from here
+      // (instead of summing scoreEvents locally) so all clients agree on
+      // the brezn-earned number — a late joiner pulls the absolute total
+      // from the first score_update they receive after joining.
+      const creditsMap = Object.fromEntries(
+        (msg.leaderboard || []).map(e => [e.userId, Number(e.creditsEarnedThisMatch) || 0])
+      )
       const deltaByUid = Object.fromEntries(
         (msg.changes || []).map(c => [c.userId, Number(c.delta) || 0])
       )
@@ -184,11 +192,20 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
           if (target === undefined) return m
           const delta     = deltaByUid[m.userId] || 0
           const allowDecrease = delta < 0 // legitimate negative event
+          // Credits are monotonically non-decreasing within a match
+          // (positive-deltas-only accumulator on the backend). Always
+          // take max(local, broadcast) to absorb out-of-order broadcasts
+          // without regressing on a stale message.
+          const localCredits  = Number(m.creditsEarnedThisMatch) || 0
+          const targetCredits = creditsMap[m.userId] || 0
+          const nextCredits   = Math.max(localCredits, targetCredits)
           if (target >= localBase || allowDecrease) {
-            return { ...m, score: target }
+            return { ...m, score: target, creditsEarnedThisMatch: nextCredits }
           }
-          // Regression detected — keep local
-          return m
+          // Regression detected on score — keep local score but still
+          // adopt the credits update (no reason to hold back a
+          // monotonically-increasing field).
+          return { ...m, creditsEarnedThisMatch: nextCredits }
         }),
       } : prev)
 
@@ -554,6 +571,35 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       ts:          Date.now(),
     }
     setScoreEvents(prev => {
+      // Dedup against an earlier WS-driven append for this same reaction.
+      // The score_update WS handler already does the symmetric check the
+      // other direction (HTTP-first → WS arrives second), but the
+      // WS-first race (cold-start Lambda + slow client network) lets the
+      // broadcast land in scoreEvents BEFORE the HTTP response resolves.
+      // Without this guard the reactor sees two identical
+      // "REACTED TO NUTMEG +2" rows in their leaderboard timeline while
+      // other users see one (other users never run this code path —
+      // applyAuthoritativeScoreChange only fires inside handleReactTap on
+      // the reactor's tab). Match logic mirrors useRoom.js:234-251 so
+      // both directions of the race are caught identically.
+      const already = prev.some(e => {
+        // Ironclad: same source event + user + reason.
+        if (entry._sourceEventId
+            && e._sourceEventId === entry._sourceEventId
+            && e.userId === entry.userId
+            && e.reason === entry.reason) return true
+        // Fingerprint fallback for older clients / pre-deploy payloads
+        // that don't carry _sourceEventId. (userId, reason, delta,
+        // playerName) within a 2.5-second window for reactions.
+        if (e.userId !== entry.userId)             return false
+        if (e.reason !== entry.reason)             return false
+        if (e.delta  !== entry.delta)              return false
+        if ((e.playerName || '') !== (entry.playerName || '')) return false
+        const dt = Math.abs((Number(e.ts) || 0) - entry.ts)
+        const reactionish = (entry.reason || '').toLowerCase().includes('react')
+        return dt < (reactionish ? 2500 : 90000)
+      })
+      if (already) return prev
       const next = [...prev, entry]
       _writeScoreEvents(roomCodeRef.current, next)
       return next
