@@ -15,37 +15,55 @@ loop running between matches.
 📰 [**PRFAQ → `submission/prfaq.md`**](submission/prfaq.md)
 🎬 [**Executive summary (5 slides) → `submission/executive_summary.md`**](submission/executive_summary.md)
 
-> _Live CloudFront URL + demo video link land here before final submission._
-
 ---
 
 ## Quick Start (for judges)
 
 The fastest path to seeing Brezn in action:
 
-1. **Open the live app:** *(CloudFront URL — fill in before submission)*
+1. **Open the live app:** *[d1t5xvsturq92p.cloudfront.net](d1t5xvsturq92p.cloudfront.net)*
 2. **Sign up** with any email — Cognito sends a verification code, enter it on the confirm page.
 3. **Open a second browser tab** (or incognito window) and sign up as a second user.
 4. **Add each other as friends:** Friends tab → enter the other user's email → send invite → accept.
 5. **Create a party:** From the Home / Lobby tab → "Create a Party" → choose a match → invite your friend.
 6. **Run a match:** Once both members are in the lobby, both Ready Up → coordinated draft begins → pick your squad pair-by-pair (15s timer) → confirm your captain on the preview screen → "Lock In Squad" → match auto-starts when both squads are locked.
-7. **Enjoy the second-screen experience:** AI commentary fires on every event, mini-games trigger on offsides / shots / penalties / halftime, reactions overlay synced across all members, badges + credits awarded on match end.
+7. **Enjoy the second-screen experience:** AI commentary fires on every event, mini-games trigger on offsides / shots / penalties / halftime, reactions overlay synced across all members, badges awarded during the game if your players perform well and credits awarded on match end.
 
-### Local dev (optional)
-
-```bash
-git clone https://github.com/ClaudiuAWS/claudiu
-git checkout claude/inspiring-solomon-4e2a0e   # or main after merge
-cd frontend
-npm install
-npm run dev   # http://localhost:5173
-```
-
-Frontend points at the deployed AWS backend by default (CloudFront-served `index.html` has the API + WebSocket URLs baked in via Vite env vars). For full local backend, see `docs/architecture.md` — each Lambda has its own CloudFormation template under `infra/compute/` and deploys via the matching `.github/workflows/deploy-*.yml`.
-
-The rest of this README is a feature-by-feature tour. For the AWS stack + service map, see [`docs/architecture.md`](docs/architecture.md).
+> Do note that our focus was to work directly in the AWS cloud. It is in AWS where we debugged our application, tested it and validated it. We preferred setting up continuous deployment pipelines that would update the AWS stack on each push that modified some code in that specific service. If you wish to run it locally (although we would recommend testing the app on the production environment on AWS for the best possible experience), you can find a short tutorial at the bottom of this document.
 
 ---
+
+# A small visual demo before we dive into features
+
+Let's take a look at drafting a team, the event feed, some minigames and badges you can earn.
+
+<img width="212" height="460" alt="Drafting a team" src="https://github.com/user-attachments/assets/866c5f7b-4ee7-4b24-8f2c-554fd8c72459" />
+
+<img width="212" height="460" alt="Event feed" src="https://github.com/user-attachments/assets/49a83e5b-8c82-438f-bb43-7781b6b15a51" />
+
+<img width="212" height="460" alt="Penalty shootout minigame" src="https://github.com/user-attachments/assets/82781537-8d4d-4880-9910-ff845594c1ab" />
+
+<img width="212" height="460" alt="Badge preview" src="https://github.com/user-attachments/assets/aba61686-5917-4a16-9178-deaad2931ce9" />
+
+<img width="212" height="460" alt="Badges screen" src="https://github.com/user-attachments/assets/e5f1d1f1-ea0a-408d-b21c-81d57524e1ff" />
+
+<img width="212" height="460" alt="Penalty popup" src="https://github.com/user-attachments/assets/bdd235c0-0656-40dd-9aa8-7baf058d767e" />
+
+<img width="212" height="460" alt="Player stats mid game" src="https://github.com/user-attachments/assets/8f5a617c-c01b-4847-b251-ba072af23c45" />
+
+<img width="212" height="460" alt="Offside reflex minigame" src="https://github.com/user-attachments/assets/ce50f63c-cbae-4ef8-b1dd-570231a192ef" />
+
+<img width="212" height="460" alt="Offside reflex minigame results" src="https://github.com/user-attachments/assets/f5f9e5e1-b2a9-4e1b-b962-118b81f3fdd0" />
+
+<img width="212" height="460" alt="In game team view and leaderboard" src="https://github.com/user-attachments/assets/a1d9a466-50ec-4d90-85a3-bb3fde91b811" />
+
+<img width="212" height="460" alt="Half time quiz" src="https://github.com/user-attachments/assets/22c77304-896a-47aa-b9e2-69c73e5c5466" />
+
+<img width="212" height="460" alt="Half time quiz results" src="https://github.com/user-attachments/assets/262afe42-8fdb-483f-abd3-3fffe671c19c" />
+
+# Features
+
+Let's take a look at the features Claudiu team built, in no particular order.
 
 ## Match watching
 
@@ -53,7 +71,7 @@ The rest of this README is a feature-by-feature tour. For the AWS stack + servic
   the demo dataset, `DFL-MAT-111111`) loaded from a parsed XML feed.
 - The host picks a **replay speed** (1× = real time, 5× = recommended ~18 min,
   up to 30×). Backend EventBridge schedules dispatch the events at the
-  scaled wall-clock interval.
+  scaled wall-clock interval, with the help of an SQS FIFO queue to avoid data races.
 - Events are **revealed on the displayed match clock**, not when the backend
   happens to process them. So even if EventBridge dispatch jitter delivers an
   event late, the feed only surfaces it when the match clock reaches its
@@ -64,30 +82,24 @@ The rest of this README is a feature-by-feature tour. For the AWS stack + servic
 - Football-minute convention: a goal at 5:01 displays as `6'`, not `5'`
   (`Math.ceil(seconds / 60)`).
 
----
-
 ## Rooms
 
-- **Create or join** a room using a 6-character code. Up to 2 humans per room
-  in the current build.
+- **Create or join** a room using a 6-character code, or accepting an invite from a friend. Up to 2 humans per room in the current build.
 - Member roster, draft state, mini-game state, and leaderboard all live on
   the room record. WebSocket channel `room#{code}` broadcasts every change.
 - **Per-tab session storage** — Cognito tokens, draft progress, room rejoin
   info, and mini-game tracking all use `sessionStorage` instead of
   `localStorage`. Two tabs in the same browser profile can hold two
   different accounts (essential for same-machine multi-user testing).
-  Tradeoff: closing a tab signs that tab out.
-
----
 
 ## Squad draft
 
 Two modes depending on the room composition:
 
-### Solo (1 user) — local simulation
+### Solo (1 user) — simulation purposes
 
 Frontend generates draft pairs from the player roster, simulates an opponent
-locally, and lets the user click through 14-ish rounds before picking their
+locally, and lets the user click through 14 rounds before picking their
 starting XI. State persists in `sessionStorage` so a refresh resumes
 mid-draft.
 
@@ -152,8 +164,6 @@ The frontend shows a coin-flip animation (~1s) before revealing the result.
 The reveal banner mentions `· balance corrected` when the cap kicked in, so
 you can see when the script overrode the coin.
 
----
-
 ## Mini-games
 
 Live reaction-based games triggered by qualifying match events.
@@ -189,8 +199,6 @@ Backend idempotency is per-`(gameId, userId)` — both users always get their
 result broadcast, deltas accumulate across messages so each modal shows both
 players' outcomes.
 
----
-
 ## AI Match Director (Bedrock)
 
 A `claudiu-director-handler` Lambda calls **Amazon Nova Micro** via the
@@ -205,8 +213,6 @@ returns one of three actions in JSON:
 The Director runs alongside the rule-based trigger map. If Bedrock errors,
 JSON parse fails, or the route is down, the rule-based fallback still fires
 the modal — the AI is additive, not load-bearing.
-
----
 
 ## Scoring
 
@@ -225,6 +231,10 @@ All deltas are clamped to ±200 server-side to prevent client tampering.
 Leaderboard pushes via `score_update` over the room WebSocket.
 
 ---
+
+# Architectural decisions
+
+Now that we got the features out of the way, let's take a look at what technologies we chose, why we chose them and how they integrate with each other.
 
 ## Stack
 
