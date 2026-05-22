@@ -326,6 +326,14 @@ the room WebSocket.
 
 Now that we got the features out of the way, let's take a look at what technologies we chose, why we chose them and how they integrate with each other.
 
+We chose CloudFormation to make sure we have consistent deployments and no manual mistakes can occur in the console, since those can be hard to debug. This also means this app can be easily redeployed at any time. Nothing was done manually in the AWS console.
+
+<img width="406.5" height="417.5" alt="AWS Deployment" src="https://github.com/user-attachments/assets/ccd060ed-5081-4f2e-8d50-029479896921" />
+
+A serverless deployment was chosen so that we make sure we do not exceed the 50$ budget our account was limited to, but also to ensure seamless scalability in case of user spikes while minimizing overhead on managing EC2 instances for example.
+
+Most deployments are automatic. GitHub Actions update each part of the stack as soon as some change happens in that part, and a few rarely-changing CloudFormation stacks still go out via `aws cloudformation deploy` from a developer machine. We sticked to modern DevOps practices to minimize human error.
+
 ## Stack
 
 - **Frontend**: React + Vite, deployed to CloudFront via S3
@@ -335,7 +343,7 @@ Now that we got the features out of the way, let's take a look at what technolog
 - **Storage**: DynamoDB (`claudiu-rooms`, `claudiu-matches`,
   `claudiu-player-lookup`, `claudiu-match-events`, `claudiu-ws-connections`)
 - **Compute**: EventBridge Scheduler for replay event dispatch, SQS FIFO for
-  ordered processing, AWS Bedrock (Nova Micro) for the AI Director
+  ordered processing, AWS Bedrock (Nova Lite) for the AI Director
 - **Infra**: CloudFormation templates in `infra/compute/`
 
 ---
@@ -362,20 +370,23 @@ via `aws cloudformation describe-stacks` if you have AWS access.
 
 ### Backend / infra changes
 
-Lambda code changes auto-deploy on `main` via the workflows in
-`.github/workflows/deploy-*.yml`. CloudFormation stacks (`api-gateway-claudiu`,
-the IAM role stacks, etc.) require manual `aws cloudformation deploy` for
-the stacks that don't yet have a workflow. See `infra/compute/`.
+Lambda code, the frontend, IAM roles, and most CloudFormation stacks
+auto-deploy on `main` via the workflows in `.github/workflows/deploy-*.yml`.
+A few rarely-changing stacks (`api-gateway-ws.yml`, `s3-profile-pictures.yml`,
+`api-gateway-role.yml`, `lambdas-logger.yml`) don't have dedicated workflows
+yet and still require a manual `aws cloudformation deploy` from a developer
+machine. See `infra/compute/`.
 
 ### Reloading match data
 
 The four source XMLs (`positions.xml`, `kpi.xml`, `events.xml`, `match.xml`)
-are gitignored because they're too large. You only need them if you want to
-re-populate DynamoDB with fresh match data via `data/loader/main.py`. Match
-data is already loaded in the deployed DDB tables, so most local development
-doesn't need this.
+are gitignored — they're large, and the hackathon rules don't permit
+redistributing them. You only need them if you want to re-populate DynamoDB
+with fresh match data via `data/loader/main.py`. Match data is already
+loaded in the deployed DDB tables, so most local development doesn't need this.
 
 To reset the deployed match back to `upcoming` for a fresh replay:
+
 
 ```bash
 python data/reset_match.py    # uses [hackathon] AWS profile
@@ -402,7 +413,7 @@ infra/compute/       # CloudFormation: api-gateway.yml, lambdas-*.yml
 data/                # match dataset loader + reset scripts
 ```
 
-<img width="1308" height="220" alt="Screenshot 2026-05-14 at 15 38 54" src="https://github.com/user-attachments/assets/e768bf47-d9cc-42e4-9c1b-7192165eacc8" />
+<img width="1308" height="220" alt="Deployment process fun fact" src="https://github.com/user-attachments/assets/e768bf47-d9cc-42e4-9c1b-7192165eacc8" />
 
 ---
 
