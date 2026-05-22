@@ -1150,15 +1150,32 @@ def _build_quiz_candidates(roster: list, goals: list, home_team: str, away_team:
 _QUIZ_SYSTEM_PROMPT = (
     "You generate halftime trivia for a fantasy football match-watching app.\n"
     "Return ONLY a JSON array of question objects - no prose, no code fences, no extra text.\n"
-    "Each object must have exactly these fields:\n"
-    '  {"q": "...", "choices": ["A","B","C","D"], "correctIdx": 0-3, "category": "match" | "bundesliga" | "trivia"}\n'
+    "Schema for each object (the choices array MUST contain real answers, not these placeholders):\n"
+    '  {"q": "<question text>", "choices": ["<real answer 1>", "<real answer 2>", "<real answer 3>", "<real answer 4>"], "correctIdx": 0-3, "category": "match" | "bundesliga" | "trivia"}\n'
+    "\n"
     "Hard rules:\n"
     "- Exactly 4 distinct non-empty choices per question (no duplicates).\n"
     "- correctIdx is the 0-indexed position of the correct answer in the choices array.\n"
     "- Mix categories across the three questions: one about THIS match (teams/score), one about the teams or league context, one general football/Bundesliga trivia.\n"
     "- Questions concise (under 100 chars). Choices short (under 30 chars each).\n"
     "- All questions answerable without insider knowledge.\n"
-    "- Output ONLY the JSON array. No explanation, no markdown, no surrounding text."
+    "- Output ONLY the JSON array. No explanation, no markdown, no surrounding text.\n"
+    "\n"
+    "CRITICAL — answer text must be REAL CONTENT, not placeholders.\n"
+    "Each choice must be a concrete answer: real team name, real player name,\n"
+    "year, score, stadium, etc. NEVER a single letter, single digit, or generic\n"
+    'label like "A" / "B" / "Option 1" / "Choice A" / "First". The single-letter\n'
+    "examples in the schema above are placeholders for the JSON structure only —\n"
+    "you must replace them with real answers.\n"
+    "\n"
+    "BAD example (DO NOT produce output like this):\n"
+    '  {"q": "Which team has more titles?", "choices": ["A", "B", "C", "D"], "correctIdx": 0, "category": "bundesliga"}\n'
+    '  {"q": "Who scored the opener?", "choices": ["Option 1", "Option 2", "Option 3", "Option 4"], "correctIdx": 0, "category": "match"}\n'
+    "\n"
+    "GOOD examples (produce output like these):\n"
+    '  {"q": "Which team has more Bundesliga titles?", "choices": ["Bayern Munich", "Hamburger SV", "Borussia Dortmund", "Schalke 04"], "correctIdx": 0, "category": "bundesliga"}\n'
+    '  {"q": "Who scored Bayern\'s opener?", "choices": ["Olise", "Kane", "Kimmich", "Musiala"], "correctIdx": 0, "category": "match"}\n'
+    '  {"q": "Where does Bayern play home games?", "choices": ["Allianz Arena", "Signal Iduna Park", "Volksparkstadion", "Olympiastadion"], "correctIdx": 0, "category": "trivia"}'
 )
 
 
@@ -1240,7 +1257,35 @@ def _valid_quiz_question(q) -> bool:
         return False
     if not all(isinstance(c, str) and c.strip() for c in choices):
         return False
-    if len({c.strip().lower() for c in choices}) != 4:  # no duplicates
+    choices_clean = [c.strip() for c in choices]
+    if len({c.lower() for c in choices_clean}) != 4:  # no duplicates
+        return False
+    # NEW — Nova sometimes regurgitates the schema example's `["A","B","C","D"]`
+    # placeholders as literal choice text (the prompt now explicitly forbids
+    # this, but defence-in-depth: validator catches the case so a regression
+    # in Nova's instruction-following falls back to the static pool rather
+    # than rendering useless cards to the user).
+    #
+    # Rule a: every choice must be ≥ 3 characters — real Bundesliga answers
+    # (team names, player surnames, stadium names, scores like "2-1") all
+    # clear this bar.
+    if not all(len(c) >= 3 for c in choices_clean):
+        return False
+    # Rule b: belt-and-suspenders for digit/symbol placeholders that
+    # happen to be 1 character — if EVERY choice is exactly one char, the
+    # set is a placeholder regardless of which alphabet Nova picked.
+    if all(len(c) == 1 for c in choices_clean):
+        return False
+    # Rule c: explicit placeholder/label tokens that are >= 3 chars and
+    # would slip past rule a. Case-insensitive exact match.
+    _PLACEHOLDER_TOKENS = {
+        'option 1', 'option 2', 'option 3', 'option 4',
+        'choice a', 'choice b', 'choice c', 'choice d',
+        'first', 'second', 'third', 'fourth',
+        'answer 1', 'answer 2', 'answer 3', 'answer 4',
+        'none', 'n/a', 'tbd',
+    }
+    if any(c.lower() in _PLACEHOLDER_TOKENS for c in choices_clean):
         return False
     idx = q.get('correctIdx')
     if not isinstance(idx, int):
