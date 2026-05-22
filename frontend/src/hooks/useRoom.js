@@ -554,6 +554,35 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       ts:          Date.now(),
     }
     setScoreEvents(prev => {
+      // Dedup against an earlier WS-driven append for this same reaction.
+      // The score_update WS handler already does the symmetric check the
+      // other direction (HTTP-first → WS arrives second), but the
+      // WS-first race (cold-start Lambda + slow client network) lets the
+      // broadcast land in scoreEvents BEFORE the HTTP response resolves.
+      // Without this guard the reactor sees two identical
+      // "REACTED TO NUTMEG +2" rows in their leaderboard timeline while
+      // other users see one (other users never run this code path —
+      // applyAuthoritativeScoreChange only fires inside handleReactTap on
+      // the reactor's tab). Match logic mirrors useRoom.js:234-251 so
+      // both directions of the race are caught identically.
+      const already = prev.some(e => {
+        // Ironclad: same source event + user + reason.
+        if (entry._sourceEventId
+            && e._sourceEventId === entry._sourceEventId
+            && e.userId === entry.userId
+            && e.reason === entry.reason) return true
+        // Fingerprint fallback for older clients / pre-deploy payloads
+        // that don't carry _sourceEventId. (userId, reason, delta,
+        // playerName) within a 2.5-second window for reactions.
+        if (e.userId !== entry.userId)             return false
+        if (e.reason !== entry.reason)             return false
+        if (e.delta  !== entry.delta)              return false
+        if ((e.playerName || '') !== (entry.playerName || '')) return false
+        const dt = Math.abs((Number(e.ts) || 0) - entry.ts)
+        const reactionish = (entry.reason || '').toLowerCase().includes('react')
+        return dt < (reactionish ? 2500 : 90000)
+      })
+      if (already) return prev
       const next = [...prev, entry]
       _writeScoreEvents(roomCodeRef.current, next)
       return next
