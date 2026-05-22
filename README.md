@@ -17,22 +17,6 @@ loop running between matches.
 
 ---
 
-## Quick Start (for judges)
-
-The fastest path to seeing Brezn in action:
-
-1. **Open the live app:** *[d1t5xvsturq92p.cloudfront.net](d1t5xvsturq92p.cloudfront.net)*
-2. **Sign up** with any email — Cognito sends a verification code, enter it on the confirm page.
-3. **Open a second browser tab** (or incognito window) and sign up as a second user.
-4. **Add each other as friends:** Friends tab → enter the other user's email → send invite → accept.
-5. **Create a party:** From the Home / Lobby tab → "Create a Party" → choose a match → invite your friend.
-6. **Run a match:** Once both members are in the lobby, both Ready Up → coordinated draft begins → pick your squad pair-by-pair (15s timer) → confirm your captain on the preview screen → "Lock In Squad" → match auto-starts when both squads are locked.
-7. **Enjoy the second-screen experience:** AI commentary fires on every event, mini-games trigger on offsides / shots / penalties / halftime, reactions overlay synced across all members, badges awarded during the game if your players perform well and credits awarded on match end.
-
-> Do note that our focus was to work directly in the AWS cloud. It is in AWS where we debugged our application, tested it and validated it. We preferred setting up continuous deployment pipelines that would update the AWS stack on each push that modified some code in that specific service. If you wish to run it locally (although we would recommend testing the app on the production environment on AWS for the best possible experience), you can find a short tutorial at the bottom of this document.
-
----
-
 # A small visual demo before we dive into features
 
 Let's take a look at drafting a team, the event feed, some minigames and badges you can earn.
@@ -60,6 +44,22 @@ Let's take a look at drafting a team, the event feed, some minigames and badges 
 <img width="212" height="460" alt="Half time quiz" src="https://github.com/user-attachments/assets/22c77304-896a-47aa-b9e2-69c73e5c5466" />
 
 <img width="212" height="460" alt="Half time quiz results" src="https://github.com/user-attachments/assets/262afe42-8fdb-483f-abd3-3fffe671c19c" />
+
+---
+
+## Quick Start (for judges)
+
+The fastest path to seeing Brezn in action:
+
+1. **Open the live app:** *[d1t5xvsturq92p.cloudfront.net](d1t5xvsturq92p.cloudfront.net)*
+2. **Sign up** with any email — Cognito sends a verification code, enter it on the confirm page.
+3. **Open a second browser tab** (or incognito window) and sign up as a second user.
+4. **Add each other as friends:** Friends tab → enter the other user's email → send invite → accept.
+5. **Create a party:** From the Home / Lobby tab → "Create a Party" → choose a match → invite your friend.
+6. **Run a match:** Once both members are in the lobby, both Ready Up → coordinated draft begins → pick your squad pair-by-pair (15s timer) → confirm your captain on the preview screen → "Lock In Squad" → match auto-starts when both squads are locked.
+7. **Enjoy the second-screen experience:** AI commentary fires on every event, mini-games trigger on offsides / shots / penalties / halftime, reactions overlay synced across all members, badges awarded during the game if your players perform well and credits awarded on match end.
+
+> Do note that our focus was to work directly in the AWS cloud. It is in AWS where we debugged our application, tested it and validated it. We preferred setting up continuous deployment pipelines that would update the AWS stack on each push that modified some code in that specific service. If you wish to run it locally (although we would recommend testing the app on the production environment on AWS for the best possible experience), you can find a short tutorial at the bottom of this document.
 
 # Features
 
