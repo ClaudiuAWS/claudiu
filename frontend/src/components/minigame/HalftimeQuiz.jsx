@@ -42,18 +42,23 @@ const CATEGORY_ICON = {
 }
 
 export default function HalftimeQuiz({ config, durationMs, onSubmit }) {
-  // Use AI-supplied questions if they pass a basic schema check, otherwise
-  // fall back to the static pool. Generating fallback once on mount means
-  // re-renders don't reshuffle and confuse the user mid-question.
-  const questions = useMemoOnce(() => {
-    const provided = Array.isArray(config?.questions) ? config.questions : null
-    const valid = provided?.every(q =>
-      q && typeof q.q === 'string'
-      && Array.isArray(q.choices) && q.choices.length === 4
-      && Number.isInteger(q.correctIdx) && q.correctIdx >= 0 && q.correctIdx < 4
-    )
-    return (valid && provided.length >= 1) ? provided.slice(0, 3) : pickFallbackQuestions(3)
-  })
+  // Question lifecycle:
+  //   1. Initial mount uses whatever is in config.questions right now —
+  //      which is the local fallback set pre-filled by useMiniGame's
+  //      frontend trigger (so the modal renders instantly without
+  //      waiting for the backend).
+  //   2. ~500ms later the backend's `minigame_start` arrives with AI
+  //      questions and useMiniGame's upgrade path updates state.config.
+  //      The upgrade effect below swaps them in — but ONLY while the
+  //      user hasn't started answering (`lockedRef === false`). After
+  //      the first tap, the questions are frozen so a late-arriving
+  //      broadcast can't shuffle mid-quiz.
+  //
+  // Previous version used `useMemoOnce` which baked the fallback into
+  // a ref on first render and never re-derived. End result: the AI
+  // questions reached the WS but the UI rendered the fallback forever.
+  const [questions, setQuestions] = useState(() => deriveQuestions(config))
+  const lockedRef = useRef(false)
 
   const [qIndex, setQIndex] = useState(0)
   const [answers, setAnswers] = useState([])
@@ -63,6 +68,27 @@ export default function HalftimeQuiz({ config, durationMs, onSubmit }) {
   const [streak, setStreak] = useState(0)
   const [pointsFly, setPointsFly] = useState(null)   // {value, key} for the +N popup
   const submittedRef = useRef(false)
+
+  // One-shot upgrade: when AI questions arrive after mount via the
+  // useMiniGame `minigame_start` handler, swap them in here. Gated on
+  // lockedRef so a hypothetical late broadcast after the user starts
+  // answering is ignored. The cheap identity check on prev[0]?.q vs
+  // next[0]?.q avoids a state-churn re-render when the same fallback
+  // set passes through repeatedly.
+  useEffect(() => {
+    if (lockedRef.current) return
+    const next = deriveQuestions(config)
+    setQuestions(prev => (prev[0]?.q === next[0]?.q ? prev : next))
+  }, [config?.questions])
+
+  // Lock the question set the instant the user starts interacting. The
+  // parent's upgrade gate (useMiniGame.js:433-451) also stops firing
+  // once submittedRef is true, but we re-assert here so a malformed
+  // late broadcast that somehow slips past the parent gate still
+  // doesn't reshuffle the active quiz.
+  useEffect(() => {
+    if (qIndex > 0 || picked !== null) lockedRef.current = true
+  }, [qIndex, picked])
 
   const qStartMsRef = useRef(Date.now())
   const [now, setNow] = useState(Date.now())
@@ -278,9 +304,19 @@ function CountdownRing({ remaining, progress }) {
   )
 }
 
-// Memoize on first render only — avoids reshuffling questions on re-renders.
-function useMemoOnce(factory) {
-  const ref = useRef(null)
-  if (ref.current === null) ref.current = factory()
-  return ref.current
+// Schema-check + fallback for the question set. Pulled out of the
+// component so the initial `useState` factory and the upgrade `useEffect`
+// share identical derivation logic. Returns AI-supplied questions when
+// `config.questions` passes the schema check, otherwise returns a fresh
+// fallback set (`pickFallbackQuestions` reshuffles each call — that's
+// why the caller stores the result in state, not in a memo that re-runs
+// on every render).
+function deriveQuestions(config) {
+  const provided = Array.isArray(config?.questions) ? config.questions : null
+  const valid = provided?.every(q =>
+    q && typeof q.q === 'string'
+    && Array.isArray(q.choices) && q.choices.length === 4
+    && Number.isInteger(q.correctIdx) && q.correctIdx >= 0 && q.correctIdx < 4
+  )
+  return (valid && provided.length >= 1) ? provided.slice(0, 3) : pickFallbackQuestions(3)
 }
