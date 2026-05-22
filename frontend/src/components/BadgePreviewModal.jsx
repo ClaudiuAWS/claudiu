@@ -165,9 +165,9 @@ export default function BadgePreviewModal({ preview, onClose }) {
             <div
               className="w-full py-3 rounded-2xl text-center font-bold text-sm"
               style={{
-                background: 'rgba(34,197,94,0.15)',
-                border: '1px solid rgba(34,197,94,0.40)',
-                color: '#86efac',
+                background: 'rgba(220,38,38,0.15)',
+                border: '1px solid rgba(248,113,113,0.40)',
+                color: '#fca5a5',
               }}
             >
               ✓ Earned{earnedAt ? ` on ${new Date(earnedAt).toLocaleDateString()}` : ''}

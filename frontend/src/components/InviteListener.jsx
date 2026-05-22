@@ -197,8 +197,8 @@ export default function InviteListener() {
       <div
         className="max-w-md mx-auto rounded-2xl p-4 pointer-events-auto shadow-2xl"
         style={{
-          background: 'linear-gradient(145deg, #1a2438 0%, #0d1117 100%)',
-          border: '1px solid rgba(34,197,94,0.25)',
+          background: 'linear-gradient(145deg, #1a0a0a 0%, #0d0606 100%)',
+          border: '1px solid rgba(220,38,38,0.30)',
         }}
       >
         <div className="flex items-center gap-3 mb-3">
@@ -206,7 +206,7 @@ export default function InviteListener() {
             {inviter.avatarUrl ? (
               <img src={inviter.avatarUrl} alt={inviter.displayName} className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-sm font-bold">
+              <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white text-sm font-bold">
                 {initials}
               </div>
             )}
@@ -229,7 +229,12 @@ export default function InviteListener() {
           <button
             onClick={handleAccept}
             disabled={accepting}
-            className="flex-1 py-2.5 rounded-xl bg-green-500 hover:bg-green-400 active:bg-green-600 text-white text-sm font-bold transition-colors disabled:opacity-50"
+            className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-50"
+            style={{
+              background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+              border: '1px solid rgba(248,113,113,0.55)',
+              boxShadow: '0 8px 24px -8px rgba(220,38,38,0.55), inset 0 1px 0 rgba(255,255,255,0.20)',
+            }}
           >
             {accepting ? 'Joining…' : 'Accept'}
           </button>
