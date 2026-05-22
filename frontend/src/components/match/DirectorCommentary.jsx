@@ -27,16 +27,19 @@ export default function DirectorCommentary({ stack }) {
     // line as it arrives (e.g. "Olise doubles Bayern's lead — clinical!").
     // 'polite' politeness level waits for the user's current speech to
     // finish before reading — no rude interruptions mid-action.
-    // Fixed overlay anchored around the watchers strip (~y=200-260px
-    // on a Pro Max viewport — just below the Scoreboard, on top of
-    // the "X watching together" row). top-52 = 13rem = 208px puts
-    // the top of the card at the watchers strip's upper edge so it
-    // feels visually attached to that band rather than the
-    // scoreboard. pointer-events-none on the wrapper so taps shoot
-    // through to whatever's underneath; the card itself restores
-    // pointer-events so the "Why?" pill stays clickable.
+    //
+    // Fixed overlay anchored ABOVE the "X watching together" strip — slots
+    // into the gap between the bottom of the Scoreboard (~y=120px on a Pro
+    // Max viewport) and the top of the watchers row (~y=200px). top-32 =
+    // 8rem = 128px puts the card's top edge just below the scoreboard so
+    // the card body (~64-72px tall) clears the watchers strip entirely.
+    // Previous iterations sat at top-52 (208px) which visually overlapped
+    // the feed/tabs area; the user explicitly wants it above the watchers
+    // row, not on top of or below it. pointer-events-none on the wrapper
+    // so taps shoot through to whatever's underneath; the card itself
+    // restores pointer-events so the "Why?" pill stays clickable.
     <div
-      className="fixed inset-x-0 top-52 z-[45] flex flex-col items-center gap-2 px-3 pointer-events-none"
+      className="fixed inset-x-0 top-32 z-[45] flex flex-col items-center gap-2 px-3 pointer-events-none"
       aria-live="polite"
       aria-atomic="false"
       role="status"
