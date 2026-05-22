@@ -676,8 +676,12 @@ def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, g
             # check, AI action choice, schema validation, confidence
             # filter, grounding filter, WS race). Helper never raises —
             # falls back to the static match-aware pool on ANY error.
+            # `room_code` is forwarded so the helper can push a
+            # `halftime_quiz_diag` WS breadcrumb with the failure reason
+            # (frontend logs it as `[halftime-quiz-diag]` in DevTools so we
+            # can debug without CloudWatch access).
             questions, q_source = _generate_ai_halftime_quiz(
-                match_id, event_id, count=3,
+                match_id, event_id, count=3, room_code=room_code,
             )
             config['questions'] = questions
             config['questionsSource'] = q_source  # 'ai-direct' or 'fallback'
@@ -1173,9 +1177,9 @@ def _build_halftime_quiz_prompt(match_id: str, count: int) -> str:
 
 
 def _valid_quiz_question(q) -> bool:
-    """Schema gate for one AI-generated question. Mirrors the validation
-    in director-handler/service.py:188-199 but stricter on min question
-    length (>=6 chars after strip)."""
+    """Schema gate for one (already-normalized) quiz question. Mirrors the
+    validation in director-handler/service.py:188-199 but stricter on min
+    question length (>=6 chars after strip)."""
     if not isinstance(q, dict):
         return False
     text = q.get('q')
@@ -1194,13 +1198,80 @@ def _valid_quiz_question(q) -> bool:
     return 0 <= idx < 4
 
 
-def _generate_ai_halftime_quiz(match_id: str, event_id: str, count: int = 3) -> tuple:
+def _normalize_quiz_question(q) -> dict:
+    """Accept Nova's likely alternate key names and return the canonical
+    {q, choices, correctIdx, category} shape — or None if unrecoverable.
+    The frontend (`HalftimeQuiz.jsx`) only knows about the canonical shape,
+    so doing the rewrite here means we don't have to touch the React side
+    every time the model picks a slightly different schema.
+
+    Variants accepted:
+      question text:  q | question | text
+      choices:        choices | options | answers
+      correct index:  correctIdx | correctIndex | answerIdx
+    """
+    if not isinstance(q, dict):
+        return None
+    text = q.get('q') or q.get('question') or q.get('text')
+    choices = q.get('choices') or q.get('options') or q.get('answers')
+    idx = q.get('correctIdx')
+    if not isinstance(idx, int):
+        ci = q.get('correctIndex')
+        idx = ci if isinstance(ci, int) else None
+    if not isinstance(idx, int):
+        ai = q.get('answerIdx')
+        idx = ai if isinstance(ai, int) else None
+    if not (isinstance(text, str) and isinstance(choices, list) and isinstance(idx, int)):
+        return None
+    return {
+        'q':          text,
+        'choices':    choices,
+        'correctIdx': idx,
+        'category':   q.get('category', 'match'),
+    }
+
+
+def _push_halftime_quiz_diag(room_code: str, outcome: str, **details) -> None:
+    """Halftime-quiz observability breadcrumb over the room WS channel.
+    Mirrors `_push_director_diag` in director-handler/service.py:102-120 so
+    the user can see WHY the inline AI quiz did or didn't fire from
+    DevTools without needing CloudWatch access.
+
+    Outcomes:
+      success            — AI questions selected, broadcast about to fire
+      bedrock_error      — bedrock.converse(...) raised (IAM, throttle, ...)
+      parse_error        — Nova returned non-JSON or truncated output
+      validation_failed  — got questions but ZERO passed validation
+      partial_validation — some valid but fewer than `count`
+
+    The pure observability nature means this never throws — a failure
+    pushing the diag itself is logged and swallowed."""
+    if not room_code:
+        return
+    try:
+        ws.push_to_channel(f"room#{room_code}", {
+            'type':    'halftime_quiz_diag',
+            'outcome': outcome,
+            **details,
+        })
+    except Exception as e:
+        print(f"[halftime-quiz] failed to push diag: {e}")
+
+
+def _generate_ai_halftime_quiz(match_id: str, event_id: str, count: int = 3, room_code: str = None) -> tuple:
     """Returns (questions, source) where source is 'ai-direct' on success
     or 'fallback' when Bedrock errors / output fails validation. Guaranteed
-    safe to call from the hot path — any exception is caught and logged."""
+    safe to call from the hot path — any exception is caught and logged.
+
+    When `room_code` is provided, also broadcasts a `halftime_quiz_diag`
+    WS message at every decision point. The frontend logs these as
+    `[halftime-quiz-diag]` in DevTools — single source of truth for
+    debugging which gate dropped the AI output."""
+    # Outer wrapper: anything before/inside the Bedrock call that throws
+    # (boto3 init, prompt build, response shape) lands in `bedrock_error`.
+    bedrock_region = os.environ.get('BEDROCK_REGION', 'eu-central-1')
+    model_id = os.environ.get('BEDROCK_MODEL_ID', 'eu.amazon.nova-lite-v1:0')
     try:
-        bedrock_region = os.environ.get('BEDROCK_REGION', 'eu-central-1')
-        model_id = os.environ.get('BEDROCK_MODEL_ID', 'eu.amazon.nova-lite-v1:0')
         bedrock = boto3.client('bedrock-runtime', region_name=bedrock_region)
         prompt = _build_halftime_quiz_prompt(match_id, count)
         t0 = datetime.now(timezone.utc)
@@ -1212,27 +1283,96 @@ def _generate_ai_halftime_quiz(match_id: str, event_id: str, count: int = 3) -> 
         )
         elapsed_ms = (datetime.now(timezone.utc) - t0).total_seconds() * 1000
         text = response['output']['message']['content'][0]['text'].strip()
-        # Strip code fences if Nova adds them despite the rule.
-        if text.startswith('```'):
-            text = text.strip('`')
-            if text.lower().startswith('json'):
-                text = text[4:]
-            text = text.strip()
-        parsed = json.loads(text)
-        questions = parsed if isinstance(parsed, list) else parsed.get('questions', [])
-        valid = [q for q in questions if _valid_quiz_question(q)]
-        print(
-            f"[halftime-quiz] bedrock latency={elapsed_ms:.0f}ms "
-            f"raw={len(questions) if isinstance(questions, list) else 'n/a'} "
-            f"valid={len(valid)} need={count}"
-        )
-        if len(valid) >= count:
-            sample_q = (valid[0].get('q') or '')[:60]
-            print(f"[halftime-quiz] AI-generated {len(valid)} valid questions; first: {sample_q!r}")
-            return valid[:count], 'ai-direct'
-        print(f"[halftime-quiz] not enough valid questions ({len(valid)}/{count}); falling back")
     except Exception as e:
-        print(f"[halftime-quiz] AI generation failed ({type(e).__name__}: {e}); falling back")
+        err_msg = str(e)[:200]
+        print(f"[halftime-quiz] bedrock_error ({type(e).__name__}: {err_msg}); falling back")
+        _push_halftime_quiz_diag(
+            room_code, 'bedrock_error',
+            errorType=type(e).__name__,
+            errorMessage=err_msg,
+            modelId=model_id,
+            region=bedrock_region,
+        )
+        return (
+            _match_aware_quiz_questions(match_id, count=count, seed=f"{match_id}#{event_id}"),
+            'fallback',
+        )
+
+    # Strip code fences if Nova adds them despite the prompt rule.
+    if text.startswith('```'):
+        text = text.strip('`')
+        if text.lower().startswith('json'):
+            text = text[4:]
+        text = text.strip()
+
+    # JSON parse layer — separate try so we can broadcast the raw snippet
+    # for fingerprinting Nova's actual output shape.
+    try:
+        parsed = json.loads(text)
+    except Exception as e:
+        err_msg = str(e)[:200]
+        raw_snippet = text[:200] if isinstance(text, str) else ''
+        print(f"[halftime-quiz] parse_error ({type(e).__name__}: {err_msg}); raw[:200]={raw_snippet!r}")
+        _push_halftime_quiz_diag(
+            room_code, 'parse_error',
+            errorMessage=err_msg,
+            rawSnippet=raw_snippet,
+        )
+        return (
+            _match_aware_quiz_questions(match_id, count=count, seed=f"{match_id}#{event_id}"),
+            'fallback',
+        )
+
+    # Nova might return a bare array or an object wrapping the array.
+    questions = parsed if isinstance(parsed, list) else parsed.get('questions', [])
+    raw_count = len(questions) if isinstance(questions, list) else 0
+    # Normalize alternate key names BEFORE strict validation so the
+    # `validation_failed` outcome is only triggered by genuine schema
+    # problems, not stylistic Nova variations.
+    normalized = [n for n in (_normalize_quiz_question(q) for q in (questions or [])) if n]
+    valid = [q for q in normalized if _valid_quiz_question(q)]
+    print(
+        f"[halftime-quiz] bedrock latency={elapsed_ms:.0f}ms "
+        f"raw={raw_count} normalized={len(normalized)} valid={len(valid)} need={count}"
+    )
+
+    if len(valid) >= count:
+        sample_q = (valid[0].get('q') or '')[:60]
+        print(f"[halftime-quiz] success — {len(valid)} valid questions; first: {sample_q!r}")
+        _push_halftime_quiz_diag(
+            room_code, 'success',
+            validCount=len(valid),
+            latencyMs=int(elapsed_ms),
+            firstSample=sample_q,
+        )
+        return valid[:count], 'ai-direct'
+
+    # Got something but not enough — surface partial vs total failure so the
+    # diag tells us "Nova gave 3 but only 0 passed schema" vs "Nova gave 1".
+    if len(valid) == 0 and raw_count > 0:
+        first_raw = ''
+        for q in questions:
+            if isinstance(q, dict):
+                t = q.get('q') or q.get('question') or q.get('text') or ''
+                first_raw = str(t)[:80]
+                break
+        print(f"[halftime-quiz] validation_failed raw={raw_count} valid=0; first raw q={first_raw!r}")
+        _push_halftime_quiz_diag(
+            room_code, 'validation_failed',
+            rawCount=raw_count,
+            normalizedCount=len(normalized),
+            validCount=0,
+            firstSample=first_raw,
+        )
+    else:
+        print(f"[halftime-quiz] partial_validation raw={raw_count} valid={len(valid)} need={count}")
+        _push_halftime_quiz_diag(
+            room_code, 'partial_validation',
+            rawCount=raw_count,
+            normalizedCount=len(normalized),
+            validCount=len(valid),
+            need=count,
+        )
     return (
         _match_aware_quiz_questions(match_id, count=count, seed=f"{match_id}#{event_id}"),
         'fallback',
