@@ -116,6 +116,8 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       setRoom(msg.room)
       logger.success('useRoom', 'WS room_update', msg.room)
     } else if (msg.type === 'room_closed') {
+      // eslint-disable-next-line no-console
+      console.warn('[useRoom] room cleared (source: room_closed)')
       sessionStorage.removeItem(ROOM_CODE_KEY)
       setRoom(null)
       toast('Party was closed')
@@ -376,6 +378,8 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     try {
       const result = await roomsApi.leave(room.roomCode)
       sessionStorage.removeItem(ROOM_CODE_KEY)
+      // eslint-disable-next-line no-console
+      console.warn('[useRoom] room cleared (source: leaveRoom)')
       setRoom(null)
 
       if (result.deleted) {
@@ -388,6 +392,8 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     } catch (err) {
       logger.error('useRoom', 'Failed to leave room', err)
       sessionStorage.removeItem(ROOM_CODE_KEY)
+      // eslint-disable-next-line no-console
+      console.warn('[useRoom] room cleared (source: leaveRoom_catch)', err?.message)
       setRoom(null)
       toast.error(err.message || 'Failed to leave room')
     } finally {
@@ -535,6 +541,22 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     })
   }, [])
 
+  // Defensive re-hydrate path used by LobbyPage when room is null but we
+  // have a roomCode saved in sessionStorage. Unlike joinRoom, this is a
+  // pure READ — no toasts, no membership side-effect, no loading state.
+  // Falls through to the existing room WS handlers once setRoom fires.
+  const getRoomByCode = useCallback(async (code) => {
+    if (!code) return null
+    const data = await roomsApi.get(code)
+    setRoom({
+      ...data,
+      members: (data.members || []).map(m => ({ ...m, score: Number(m.score) || 0 })),
+    })
+    sessionStorage.setItem(ROOM_CODE_KEY, data.roomCode)
+    logger.success('useRoom', 'Room re-hydrated', data)
+    return data
+  }, [])
+
   return {
     room,
     loading,
@@ -543,6 +565,7 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
     createRoom,
     joinRoom,
     leaveRoom,
+    getRoomByCode,
     applyOptimisticDeltas,
     applyAuthoritativeScoreChange,
   }

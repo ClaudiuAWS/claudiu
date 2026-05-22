@@ -162,6 +162,16 @@ export default function InviteListener() {
       },
     })
     console.info('[invite] navigate fired → /lobby/%s', payloadMatchId)
+    // Log the stub we just passed via location.state so the next test
+    // can verify it survives the route transition. Pairs with the
+    // `[lobby] mounted` log that records what LobbyPage actually
+    // received — if the two disagree, react-router is dropping state.
+    console.info('[invite] initialRoom stub handed off:', {
+      roomCode,
+      matchId: payloadMatchId,
+      membersCount: stubMembers.length,
+      hostUserId: pending.inviter?.userId || null,
+    })
     setPending(null)
 
     console.info('[invite] background join started')

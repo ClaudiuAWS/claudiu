@@ -46,13 +46,59 @@ export default function LobbyPage() {
   // Pass nav-state initialRoom (e.g. from InviteListener accepting an
   // invite) to useRoom so the loading-spinner gate doesn't fire while
   // the API restore round-trips. Mirrors MatchPage.jsx:60.
-  const { room, loading, createRoom, joinRoom, leaveRoom } = useRoom(
+  const { room, loading, createRoom, joinRoom, leaveRoom, getRoomByCode } = useRoom(
     null,
     user?.userId,
     location.state?.initialRoom || null,
     null,
     handleMatchStarted,
   )
+
+  // Mount diagnostic — pins down which signal failed if the user reports
+  // landing on the empty CreateRoom UI after accepting an invite. Logs
+  // ONCE per mount (mountedRef guard) with the three signals that matter:
+  // location.state contents, sessionStorage room code, and matchId.
+  const mountedRef = useRef(false)
+  useEffect(() => {
+    if (mountedRef.current) return
+    mountedRef.current = true
+    // eslint-disable-next-line no-console
+    console.info('[lobby] mounted', {
+      matchId,
+      locationStateHasInitialRoom: !!location.state?.initialRoom,
+      locationStateKeys: location.state ? Object.keys(location.state) : [],
+      sessionStorageRoomCode: (() => {
+        try { return sessionStorage.getItem('fan_squad_room_code') } catch { return null }
+      })(),
+    })
+  }, [matchId, location.state])
+
+  // Defensive re-hydrate — if `room` ends up null AND we have a roomCode
+  // in sessionStorage, fetch the room once via API. Recovers from:
+  //   - lost nav state (back/forward, soft reload, bfcache)
+  //   - stray room_closed broadcasts that cleared room
+  //   - WS subscription racing the join broadcast
+  // One attempt per mount (triedRehydrateRef). On 404 we clear the stale
+  // code so the empty CTA shows naturally next render.
+  const triedRehydrateRef = useRef(false)
+  useEffect(() => {
+    if (room || loading) return
+    if (triedRehydrateRef.current) return
+    let savedCode = null
+    try { savedCode = sessionStorage.getItem('fan_squad_room_code') } catch {}
+    if (!savedCode) return
+    triedRehydrateRef.current = true
+    // eslint-disable-next-line no-console
+    console.info('[lobby] room is null with savedCode; trying re-hydrate', savedCode)
+    getRoomByCode(savedCode).then(
+      () => { /* eslint-disable-next-line no-console */ console.info('[lobby] re-hydrate succeeded') },
+      (err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[lobby] re-hydrate failed; clearing stale code', err?.message)
+        try { sessionStorage.removeItem('fan_squad_room_code') } catch {}
+      },
+    )
+  }, [room, loading, getRoomByCode])
 
   const myMember = room?.members?.find(m => m.userId === user?.userId)
   const hasTeam  = myMember?.teamSelection?.length === 11
