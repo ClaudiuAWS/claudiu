@@ -1,11 +1,12 @@
 import { useState } from 'react'
 
 /**
- * AI Match Director commentary stack — in-flow card stack rendered
- * immediately above the Scoreboard on the match page. Newest at top
- * (stack[0] from useRoom), older entries below. Each entry self-
- * purges after 7s via useRoom's setTimeout, at which point the
- * scoreboard slides back up into its natural position.
+ * AI Match Director commentary stack — fixed-position pop-up overlay
+ * anchored around the "X watching together" strip (just below the
+ * Scoreboard). Doesn't push any layout — sits at z-[45] over the
+ * watchers row + the top of the feed, briefly, then self-purges
+ * after 7s. Pointer-events shoot through to the underlying content
+ * EXCEPT on the card itself so the "Why?" pill still clicks.
  *
  * Each card has a "Why?" expand that reveals the AI's `reasoning` field —
  * a one-sentence explanation of why it chose to commentate on this event.
@@ -26,13 +27,16 @@ export default function DirectorCommentary({ stack }) {
     // line as it arrives (e.g. "Olise doubles Bayern's lead — clinical!").
     // 'polite' politeness level waits for the user's current speech to
     // finish before reading — no rude interruptions mid-action.
-    // In-flow above the Scoreboard — when commentary is present the
-    // scoreboard naturally shifts down by the card's height; when the
-    // stack empties (auto-purge), it slides back. `max-w-md mx-auto`
-    // matches the match-page constrained width. stack[0] is newest,
-    // so default flex-col is correct (newest renders first / on top).
+    // Fixed overlay anchored around the watchers strip (~y=200-260px
+    // on a Pro Max viewport — just below the Scoreboard, on top of
+    // the "X watching together" row). top-52 = 13rem = 208px puts
+    // the top of the card at the watchers strip's upper edge so it
+    // feels visually attached to that band rather than the
+    // scoreboard. pointer-events-none on the wrapper so taps shoot
+    // through to whatever's underneath; the card itself restores
+    // pointer-events so the "Why?" pill stays clickable.
     <div
-      className="w-full mx-auto max-w-md px-3 py-2 flex flex-col items-center gap-2"
+      className="fixed inset-x-0 top-52 z-[45] flex flex-col items-center gap-2 px-3 pointer-events-none"
       aria-live="polite"
       aria-atomic="false"
       role="status"
