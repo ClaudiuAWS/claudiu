@@ -321,6 +321,36 @@ clamped to ±200 server-side (per-delta) so a tampered client can't
 drop a million-point swing. Leaderboard pushes via `score_update` over
 the room WebSocket.
 
+## Badges
+
+31 badges across 7 families (scoring, defensive, win-condition, mini-game, progression, social, counter), 
+tiered bronze/silver/gold. The single source of truth is backend/shared/badges.py — bundled into the event-
+processor zip so writers and the read API share one catalog.
+
+Earning is driven by atomic DDB counters (UpdateItem ADD) for goals/saves/penalties, plus rule evaluators at 
+fulltime (first_win, dominant_win, clean_sheet, …) and at mini-game resolve (reflex_master, quiz_master). The
+single award() primitive is idempotent (conditional PutItem with attribute_not_exists(badgeId)) and never 
+raises — a badge layer failure can't break scoring. WS push (badge_earned on user#{userId}) and the brezn 
+payout fire only on a successful new write.
+
+## Shop
+
+POST /badges/buy claims any unearned badge for its tier price via a single TransactWriteItems across 
+claudiu-badges (Put with attribute_not_exists) and claudiu-credits (Update with balance >= price). Either 
+condition fails → whole transaction rolls back, no partial state. Errors disambiguate to 402 (insufficient 
+brezn), 409 (already owned), or 404 (unknown badge). Earn payout and buy price are equal per tier (300 / 800 
+/ 2000), so paying carries no grind tax — disc-unlocking badges (first_win, hattrick, quiz_master) override 
+with a buyPrice premium since they shortcut the music unlock too.
+
+## Chat
+
+In-match only. POST /rooms/{code}/message validates membership, caps at 200 chars, and fans out a 
+chat_message payload over the room#{code} WS channel — no DB persistence. The frontend useChat hook keeps a 
+sessionStorage-backed history per matchId (survives refresh, dies with the tab) and de-dupes on 
+${userId}-${ts} so refresh + WS re-delivery doesn't double up. Bubbles overlay (top-right, max 3, 4s TTL) 
+coexist with the full ChatPanel. At fulltime the hook demolishes everything — state, sessionStorage, and any 
+post-fulltime WS messages are dropped — so chat is strictly match-bound by design.
+
 ---
 
 # Architectural decisions
