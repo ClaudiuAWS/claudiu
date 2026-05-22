@@ -9,8 +9,21 @@ const icons = { info: '🔵', success: '🟢', warn: '🟡', error: '🔴' }
 let buffer = []
 let flushTimer = null
 
+// Circuit breaker for the /logs endpoint. The endpoint was originally added in
+// commit 840a52dd but is missing from the currently deployed API Gateway stack,
+// so every POST returns a CORS preflight failure. Without a breaker the page
+// re-tries every 3 seconds for the entire session, flooding the DevTools
+// console with hundreds of `flush failed` lines per minute (visible in the
+// user's halftime-quiz screenshot). Three consecutive failures permanently
+// disables flushing for this tab — buffer entries silently drop on the floor.
+// Resets to zero on any successful POST so an outage recovery brings logging
+// back without a refresh.
+let consecutiveFailures = 0
+let flushDisabled = false
+const MAX_CONSECUTIVE_FAILURES = 3
+
 const flush = async () => {
-  if (!buffer.length) return
+  if (flushDisabled || !buffer.length) return
   const events = buffer.splice(0)
 
   try {
@@ -22,13 +35,29 @@ const flush = async () => {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ logs: events }),
     })
+    // Success — reset the breaker. If the endpoint goes down and recovers
+    // within the session, logging keeps working without a page reload.
+    consecutiveFailures = 0
   } catch (e) {
-    console.warn('[logger] flush failed', e)
+    consecutiveFailures += 1
+    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      flushDisabled = true
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[logger] disabled after ${MAX_CONSECUTIVE_FAILURES} consecutive flush failures ` +
+        `(endpoint unreachable / CORS). Further logs drop silently until reload.`
+      )
+    } else {
+      console.warn('[logger] flush failed', e)
+    }
   }
 }
 
 const scheduleFlush = () => {
-  if (flushTimer) return
+  // Skip scheduling once the breaker has tripped — every queued flush would
+  // immediately bail at the `flushDisabled` check anyway, but not creating
+  // the timer avoids a stale setTimeout sitting on the event loop forever.
+  if (flushDisabled || flushTimer) return
   flushTimer = setTimeout(() => { flushTimer = null; flush() }, 3000)
 }
 
@@ -50,6 +79,9 @@ function log(level, context, message, data = null) {
     return
   }
 
+  // Drop new entries on the floor once the breaker has tripped — no point
+  // letting the buffer grow unbounded across a long live-match session.
+  if (flushDisabled) return
   buffer.push({ timestamp: Date.now(), level, context, message, ...(data && { data }) })
   scheduleFlush()
 }

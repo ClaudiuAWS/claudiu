@@ -1,4 +1,5 @@
 import boto3
+import json
 import os
 from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
@@ -669,17 +670,17 @@ def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, g
             config['takerName']  = data.get('scoringDisplay') or data.get('playerDisplay') or data.get('penaltyTakerId')
             config['teamRole']   = data.get('teamRole') or data.get('scoringTeamRole')
         elif game_type == 'HALFTIME_QUIZ':
-            # Match-aware halftime quiz: questions built from THIS match's
-            # roster + first-half goals (Bayern's keeper, Kimmich's position,
-            # who scored the opener, etc.). Falls back to the static rules
-            # pool only when DDB roster lookup fails (e.g. before the loader
-            # ran). The AI Director can still overwrite via its own
-            # minigame_start broadcast with custom `questions` — the
-            # commentator's match-aware Bedrock quiz wins when validation
-            # passes. Seed by match_id + event_id for deterministic output.
-            config['questions'] = _match_aware_quiz_questions(
-                match_id, count=3, seed=f"{match_id}#{event_id}",
+            # Deterministic AI quiz path: call Bedrock inline at the moment
+            # the halftime event fires. Eliminates the six gates of the old
+            # frontend useDirector → director-handler → WS chain (host
+            # check, AI action choice, schema validation, confidence
+            # filter, grounding filter, WS race). Helper never raises —
+            # falls back to the static match-aware pool on ANY error.
+            questions, q_source = _generate_ai_halftime_quiz(
+                match_id, event_id, count=3,
             )
+            config['questions'] = questions
+            config['questionsSource'] = q_source  # 'ai-direct' or 'fallback'
 
         payload = {
             'type':                'minigame_start',
@@ -692,6 +693,11 @@ def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, g
             'durationMs':          duration_sec * 1000,
             'relatedEventId':      event_id,
             'ownershipContext':    ownership,
+            # 'ai-direct' when the inline Bedrock call succeeded, 'fallback'
+            # otherwise. Surfaces in DevTools console via useMiniGame's
+            # `[minigame_start] HALFTIME_QUIZ received` log line so the user
+            # can confirm which path won without CloudWatch access.
+            'source':              config.get('questionsSource', 'event-processor'),
         }
         ws.push_to_channel(f"room#{room_code}", payload)
         print(f"Mini-game {game_type} started for room {room_code} on {event_type} event")
@@ -1075,6 +1081,162 @@ def _build_quiz_candidates(roster: list, goals: list, home_team: str, away_team:
         })
 
     return candidates
+
+
+# ─────────────────────────────────────────
+# AI-generated halftime quiz (Bedrock, inline)
+# ─────────────────────────────────────────
+# Deterministic path replacing the old useDirector → director-handler chain.
+# Generates 3 quiz questions from a single Bedrock Converse call when the
+# halftime event fires in event-processor — no host check, no separate
+# Lambda, no WS race. On ANY failure (Bedrock error, JSON parse, schema
+# validation) silently falls through to `_match_aware_quiz_questions`
+# so the quiz UI is never broken.
+
+_QUIZ_SYSTEM_PROMPT = (
+    "You generate halftime trivia for a fantasy football match-watching app.\n"
+    "Return ONLY a JSON array of question objects - no prose, no code fences, no extra text.\n"
+    "Each object must have exactly these fields:\n"
+    '  {"q": "...", "choices": ["A","B","C","D"], "correctIdx": 0-3, "category": "match" | "bundesliga" | "trivia"}\n'
+    "Hard rules:\n"
+    "- Exactly 4 distinct non-empty choices per question (no duplicates).\n"
+    "- correctIdx is the 0-indexed position of the correct answer in the choices array.\n"
+    "- Mix categories across the three questions: one about THIS match (teams/score), one about the teams or league context, one general football/Bundesliga trivia.\n"
+    "- Questions concise (under 100 chars). Choices short (under 30 chars each).\n"
+    "- All questions answerable without insider knowledge.\n"
+    "- Output ONLY the JSON array. No explanation, no markdown, no surrounding text."
+)
+
+
+def _load_match_summary_for_quiz(match_id: str) -> dict:
+    """Pull team names + first-half goals for the AI prompt. Resilient to
+    DDB read failures: returns minimal fields so the prompt still produces
+    generic football trivia even when the match record is missing."""
+    try:
+        match = matches_table.get_item(Key={'matchId': match_id}).get('Item') or {}
+    except Exception as e:
+        print(f"[halftime-quiz] matches_table read failed: {e}")
+        match = {}
+    home_team = match.get('homeTeamName') or 'Home'
+    away_team = match.get('awayTeamName') or 'Away'
+
+    # First-half goal summary — same source the fallback path uses, so the
+    # AI and the fallback agree on what happened in this half.
+    goals_summary = 'No goals in the first half'
+    try:
+        roster = _load_match_roster(match_id)
+        roster_by_id = {p.get('playerId'): p for p in roster if p.get('playerId')}
+        goals = _load_first_half_goals(match_id, roster_by_id)
+        if goals:
+            lines = []
+            for g in goals:
+                mm = g['gameTimeSecs'] // 60
+                team_name = home_team if g['teamRole'] == 'home' else away_team
+                lines.append(f"{mm}' {g['scorerName']} ({team_name})")
+            goals_summary = '; '.join(lines)
+    except Exception as e:
+        print(f"[halftime-quiz] goals load for prompt failed: {e}")
+
+    # Halftime score derived from goals tally (matches the match-aware
+    # candidate builder's logic).
+    try:
+        roster = _load_match_roster(match_id)
+        roster_by_id = {p.get('playerId'): p for p in roster if p.get('playerId')}
+        goals = _load_first_half_goals(match_id, roster_by_id)
+        home_score = sum(1 for g in goals if g.get('teamRole') == 'home')
+        away_score = sum(1 for g in goals if g.get('teamRole') == 'away')
+    except Exception:
+        home_score = 0
+        away_score = 0
+
+    return {
+        'homeTeam':     home_team,
+        'awayTeam':     away_team,
+        'homeScore':    home_score,
+        'awayScore':    away_score,
+        'goalsSummary': goals_summary,
+    }
+
+
+def _build_halftime_quiz_prompt(match_id: str, count: int) -> str:
+    """Compose the user-message text fed to Bedrock. Anchors on the live
+    match so question 1 grounds in real context."""
+    m = _load_match_summary_for_quiz(match_id)
+    return (
+        f"Match: {m['homeTeam']} vs {m['awayTeam']}\n"
+        f"First-half score: {m['homeScore']}-{m['awayScore']}\n"
+        f"First-half goals: {m['goalsSummary']}\n"
+        f"\n"
+        f"Generate {count} halftime quiz questions following the system rules. "
+        f"Return ONLY the JSON array — no surrounding text."
+    )
+
+
+def _valid_quiz_question(q) -> bool:
+    """Schema gate for one AI-generated question. Mirrors the validation
+    in director-handler/service.py:188-199 but stricter on min question
+    length (>=6 chars after strip)."""
+    if not isinstance(q, dict):
+        return False
+    text = q.get('q')
+    if not isinstance(text, str) or len(text.strip()) < 6:
+        return False
+    choices = q.get('choices')
+    if not isinstance(choices, list) or len(choices) != 4:
+        return False
+    if not all(isinstance(c, str) and c.strip() for c in choices):
+        return False
+    if len({c.strip().lower() for c in choices}) != 4:  # no duplicates
+        return False
+    idx = q.get('correctIdx')
+    if not isinstance(idx, int):
+        return False
+    return 0 <= idx < 4
+
+
+def _generate_ai_halftime_quiz(match_id: str, event_id: str, count: int = 3) -> tuple:
+    """Returns (questions, source) where source is 'ai-direct' on success
+    or 'fallback' when Bedrock errors / output fails validation. Guaranteed
+    safe to call from the hot path — any exception is caught and logged."""
+    try:
+        bedrock_region = os.environ.get('BEDROCK_REGION', 'eu-central-1')
+        model_id = os.environ.get('BEDROCK_MODEL_ID', 'eu.amazon.nova-lite-v1:0')
+        bedrock = boto3.client('bedrock-runtime', region_name=bedrock_region)
+        prompt = _build_halftime_quiz_prompt(match_id, count)
+        t0 = datetime.now(timezone.utc)
+        response = bedrock.converse(
+            modelId=model_id,
+            system=[{'text': _QUIZ_SYSTEM_PROMPT}],
+            messages=[{'role': 'user', 'content': [{'text': prompt}]}],
+            inferenceConfig={'maxTokens': 800, 'temperature': 0.5},
+        )
+        elapsed_ms = (datetime.now(timezone.utc) - t0).total_seconds() * 1000
+        text = response['output']['message']['content'][0]['text'].strip()
+        # Strip code fences if Nova adds them despite the rule.
+        if text.startswith('```'):
+            text = text.strip('`')
+            if text.lower().startswith('json'):
+                text = text[4:]
+            text = text.strip()
+        parsed = json.loads(text)
+        questions = parsed if isinstance(parsed, list) else parsed.get('questions', [])
+        valid = [q for q in questions if _valid_quiz_question(q)]
+        print(
+            f"[halftime-quiz] bedrock latency={elapsed_ms:.0f}ms "
+            f"raw={len(questions) if isinstance(questions, list) else 'n/a'} "
+            f"valid={len(valid)} need={count}"
+        )
+        if len(valid) >= count:
+            sample_q = (valid[0].get('q') or '')[:60]
+            print(f"[halftime-quiz] AI-generated {len(valid)} valid questions; first: {sample_q!r}")
+            return valid[:count], 'ai-direct'
+        print(f"[halftime-quiz] not enough valid questions ({len(valid)}/{count}); falling back")
+    except Exception as e:
+        print(f"[halftime-quiz] AI generation failed ({type(e).__name__}: {e}); falling back")
+    return (
+        _match_aware_quiz_questions(match_id, count=count, seed=f"{match_id}#{event_id}"),
+        'fallback',
+    )
 
 
 def _match_aware_quiz_questions(match_id: str, count: int = 3, seed: str = None) -> list:
