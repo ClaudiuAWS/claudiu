@@ -173,6 +173,14 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       const scoreMap = Object.fromEntries(
         (msg.leaderboard || []).map(e => [e.userId, Number(e.score) || 0])
       )
+      // Per-match credits absolute total, stamped by event-processor on
+      // every member after each scoring event. Frontend reads from here
+      // (instead of summing scoreEvents locally) so all clients agree on
+      // the brezn-earned number — a late joiner pulls the absolute total
+      // from the first score_update they receive after joining.
+      const creditsMap = Object.fromEntries(
+        (msg.leaderboard || []).map(e => [e.userId, Number(e.creditsEarnedThisMatch) || 0])
+      )
       const deltaByUid = Object.fromEntries(
         (msg.changes || []).map(c => [c.userId, Number(c.delta) || 0])
       )
@@ -184,11 +192,20 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
           if (target === undefined) return m
           const delta     = deltaByUid[m.userId] || 0
           const allowDecrease = delta < 0 // legitimate negative event
+          // Credits are monotonically non-decreasing within a match
+          // (positive-deltas-only accumulator on the backend). Always
+          // take max(local, broadcast) to absorb out-of-order broadcasts
+          // without regressing on a stale message.
+          const localCredits  = Number(m.creditsEarnedThisMatch) || 0
+          const targetCredits = creditsMap[m.userId] || 0
+          const nextCredits   = Math.max(localCredits, targetCredits)
           if (target >= localBase || allowDecrease) {
-            return { ...m, score: target }
+            return { ...m, score: target, creditsEarnedThisMatch: nextCredits }
           }
-          // Regression detected — keep local
-          return m
+          // Regression detected on score — keep local score but still
+          // adopt the credits update (no reason to hold back a
+          // monotonically-increasing field).
+          return { ...m, creditsEarnedThisMatch: nextCredits }
         }),
       } : prev)
 

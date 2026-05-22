@@ -181,10 +181,18 @@ export default function MatchEndCelebration({ shown, match, room, scoreEvents = 
     navigate('/')
   }
 
-  // Per-member credit totals computed from the per-match scoreEvents log.
-  // Mirrors the backend's award rule (positive deltas only, multiplied
-  // by CREDITS_PER_POINT).
-  const creditsByUser = useMemo(() => {
+  // Per-member credit totals — preferred source is the server-authoritative
+  // `creditsEarnedThisMatch` field that event-processor now stamps on every
+  // member after each scoring event (and broadcasts via score_update's
+  // leaderboard). Falls back to a local sum of positive scoreEvents deltas
+  // for backward compat during rollout — when the next deploy is live and
+  // every client has the field, the fallback path is dead code.
+  //
+  // Previously the local sum was the ONLY source, so two clients in the
+  // same room could display DIFFERENT brezn-earned totals for the same
+  // user: a late joiner had a sparser scoreEvents list than a long-
+  // connected client, and each summed what they had.
+  const localCreditsByUser = useMemo(() => {
     const out = {}
     for (const ev of scoreEvents) {
       if (!ev || !ev.userId || typeof ev.delta !== 'number') continue
@@ -193,6 +201,11 @@ export default function MatchEndCelebration({ shown, match, room, scoreEvents = 
     }
     return out
   }, [scoreEvents])
+  const creditsForMember = (m) => {
+    const fromServer = Number(m?.creditsEarnedThisMatch)
+    if (Number.isFinite(fromServer) && fromServer > 0) return fromServer
+    return localCreditsByUser[m?.userId] || 0
+  }
 
   if (!active) return null
 
@@ -277,7 +290,7 @@ export default function MatchEndCelebration({ shown, match, room, scoreEvents = 
             ) : (
               members.map((m, i) => {
                 const isMe = m.userId === user?.userId
-                const credits = creditsByUser[m.userId] || 0
+                const credits = creditsForMember(m)
                 return (
                   <div
                     key={m.userId}

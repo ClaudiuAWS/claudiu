@@ -533,13 +533,34 @@ def _apply_member_changes(
             continue
         totals_by_user[c['userId']] = totals_by_user.get(c['userId'], 0) + c['delta']
 
+    # Per-match credits accumulator. Positive fantasy deltas only,
+    # multiplied by CREDITS_PER_POINT (mirrors backend/shared/credits.py and
+    # the frontend's CREDITS_PER_POINT constant). Stamped on each member
+    # so the leaderboard broadcast carries the SAME absolute number every
+    # client sees — previously the frontend MatchEndCelebration computed
+    # this client-side from each tab's local scoreEvents list, so late
+    # joiners and clients that missed any WS broadcast displayed
+    # different "brezn earned" totals to each other.
+    CREDITS_PER_POINT = 2
+    credits_delta_by_user = {}
+    for c in member_changes:
+        if c.get('delta', 0) <= 0:
+            continue
+        credits_delta_by_user[c['userId']] = (
+            credits_delta_by_user.get(c['userId'], 0) + c['delta'] * CREDITS_PER_POINT
+        )
+
     new_score_by_user = {}
     for m in members:
         total = totals_by_user.get(m['userId'])
-        if not total:
+        credits_delta = credits_delta_by_user.get(m['userId'], 0)
+        if not total and not credits_delta:
             continue
-        m['score'] = int(m.get('score', 0)) + total
-        new_score_by_user[m['userId']] = int(m['score'])
+        if total:
+            m['score'] = int(m.get('score', 0)) + total
+        if credits_delta:
+            m['creditsEarnedThisMatch'] = int(m.get('creditsEarnedThisMatch', 0)) + credits_delta
+        new_score_by_user[m['userId']] = int(m.get('score', 0))
 
     # Broadcast every per-component entry — the frontend score_update
     # handler dedups against optimistic appends via
@@ -572,7 +593,15 @@ def _apply_member_changes(
     )
 
     leaderboard = sorted(
-        [{'userId': m['userId'], 'displayName': m['displayName'], 'score': int(m.get('score', 0))} for m in members],
+        [{
+            'userId':                 m['userId'],
+            'displayName':            m['displayName'],
+            'score':                  int(m.get('score', 0)),
+            # Absolute per-match credit total. Frontend reads this directly
+            # so all clients agree on the "brezn earned" number — regardless
+            # of when each tab joined the room.
+            'creditsEarnedThisMatch': int(m.get('creditsEarnedThisMatch', 0)),
+        } for m in members],
         key=lambda x: x['score'],
         reverse=True,
     )
