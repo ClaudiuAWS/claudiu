@@ -324,8 +324,7 @@ the room WebSocket.
 ## Badges
 
 31 badges across 7 families (scoring, defensive, win-condition, mini-game, progression, social, counter), 
-tiered bronze/silver/gold. The single source of truth is backend/shared/badges.py — bundled into the event-
-processor zip so writers and the read API share one catalog.
+tiered bronze/silver/gold.
 
 Earning is driven by atomic DDB counters (UpdateItem ADD) for goals/saves/penalties, plus rule evaluators at 
 fulltime (first_win, dominant_win, clean_sheet, …) and at mini-game resolve (reflex_master, quiz_master). The
