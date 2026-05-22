@@ -168,7 +168,7 @@ you can see when the script overrode the coin.
 
 Live reaction-based games triggered by qualifying match events.
 
-### OFFSIDE_REFLEX (currently shipping)
+### OFFSIDE_REFLEX
 
 - Triggered by the first `offside` event in a match.
 - A modal pops with a horizontal pitch lane: defender line at x=60%, an
@@ -178,57 +178,147 @@ Live reaction-based games triggered by qualifying match events.
   (when the attacker hits the line).
 - Score brackets: ≤150 ms = +6 points, ≤300 ms = +4, ≤600 ms = +2,
   else 0. **Closest tap** gets a +1 bonus.
+- Solo bot: random tap timing within ±150–600 ms of the offside moment,
+  50% accurate; reaction delay 400–1800 ms after game start.
 
-### Frontend-driven trigger
+### PENALTY_SHOOTOUT
 
-The modal opens **the instant the offside event reveals in the feed**, not
-when the backend processes it. Per-match idempotent via `sessionStorage`
-(`minigame_fired_${matchId}_${startedAt}`) — the same mini-game can't
-re-trigger after a refresh.
+Triggered whenever a `goal` event lands with `isPenalty: true` — so the
+mini-game fires on the actual penalty kick in the match feed, not on a
+generic "penalty awarded" event.
 
-### Solo mode bot
+**Roles aren't randomly assigned — they track who owns the player taking
+the kick.** Whichever user has the penalty taker in their drafted XI is
+the **shooter**; the other user is the **keeper**. If neither user owns
+him (or both somehow do), it falls back to a deterministic split by user
+id so it's still consistent across both clients.
 
-When only one human is in the room, a bot opponent fills the other slot.
-Random tap timing within ±150-600 ms of the offside moment, 50% accurate.
-Reaction delay 400-1800 ms after game start.
+**The grid:** a 3×3 goalmouth — the same shot-zone segmentation Opta and
+StatsBomb use (and that FIFA / PES have basically trained every football
+fan to read by now).
 
-### Multi-user resolve
 
-Each user posts only their own delta to `POST /rooms/{code}/minigame-score`.
-Backend idempotency is per-`(gameId, userId)` — both users always get their
-result broadcast, deltas accumulate across messages so each modal shows both
-players' outcomes.
+TL  TM  TR     +8  +7  +8
+ML  MM  MR     +5  +3  +5
+BL  BM  BR     +6  +4  +6
+
+Both players have a 10-second window. They commit **at the same time, in
+secret**:
+
+- **Shooter** taps one of the 9 zones to aim.
+- **Keeper** taps one of the same 9 zones to dive.
+
+Once both have locked in (or the timer runs out), the animation plays —
+ball flies to the shooter's pick, keeper silhouette dives to theirs. Same
+zone = **save**. Different zone = **goal**.
+
+**Scoring:**
+
+| Outcome | Points |
+|---|---|
+| Goal in a top corner (TL/TR) | shooter +8 |
+| Goal top-middle (Panenka, TM) | shooter +7 |
+| Goal in a bottom corner (BL/BR) | shooter +6 |
+| Goal mid-row sides (ML/MR) | shooter +5 |
+| Goal bottom-middle (BM) | shooter +4 |
+| Goal dead-centre (MM) | shooter +3 |
+| Save (keeper matches the zone) | keeper +5 |
+| Both time out | 0 to both |
+
+The reward gradient is the whole point: corners pay the most because
+they're the hardest to hit and the keeper has to guess right to deny
+them. Dead-centre is +3 because that's where the keeper stays if they
+don't commit — easy to score, easy to save, low drama.
+
+Solo bot: zone pick weighted to mimic real-world keeper dive
+distributions (bottom corners most common, top-middle rare); reaction
+delay 600–3100 ms.
+
+### Shared mini-game mechanics
+
+These behaviors apply to every mini-game (OFFSIDE_REFLEX, PENALTY_SHOOTOUT,
+HALFTIME_QUIZ) — they're factored out so each per-game section can stick
+to what's unique.
+
+**Frontend-driven trigger.** The modal opens **the instant the qualifying
+event reveals in the match feed**, not when the backend happens to
+process it. So even with EventBridge dispatch jitter, the modal lines up
+with what the user sees on screen.
+
+Per-match idempotent via `sessionStorage`
+(`minigame_fired_v2_${matchId}_${startedAt}`) — the same mini-game can't
+re-trigger after a refresh, and different mini-games in the same match
+each get their own slot.
+
+**Solo mode bot.** When only one human is in the room, a bot fills the
+other slot so the game still has an opponent. The bot's behavior is
+per-game (offside reaction window, penalty zone-pick weights, quiz
+accuracy rate — see each section), but the wiring is the same: the bot's
+submission feeds the same resolve path as a real opponent's, so deltas,
+the result banner, and "closest tap" / "save" bonuses all work
+identically in solo and multi-user.
+
+**Multi-user resolve.** Each client posts only its **own** delta to
+`POST /rooms/{code}/minigame-score`. Backend idempotency is per-`(gameId,
+userId)`, so a re-submit from the same user is a no-op but the other
+user's delta still lands. Both results broadcast over the room WebSocket
+and accumulate — each player's modal shows both outcomes regardless of
+which one came in first.
 
 ## AI Match Director (Bedrock)
 
-A `claudiu-director-handler` Lambda calls **Amazon Nova Micro** via the
-Bedrock Converse API. Host clients post a state snapshot (recent events,
-score, member rosters, minigames already fired) on each event reveal; Claude
+A `claudiu-director-handler` Lambda calls **Amazon Nova Lite** via the
+Bedrock Converse API (region `eu-central-1`, default model
+`eu.amazon.nova-lite-v1:0` — overridable via the `BEDROCK_MODEL_ID` env
+var). The Converse API is model-agnostic, so swapping to a different
+model is an env-var change, not a code change.
+
+Host clients post a state snapshot (recent events, score, member
+rosters, mini-games already fired) on each event reveal. Nova Lite
 returns one of three actions in JSON:
 
 - `start_minigame` — fire a mini-game with a personalized prompt
 - `commentate` — emit a one-line reaction
 - `wait` — do nothing this tick
 
-The Director runs alongside the rule-based trigger map. If Bedrock errors,
-JSON parse fails, or the route is down, the rule-based fallback still fires
-the modal — the AI is additive, not load-bearing.
+The Director runs alongside the rule-based trigger map, with a
+trigger-validation gate in front of it: if the AI picks
+`start_minigame` but the trigger event's type isn't in the
+allowed-mapping for that game (e.g. it tries to fire `OFFSIDE_REFLEX`
+on a nutmeg, or `PENALTY_SHOOTOUT` on a non-penalty goal), the action
+is downgraded to `commentate` or `wait`. So Nova hallucinations can't
+trigger spurious mini-games.
+
+If Bedrock errors, JSON parse fails, or the route is down, the
+rule-based trigger map still fires the modal — the AI is additive, not
+load-bearing.
 
 ## Scoring
 
+Passive scoring (driven by match events as they reveal):
+
 | Source | Delta |
 |---|---|
-| Goal (passive) | +5 |
+| Goal | +5 |
 | Assist | +3 |
 | Save | +3 |
 | Yellow card | -1 |
-| Mini-game tap (≤150ms) | +6 |
-| Mini-game tap (≤300ms) | +4 |
-| Mini-game tap (≤600ms) | +2 |
+
+Mini-game scoring (OFFSIDE_REFLEX brackets shown — see each mini-game
+section for its own table):
+
+| Source | Delta |
+|---|---|
+| Tap ≤150 ms from offside moment | +6 |
+| Tap ≤300 ms | +4 |
+| Tap ≤600 ms | +2 |
+| Owner recovery (≤1000 ms, your player got caught) | +1 |
 | Closest tap bonus | +1 |
 
-All deltas are clamped to ±200 server-side to prevent client tampering.
-Leaderboard pushes via `score_update` over the room WebSocket.
+Mini-game deltas posted to `POST /rooms/{code}/minigame-score` are
+clamped to ±200 server-side (per-delta) so a tampered client can't
+drop a million-point swing. Leaderboard pushes via `score_update` over
+the room WebSocket.
 
 ---
 
