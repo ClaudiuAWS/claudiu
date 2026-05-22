@@ -197,10 +197,11 @@ id so it's still consistent across both clients.
 StatsBomb use (and that FIFA / PES have basically trained every football
 fan to read by now).
 
-
+```
 TL  TM  TR     +8  +7  +8
 ML  MM  MR     +5  +3  +5
 BL  BM  BR     +6  +4  +6
+```
 
 Both players have a 10-second window. They commit **at the same time, in
 secret**:
