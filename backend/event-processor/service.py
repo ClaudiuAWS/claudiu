@@ -6,6 +6,13 @@ from boto3.dynamodb.conditions import Key
 
 import ws
 
+# Version banner — printed once per cold start to CloudWatch so anyone
+# with log access can immediately tell which deploy a given Lambda
+# container is running. Bump this line in any commit that needs to be
+# verifiably live in the deployed Lambda; if CloudWatch's most recent
+# cold-start line doesn't carry the new tag, the deploy didn't take.
+print("[event-processor] module loaded build=halftime-quiz-diag-v2-preflight")
+
 # Badges integration — bundled into this Lambda's zip from
 # `backend/shared/badges.py` by the deploy workflow. The import is
 # wrapped in try/except so a missing module (e.g. an old deploy where
@@ -709,6 +716,20 @@ def _trigger_minigame_for_event(match_id: str, event_id: str, event_type: str, g
             # `halftime_quiz_diag` WS breadcrumb with the failure reason
             # (frontend logs it as `[halftime-quiz-diag]` in DevTools so we
             # can debug without CloudWatch access).
+            #
+            # Preflight breadcrumb — fires BEFORE the Bedrock call so the
+            # user can verify from DevTools that this branch is actually
+            # being entered. If the user sees `outcome: 'attempt'` in
+            # console, the Lambda is running the latest code and the
+            # subsequent diag will reveal the real failure mode. If
+            # `attempt` never appears, the Lambda is stale (or the WS
+            # broadcast isn't reaching this client) — different fix.
+            _push_halftime_quiz_diag(
+                room_code, 'attempt',
+                eventId=event_id,
+                modelId=os.environ.get('BEDROCK_MODEL_ID', 'eu.amazon.nova-lite-v1:0'),
+                region=os.environ.get('BEDROCK_REGION', 'eu-central-1'),
+            )
             questions, q_source = _generate_ai_halftime_quiz(
                 match_id, event_id, count=3, room_code=room_code,
             )

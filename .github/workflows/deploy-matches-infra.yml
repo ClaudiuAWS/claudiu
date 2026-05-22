@@ -85,12 +85,17 @@ jobs:
                         # Separate policy because put-role-policy OVERWRITES the named
                         # policy each call. Keeping Bedrock in its own inline policy
                         # lets the DynamoDB writes above stay untouched if we ever
-                        # tweak only one or the other. Mirrors the BedrockInvoke
-                        # statement on the director Lambda
-                        # (infra/compute/lambdas-director.yml:27-43) which is the
-                        # proven-working baseline — same actions, same resource ARN
-                        # pattern. Needed by backend/event-processor/service.py
-                        # `_generate_ai_halftime_quiz` to call bedrock.converse(...).
+                        # tweak only one or the other.
+                        #
+                        # Resource is `"*"` here (not narrowed to the
+                        # inference-profile + foundation-model ARN pattern the director
+                        # uses) because the previous narrower version applied
+                        # successfully but the Lambda still got AccessDenied — the
+                        # exact ARN that `bedrock.converse(...)` checks against may
+                        # not match our pattern for cross-region inference profiles.
+                        # The action set is still scoped to the four Bedrock invoke
+                        # APIs, so this only allows the model invocations we already
+                        # wanted; it removes ARN-pattern mismatch as a variable.
                         - name: Apply event-processor bedrock invoke policy
                           run: |
                                   set -e
@@ -109,13 +114,7 @@ jobs:
                                             "bedrock:Converse",
                                             "bedrock:ConverseStream"
                                           ],
-                                          "Resource": [
-                                            "arn:aws:bedrock:eu-central-1:507609143109:inference-profile/eu.amazon.*",
-                                            "arn:aws:bedrock:eu-central-1::foundation-model/amazon.*",
-                                            "arn:aws:bedrock:eu-west-1::foundation-model/amazon.*",
-                                            "arn:aws:bedrock:eu-west-3::foundation-model/amazon.*",
-                                            "arn:aws:bedrock:eu-north-1::foundation-model/amazon.*"
-                                          ]
+                                          "Resource": "*"
                                         }
                                       ]
                                     }'
@@ -173,4 +172,24 @@ jobs:
                                   aws lambda get-function-configuration \
                                     --function-name claudiu-event-processor \
                                     --query 'Environment.Variables' \
+                                    --output json
+
+                        # Post-apply diagnostic dump. Prints the FULL policy
+                        # document + Lambda LastModified + CodeSha256 so this
+                        # workflow's log is unambiguous proof of which deploy is
+                        # actually live. If a future "no diag in console" report
+                        # comes in, grep this workflow run's output to verify
+                        # the Lambda actually picked up the new code.
+                        - name: Dump bedrock policy + Lambda code identity (diagnostic)
+                          run: |
+                                  echo "=== Deployed claudiu-event-processor-bedrock policy document ==="
+                                  aws iam get-role-policy \
+                                    --role-name claudiu-event-processor-role \
+                                    --policy-name claudiu-event-processor-bedrock \
+                                    --query 'PolicyDocument' --output json
+                                  echo ""
+                                  echo "=== Lambda code identity + env vars (LastModified is the smoking gun for stale deploys) ==="
+                                  aws lambda get-function-configuration \
+                                    --function-name claudiu-event-processor \
+                                    --query '{LastModified: LastModified, Runtime: Runtime, CodeSha256: CodeSha256, Env: Environment.Variables}' \
                                     --output json

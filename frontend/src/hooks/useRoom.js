@@ -291,6 +291,9 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       // Inline halftime-quiz path observability — broadcast by
       // backend/event-processor/service.py::_push_halftime_quiz_diag at
       // every gate of the Bedrock call. outcome:
+      //   'attempt'            — branch entered (preflight, fires before
+      //                          the Bedrock call so we know the Lambda
+      //                          is running the latest code)
       //   'success'            — AI questions selected
       //   'bedrock_error'      — boto3.converse raised (IAM, throttle, …);
       //                          carries errorType + errorMessage
@@ -299,8 +302,18 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       //   'partial_validation' — some valid but fewer than `need`
       // Pure observability — no state change. Read in DevTools as
       // `[halftime-quiz-diag] { outcome: '...', ... }`.
+      //
+      // Failure outcomes log via console.error so the default DevTools
+      // level filter ("Errors only") still surfaces them — the previous
+      // console.info path could be hidden by a user-set filter. 'attempt'
+      // and 'success' stay informational.
+      const isFailure = msg.outcome
+        && msg.outcome !== 'success'
+        && msg.outcome !== 'attempt'
       // eslint-disable-next-line no-console
-      console.info('[halftime-quiz-diag]', msg)
+      const logFn = isFailure ? console.error : console.info
+      // eslint-disable-next-line no-console
+      logFn('[halftime-quiz-diag]', msg)
     } else if (msg.type === 'commentary_update') {
       // AI Match Director commentary — push onto a stack. Newest first (top),
       // older entries flow down. Each entry self-purges after 7s. Cap at 5
