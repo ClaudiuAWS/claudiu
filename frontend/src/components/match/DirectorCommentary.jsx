@@ -1,9 +1,11 @@
 import { useState } from 'react'
 
 /**
- * AI Match Director commentary stack — fixed-position pop-up overlay.
- * Newest at top (anchored), older entries flow down. Each entry self-
- * purges after 7s via useRoom's setTimeout.
+ * AI Match Director commentary stack — in-flow card stack rendered
+ * immediately above the Scoreboard on the match page. Newest at top
+ * (stack[0] from useRoom), older entries below. Each entry self-
+ * purges after 7s via useRoom's setTimeout, at which point the
+ * scoreboard slides back up into its natural position.
  *
  * Each card has a "Why?" expand that reveals the AI's `reasoning` field —
  * a one-sentence explanation of why it chose to commentate on this event.
@@ -24,13 +26,13 @@ export default function DirectorCommentary({ stack }) {
     // line as it arrives (e.g. "Olise doubles Bayern's lead — clinical!").
     // 'polite' politeness level waits for the user's current speech to
     // finish before reading — no rude interruptions mid-action.
-    // Anchor at the BOTTOM (above BottomNav h-24 ≈ 96px) so the
-    // commentary cards rise UP from the bottom-of-screen toast area
-    // instead of dropping onto the scoreboard. flex-col-reverse keeps
-    // the newest card on top (the visible-edge of the stack) as new
-    // entries get prepended into stack[0] from useRoom.
+    // In-flow above the Scoreboard — when commentary is present the
+    // scoreboard naturally shifts down by the card's height; when the
+    // stack empties (auto-purge), it slides back. `max-w-md mx-auto`
+    // matches the match-page constrained width. stack[0] is newest,
+    // so default flex-col is correct (newest renders first / on top).
     <div
-      className="fixed inset-x-0 bottom-28 z-[45] flex flex-col-reverse items-center gap-2 px-3 pointer-events-none"
+      className="w-full mx-auto max-w-md px-3 py-2 flex flex-col items-center gap-2"
       aria-live="polite"
       aria-atomic="false"
       role="status"
@@ -41,8 +43,8 @@ export default function DirectorCommentary({ stack }) {
 
       <style>{`
         @keyframes directorCommentaryIn {
-          0%   { opacity: 0; transform: translateY(14px) scale(0.94); }
-          100% { opacity: 1; transform: translateY(0)    scale(1);    }
+          0%   { opacity: 0; transform: translateY(-14px) scale(0.94); }
+          100% { opacity: 1; transform: translateY(0)     scale(1);    }
         }
         @keyframes directorRingPulse {
           0%   { box-shadow: 0 0 0 0   rgba(168, 85, 247, 0.55); }
