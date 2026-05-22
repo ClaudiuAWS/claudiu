@@ -270,6 +270,20 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       // change. See backend/director-handler/service.py::_push_director_diag.
       // eslint-disable-next-line no-console
       console.info('[director_diag]', msg)
+    } else if (msg.type === 'halftime_quiz_diag') {
+      // Inline halftime-quiz path observability — broadcast by
+      // backend/event-processor/service.py::_push_halftime_quiz_diag at
+      // every gate of the Bedrock call. outcome:
+      //   'success'            — AI questions selected
+      //   'bedrock_error'      — boto3.converse raised (IAM, throttle, …);
+      //                          carries errorType + errorMessage
+      //   'parse_error'        — Nova returned non-JSON; carries rawSnippet
+      //   'validation_failed'  — got questions but ZERO passed schema
+      //   'partial_validation' — some valid but fewer than `need`
+      // Pure observability — no state change. Read in DevTools as
+      // `[halftime-quiz-diag] { outcome: '...', ... }`.
+      // eslint-disable-next-line no-console
+      console.info('[halftime-quiz-diag]', msg)
     } else if (msg.type === 'commentary_update') {
       // AI Match Director commentary — push onto a stack. Newest first (top),
       // older entries flow down. Each entry self-purges after 7s. Cap at 5
