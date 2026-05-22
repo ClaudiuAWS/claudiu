@@ -29,7 +29,7 @@ from prompts import (
 
 
 bedrock = boto3.client('bedrock-runtime', region_name=os.environ.get('BEDROCK_REGION', 'eu-central-1'))
-MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'eu.amazon.nova-micro-v1:0')
+MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'eu.amazon.nova-lite-v1:0')
 
 # Allowed event-type → gameType mappings. AI's start_minigame action is
 # rejected (downgraded to commentate or wait) when the trigger event's type

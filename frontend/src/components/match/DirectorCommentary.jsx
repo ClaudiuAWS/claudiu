@@ -24,8 +24,13 @@ export default function DirectorCommentary({ stack }) {
     // line as it arrives (e.g. "Olise doubles Bayern's lead — clinical!").
     // 'polite' politeness level waits for the user's current speech to
     // finish before reading — no rude interruptions mid-action.
+    // Anchor at the BOTTOM (above BottomNav h-24 ≈ 96px) so the
+    // commentary cards rise UP from the bottom-of-screen toast area
+    // instead of dropping onto the scoreboard. flex-col-reverse keeps
+    // the newest card on top (the visible-edge of the stack) as new
+    // entries get prepended into stack[0] from useRoom.
     <div
-      className="fixed inset-x-0 top-20 z-[45] flex flex-col items-center gap-2 px-3 pointer-events-none"
+      className="fixed inset-x-0 bottom-28 z-[45] flex flex-col-reverse items-center gap-2 px-3 pointer-events-none"
       aria-live="polite"
       aria-atomic="false"
       role="status"
@@ -36,8 +41,8 @@ export default function DirectorCommentary({ stack }) {
 
       <style>{`
         @keyframes directorCommentaryIn {
-          0%   { opacity: 0; transform: translateY(-14px) scale(0.94); }
-          100% { opacity: 1; transform: translateY(0)     scale(1);    }
+          0%   { opacity: 0; transform: translateY(14px) scale(0.94); }
+          100% { opacity: 1; transform: translateY(0)    scale(1);    }
         }
         @keyframes directorRingPulse {
           0%   { box-shadow: 0 0 0 0   rgba(168, 85, 247, 0.55); }
