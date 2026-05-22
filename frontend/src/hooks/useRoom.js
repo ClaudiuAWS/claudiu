@@ -469,25 +469,30 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       })
     }
 
-    // Per-event toast for the current user. Mirrors the score_update toast
-    // logic so optimistic bumps surface immediately rather than waiting on
-    // the backend round-trip. SUM across all per-component entries (one
-    // goal can produce scorer + assist + concede rows for the same user)
-    // and label the toast with the dominant component (scorer > assist
-    // > concede) so the user reads it as one logical event.
+    // Per-component toasts — one per (scorer | assist | concede) entry
+    // for the current user. The leaderboard timeline already shows the
+    // breakdown as separate rows; the in-feed toast should match so a
+    // goal + assist combo (e.g. Pavlović +5 + Kane assist +6 with
+    // captain ×2) doesn't masquerade as one inflated "+11" line.
+    // Ordered deterministically (scorer → assist → concede) and
+    // staggered ~150 ms so each card slides in cleanly instead of
+    // overlapping on the same frame.
     const myEntries = deltas.filter(d => d.userId === currentUserId && d.delta !== 0)
     if (myEntries.length) {
-      const sumDelta = myEntries.reduce((s, d) => s + (Number(d.delta) || 0), 0)
-      const ranked   = ['scorer', 'assist', 'concede']
-      const pick = myEntries.slice().sort((a, b) => {
+      const ranked = ['scorer', 'assist', 'concede']
+      const ordered = myEntries.slice().sort((a, b) => {
         const ai = ranked.indexOf(a.component || '')
         const bi = ranked.indexOf(b.component || '')
         return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
-      })[0]
-      emitScoreToast({
-        delta:      sumDelta,
-        reason:     pick?.reason     || 'your squad',
-        playerName: pick?.playerName || '',
+      })
+      ordered.forEach((d, i) => {
+        setTimeout(() => {
+          emitScoreToast({
+            delta:      Number(d.delta) || 0,
+            reason:     d.reason || 'your squad',
+            playerName: d.playerName || '',
+          })
+        }, i * 150)
       })
     }
   }, [currentUserId])
