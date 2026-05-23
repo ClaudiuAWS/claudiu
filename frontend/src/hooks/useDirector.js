@@ -182,7 +182,11 @@ export function useDirector(room, events, currentUserId, match) {
       ownershipContext: _computeSnapshotOwnership(latest, room.members || []),
     }
 
-    roomsApi.directorTick(room.roomCode, snapshot)
+    // Wrap as { snapshot } so the backend's run_director_tick can read it
+    // off body.snapshot (the default tick mode). The captain-suggestion
+    // call from TeamSelectionModal uses a different top-level body shape
+    // — see the directorTick wrapper comment in services/api.js.
+    roomsApi.directorTick(room.roomCode, { snapshot })
       .then(res => logger.success('useDirector', 'tick', { decision: res?.decision, count: tickCountRef.current }))
       .catch(err => logger.warn('useDirector', 'tick failed', err))
 
