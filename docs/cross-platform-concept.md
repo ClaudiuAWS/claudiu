@@ -1,5 +1,7 @@
 # Brezn beyond the browser — TV-anchored AR concept
 
+![Brezn AR concept — Apple Vision Pro view: BREZN wordmark above the TV, BREZN COMMENTATOR AI card with the pretzel mascot reading "Kane bags Bayern's fourth — clinical from the skipper. Captain bonus stacks.", live leaderboard with Robert +42 / 86 brezn and Mihai +30 / 68 brezn, GOAL · KANE +8 (CAPTAIN) red panel, Mihai's "GOOOAL!!" chat bubble, three floating reaction emoji bubbles (trumpet, beer, goat), GOLDEN BOOT badge unlock toast, and Mihai's SharePlay Persona avatar on the couch labelled "Mihai · joined via Brezn" — all floating in 3D space anchored to a 65-inch TV showing a Bayern 4:0 HSV broadcast in a cozy evening living room.](./img/cross-platform-hero.jpg)
+
 > **One-line pitch:** while you watch the match on your TV, point your phone
 > (or wear your Vision Pro) at the screen — your Brezn party's live
 > leaderboard, captain pick, friends' reactions, and AI commentary float in
