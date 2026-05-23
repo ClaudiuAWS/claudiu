@@ -1202,12 +1202,14 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
                   <p className="text-[9px] font-black tracking-widest uppercase text-amber-300/80 mb-0.5">
                     Brezn Commentator suggests
                   </p>
-                  <p className="text-white text-xs font-semibold leading-snug truncate">
+                  {/* Player name only — the position pill and AI reasoning
+                      blurb were eating banner width and getting truncated
+                      with an ellipsis, which made the suggestion read worse
+                      than no detail at all. The recommended player's chip
+                      on the pitch already shows the position label, so
+                      this line stays minimal. */}
+                  <p className="text-white text-sm font-semibold leading-snug truncate">
                     <span className="text-amber-200">{recPlayer.displayName}</span>
-                    {recPlayer.position ? <span className="text-gray-500"> ({recPlayer.position})</span> : null}
-                    {captainSuggestion.reasoning
-                      ? <span className="text-gray-400"> — {captainSuggestion.reasoning}</span>
-                      : null}
                   </p>
                 </div>
                 <button
