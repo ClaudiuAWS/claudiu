@@ -715,9 +715,18 @@ export default function TeamSelectionModal({ matchId, roomCode, onDone, room, cu
     roomsApi.directorTick(roomCode, payload)
       .then(res => {
         const dec = res?.decision
+        // Surface the decision to DevTools so a missing banner can be
+        // debugged without CloudWatch access. Previously this branch
+        // was silent on success too, so a "wait" action from the wrong
+        // backend code path looked identical to "Bedrock failed".
+        // eslint-disable-next-line no-console
+        console.info('[captain-suggestion] response', dec)
         if (dec?.recommendedPlayerId) setCaptainSuggestion(dec)
       })
-      .catch(() => { /* silent — user picks manually */ })
+      .catch(err => {
+        // eslint-disable-next-line no-console
+        console.warn('[captain-suggestion] request failed', err?.message || err)
+      })
   }, [phase, captainSuggestion, starters.length, roomCode])
 
   // ── Swap mechanic ──────────────────────────────────────────────────────────

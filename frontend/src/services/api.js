@@ -47,7 +47,15 @@ export const roomsApi = {
   draftPick:   (roomCode, pairIndex, playerId) => request(`/rooms/${roomCode}/draft-pick`, 'POST', { pairIndex, playerId }),
   draftReroll: (roomCode)                   => request(`/rooms/${roomCode}/draft-reroll`, 'POST'),
   freeHitSwap: (roomCode, outPlayerId, inPlayerId) => request(`/rooms/${roomCode}/free-hit-swap`, 'POST', { outPlayerId, inPlayerId }),
-  directorTick: (roomCode, snapshot)        => request(`/rooms/${roomCode}/director-tick`, 'POST', { snapshot }),
+  // Body is passed through as-is. Callers must wrap their payload
+  // appropriately — `useDirector` sends `{ snapshot: <event-snapshot> }`
+  // for the default tick mode; `TeamSelectionModal` sends
+  // `{ mode: 'captain-suggestion', starters: [...] }`. The backend handler
+  // mode-multiplexes off `body.mode` at the TOP LEVEL, so hardcoding
+  // `{ snapshot }` here previously buried the captain-suggestion mode
+  // and silently fell through to the tick code path → no
+  // recommendedPlayerId in the response → no banner in SQUAD READY.
+  directorTick: (roomCode, body)            => request(`/rooms/${roomCode}/director-tick`, 'POST', body),
   react:        (roomCode, eventId, reactionType) => request(`/rooms/${roomCode}/react`, 'POST', { eventId, reactionType }),
   cheer:        (roomCode, emoji)                 => request(`/rooms/${roomCode}/cheer`, 'POST', { emoji }),
   setCaptain:   (roomCode, playerId)              => request(`/rooms/${roomCode}/captain`, 'POST', { playerId }),
