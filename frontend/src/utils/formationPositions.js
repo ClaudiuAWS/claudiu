@@ -154,7 +154,21 @@ const FORMATION_TEMPLATES = {
       { positions: ['DMR', 'DLM', 'DMZ'],                              x: 48, y: 45 },
       { positions: ['RV', 'DMR', 'ORM'],                               x: 48, y: 64 },
     ],
-    CAM: [],
+    // CAM slots at the SAME x=48 as the CDM band so a (cdm=2, cam=2)
+    // 3-4-3 squad renders all four midfielders in one horizontal line,
+    // matching the textbook 3-4-3 shape (3 fwd / 4 mid / 3 def / 1 gk).
+    // Without these, the 2 CAM-bucket mids (wingers / wide attacking
+    // mids) fell back to FALLBACK_X.CAM=62 and stacked into a second
+    // sub-row above the central CDMs at x=48 — the visual split the
+    // user reported on the Squad Ready preview.
+    //
+    // The (cdm=4, cam=0) variant still uses only the 4 CDM slots
+    // above; these CAM slots stay unused for that case. Other
+    // formations have their own templates and aren't affected.
+    CAM: [
+      { positions: ['OLM', 'LA', 'DML'],                               x: 48, y: 18 },
+      { positions: ['ORM', 'RA', 'DMR'],                               x: 48, y: 56 },
+    ],
     FWD: [
       { positions: ['STL', 'LA', 'OLM'],                               x: 85, y: 15 },
       { positions: ['STZ', 'ZO'],                                       x: 85, y: 37 },

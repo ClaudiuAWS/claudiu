@@ -30,6 +30,55 @@ function _writeScoreEvents(roomCode, events) {
   } catch {}
 }
 
+// Shared dedup match logic for scoreEvents. Used by BOTH the WS
+// `score_update` handler (which dedups the incoming broadcast against
+// any existing entry — optimistic or otherwise) AND
+// `applyAuthoritativeScoreChange` (which dedups the HTTP-driven
+// optimistic append against an earlier WS broadcast). Keeping both in
+// lockstep via this helper prevents drift — a previous regression had
+// them diverge and produced first 2× rows then 0× rows on reactions.
+//
+// Match order:
+//   1. Ironclad — same _sourceEventId + userId + reason. Backend now
+//      always ships sourceEventId on reactions and score-component
+//      changes (claim_reaction / _apply_member_changes /
+//      apply_minigame_score), so this is the primary check.
+//   2. Differing-id bail — if BOTH entries carry a _sourceEventId AND
+//      the ids differ, they're different events. Skip fingerprint.
+//      WITHOUT this guard, rapid-fire reactions (same user, same
+//      reason "reacted to nutmeg", same delta=+2, same playerName=
+//      the reactor's display name) within 2.5s false-match each other
+//      and the newer reaction is incorrectly dropped from the
+//      timeline. Backend's claim_reaction stamps playerName as the
+//      REACTOR'S name (not the player who got nutmegged), so every
+//      reaction by the same user has identical fingerprint fields —
+//      only _sourceEventId distinguishes them.
+//   3. Fingerprint fallback — only fires when one or both entries
+//      lack a _sourceEventId (legacy / pre-deploy clients).
+//      (userId, reason, delta, playerName) within 2.5s for reactions
+//      / 90s for in-feed scoring events.
+function _matchesExistingScoreEvent(e, candidate) {
+  // 1. Ironclad
+  if (candidate._sourceEventId
+      && e._sourceEventId === candidate._sourceEventId
+      && e.userId === candidate.userId
+      && e.reason === candidate.reason) return true
+
+  // 2. Differing-id bail — both have ids, they differ → distinct events.
+  if (candidate._sourceEventId
+      && e._sourceEventId
+      && e._sourceEventId !== candidate._sourceEventId) return false
+
+  // 3. Fingerprint fallback (one or both ids missing)
+  if (e.userId !== candidate.userId)                          return false
+  if (e.reason !== candidate.reason)                          return false
+  if (e.delta  !== candidate.delta)                           return false
+  if ((e.playerName || '') !== (candidate.playerName || '')) return false
+  const dt          = Math.abs((Number(e.ts) || 0) - candidate.ts)
+  const reactionish = (candidate.reason || '').toLowerCase().includes('react')
+  return dt < (reactionish ? 2500 : 90000)
+}
+
 // Listeners for mini-game lifecycle messages. Hooks like useMiniGame can
 // subscribe via useRoom's `onMinigameMessage` callback so the WS connection
 // stays single (one channel subscription per room).
@@ -234,38 +283,15 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       }))
       if (incoming.length) {
         setScoreEvents(prev => {
-          // Dedup against existing entries (optimistic appends or earlier
-          // WS appends). Match order:
-          //   1. Exact _sourceEventId + userId — ironclad. The backend
-          //      now ships `sourceEventId` on every score_change via
-          //      event-processor / claim_reaction / apply_minigame_score.
-          //   2. Reaction fingerprint: (userId, reason, delta, playerName)
-          //      within ±2.5s — covers the handleReactTap HTTP-then-WS
-          //      pair for older clients / pre-deploy.
-          //   3. In-feed fingerprint: same tuple within 90s — wider safety
-          //      net for Lambda cold start (typically <30s end-to-end,
-          //      but EventBridge + SQS scheduling + replay-emitter add up).
-          // playerName is in the fingerprint so two distinct same-type
-          // events for different players (e.g., two different scorers
-          // both worth +5) don't false-dedup.
-          const filtered = incoming.filter(inc => !prev.some(e => {
-            // Source-event fingerprint must also match the REASON now —
-            // goal events emit per-component entries (scorer / assist /
-            // conceded), all sharing the same _sourceEventId. Without
-            // the reason check, the optimistic and WS entries collapse
-            // to a single row and the user loses the breakdown.
-            if (inc._sourceEventId
-                && e._sourceEventId === inc._sourceEventId
-                && e.userId === inc.userId
-                && e.reason === inc.reason) return true
-            if (e.userId !== inc.userId)             return false
-            if (e.reason !== inc.reason)             return false
-            if (e.delta  !== inc.delta)              return false
-            if ((e.playerName || '') !== (inc.playerName || '')) return false
-            const dt = Math.abs((Number(e.ts) || 0) - inc.ts)
-            const reactionish = (inc.reason || '').toLowerCase().includes('react')
-            return dt < (reactionish ? 2500 : 90000)
-          }))
+          // Dedup against existing entries via the shared
+          // `_matchesExistingScoreEvent` helper. See its docstring for
+          // the three-stage match order (ironclad / differing-id bail /
+          // fingerprint fallback). Both this WS path and the HTTP-driven
+          // `applyAuthoritativeScoreChange` use the same helper so the
+          // two can never drift.
+          const filtered = incoming.filter(
+            inc => !prev.some(e => _matchesExistingScoreEvent(e, inc))
+          )
           if (!filtered.length) return prev
           const next = [...prev, ...filtered]
           _writeScoreEvents(roomCodeRef.current, next)
@@ -584,34 +610,16 @@ export function useRoom(onChatMessage, currentUserId, initialRoom = null, onMini
       ts:          Date.now(),
     }
     setScoreEvents(prev => {
-      // Dedup against an earlier WS-driven append for this same reaction.
-      // The score_update WS handler already does the symmetric check the
-      // other direction (HTTP-first → WS arrives second), but the
-      // WS-first race (cold-start Lambda + slow client network) lets the
-      // broadcast land in scoreEvents BEFORE the HTTP response resolves.
-      // Without this guard the reactor sees two identical
-      // "REACTED TO NUTMEG +2" rows in their leaderboard timeline while
-      // other users see one (other users never run this code path —
-      // applyAuthoritativeScoreChange only fires inside handleReactTap on
-      // the reactor's tab). Match logic mirrors useRoom.js:234-251 so
-      // both directions of the race are caught identically.
-      const already = prev.some(e => {
-        // Ironclad: same source event + user + reason.
-        if (entry._sourceEventId
-            && e._sourceEventId === entry._sourceEventId
-            && e.userId === entry.userId
-            && e.reason === entry.reason) return true
-        // Fingerprint fallback for older clients / pre-deploy payloads
-        // that don't carry _sourceEventId. (userId, reason, delta,
-        // playerName) within a 2.5-second window for reactions.
-        if (e.userId !== entry.userId)             return false
-        if (e.reason !== entry.reason)             return false
-        if (e.delta  !== entry.delta)              return false
-        if ((e.playerName || '') !== (entry.playerName || '')) return false
-        const dt = Math.abs((Number(e.ts) || 0) - entry.ts)
-        const reactionish = (entry.reason || '').toLowerCase().includes('react')
-        return dt < (reactionish ? 2500 : 90000)
-      })
+      // Dedup against an earlier WS-driven append for this same reaction
+      // via the shared `_matchesExistingScoreEvent` helper. The WS-first
+      // race (cold-start Lambda + slow client network) lets the
+      // broadcast land in scoreEvents BEFORE the HTTP response resolves;
+      // without this guard the reactor saw two "REACTED TO NUTMEG +2"
+      // rows. The differing-id bail inside the helper (see its docstring)
+      // is what prevents this dedup from false-matching against an
+      // earlier reaction to a DIFFERENT nutmeg event within 2.5s — the
+      // bug that previously made reactions disappear entirely.
+      const already = prev.some(e => _matchesExistingScoreEvent(e, entry))
       if (already) return prev
       const next = [...prev, entry]
       _writeScoreEvents(roomCodeRef.current, next)
