@@ -14,6 +14,7 @@ loop running between matches.
 ♿ [**Accessibility audit → `docs/accessibility.md`**](docs/accessibility.md)
 📰 [**PRFAQ → `submission/prfaq.md`**](submission/prfaq.md)
 🎬 [**Executive summary (5 slides) → `submission/executive_summary.md`**](submission/executive_summary.md)
+🥽 [**Cross-platform AR concept → `docs/cross-platform-concept.md`**](docs/cross-platform-concept.md)
 
 ---
 
