@@ -174,7 +174,7 @@ no new "AR state" to manage.
 ## Roadmap
 
 | Phase | Surface | Why |
-|---|---|---|---|
+|---|---|---|
 | **0 — Today** | Responsive React SPA (browser) | shipped | What you have now |
 | **1 — Phone AR companion** | iOS app w/ ARKit; same backend | Lowest-effort entry point; biggest install base |
 | **2 — visionOS spatial app** | Vision Pro native | Reuses Phase 1's WS client + asset pipeline; killer demo |
