@@ -6,13 +6,17 @@ const GRASS_DARK  = '#1a6b2f'
 const GRASS_LIGHT = '#1d7534'
 const LINE_COLOR  = 'rgba(255,255,255,0.85)'
 
-// Outfield tier order: defensive → attacking
-const OUTFIELD_ORDER = ['DEF', 'CDM', 'CAM', 'FWD']
-
 /**
- * Dynamically compute yPct for each tier based on how many rows are
- * actually populated. With 3 active rows the gaps are ~74 px; with 4
- * rows ~50 px — both comfortably clear of the 34 px dot diameter.
+ * Compute yPct for each row based on the formation template's x value,
+ * NOT the group label. Players at the same x form a single row — this
+ * matters for 3-4-3 where the template puts CDM and CAM both at x=48 so
+ * all 4 mids sit in ONE horizontal line. Grouping by the old `group`
+ * label put CDM and CAM in separate rows (two layers of 2) regardless
+ * of what the template said, breaking the textbook 3-4-3 shape.
+ *
+ * For every other formation, distinct groups already live at distinct x
+ * values (DEF≈22 / CDM≈40-52 / CAM≈58-62 / FWD≈82-87), so x-grouping
+ * gives the same row count and same positions as today.
  */
 function computeRowPcts(positioned, team) {
   const isHome = team === 'home'
@@ -20,13 +24,22 @@ function computeRowPcts(positioned, team) {
   const nearGK = isHome ? 84 : 16   // first outfield row (closest to GK)
   const farGK  = isHome ? 53 : 47   // last  outfield row (closest to midline)
 
-  const active = OUTFIELD_ORDER.filter(g => positioned.some(p => p.group === g))
-  const n = active.length
-  const pcts = { GK: gkPct }
+  // Distinct outfield x values. Rounded so near-equal x doesn't split a
+  // row by floating-point noise from the assignment algorithm's even
+  // spread. Sorted ascending so the lowest x (defenders, x≈22) is the
+  // row NEAREST the GK and the highest x (forwards, x≈85) is the row
+  // FARTHEST from the GK.
+  const outfieldXs = [...new Set(
+    positioned.filter(p => p.group !== 'GK').map(p => Math.round(p.x))
+  )].sort((a, b) => a - b)
 
-  active.forEach((group, i) => {
+  // Keyed by rounded x; reserved key '__GK__' for the keeper row so an
+  // accidental x=0 player can't collide with the GK slot.
+  const pcts = { __GK__: gkPct }
+  const n = outfieldXs.length
+  outfieldXs.forEach((x, i) => {
     const t = n <= 1 ? 0.5 : i / (n - 1)
-    pcts[group] = nearGK + t * (farGK - nearGK)
+    pcts[x] = nearGK + t * (farGK - nearGK)
   })
 
   return pcts
@@ -194,10 +207,12 @@ export function CombinedPitchView({
           </svg>
         </div>
 
-        {/* Away players — top half, row pinned by tier */}
+        {/* Away players — top half, row pinned by formation x */}
         {awayPositioned.map(player => {
           const xPct = (player.y / 74) * 100
-          const yPct = awayRowPcts[player.group] ?? (player.x / 111) * 50
+          const yPct = player.group === 'GK'
+            ? awayRowPcts.__GK__
+            : (awayRowPcts[Math.round(player.x)] ?? (player.x / 111) * 50)
           return (
             <PlayerDot
               key={player.playerId}
@@ -212,10 +227,12 @@ export function CombinedPitchView({
           )
         })}
 
-        {/* Home players — bottom half, row pinned by tier */}
+        {/* Home players — bottom half, row pinned by formation x */}
         {homePositioned.map(player => {
           const xPct = (player.y / 74) * 100
-          const yPct = homeRowPcts[player.group] ?? (50 + ((111 - player.x) / 111) * 50)
+          const yPct = player.group === 'GK'
+            ? homeRowPcts.__GK__
+            : (homeRowPcts[Math.round(player.x)] ?? (50 + ((111 - player.x) / 111) * 50))
           return (
             <PlayerDot
               key={player.playerId}
