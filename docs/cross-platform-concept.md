@@ -173,13 +173,13 @@ no new "AR state" to manage.
 
 ## Roadmap
 
-| Phase | Surface | Effort | Why |
+| Phase | Surface | Why |
 |---|---|---|---|
 | **0 — Today** | Responsive React SPA (browser) | shipped | What you have now |
-| **1 — Phone AR companion** | iOS app w/ ARKit; same backend | ~3 weeks | Lowest-effort entry point; biggest install base |
-| **2 — visionOS spatial app** | Vision Pro native | ~2 weeks atop Phase 1 | Reuses Phase 1's WS client + asset pipeline; killer demo |
-| **3 — Smart glasses HUD** | Meta Ray-Ban / Xreal | ~1 week | Limited interaction surface — score + last event only |
-| **4 — Stadium screen** | LED jumbotron API + display server | ~4 weeks | Operator-facing; needs club partnership |
+| **1 — Phone AR companion** | iOS app w/ ARKit; same backend | Lowest-effort entry point; biggest install base |
+| **2 — visionOS spatial app** | Vision Pro native | Reuses Phase 1's WS client + asset pipeline; killer demo |
+| **3 — Smart glasses HUD** | Meta Ray-Ban / Xreal| Limited interaction surface — score + last event only |
+| **4 — Stadium screen** | LED jumbotron API + display server| Operator-facing; needs club partnership |
 
 Phase 1 ships independently. Phases 2-4 are optional and don't require
 backend changes.
