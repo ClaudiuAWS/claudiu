@@ -364,7 +364,7 @@ We chose CloudFormation to make sure we have consistent deployments and no manua
 
 A serverless deployment was chosen so that we make sure we do not exceed the 50$ budget our account was limited to, but also to ensure seamless scalability in case of user spikes while minimizing overhead on managing EC2 instances for example.
 
-Most deployments are automatic. GitHub Actions update each part of the stack as soon as some change happens in that part, and a few rarely-changing CloudFormation stacks still go out via `aws cloudformation deploy` from a developer machine. We sticked to modern DevOps practices to minimize human error.
+Most deployments are automatic. GitHub Actions update each part of the stack as soon as some change happens in that part, and a few rarely-changing CloudFormation stacks still go out via `aws cloudformation deploy` from a developer machine. We stuck to modern DevOps practices to minimize human error.
 
 ## Stack
 
