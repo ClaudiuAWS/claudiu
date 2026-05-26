@@ -30,11 +30,15 @@ Please note the demo is 5 minutes and 30 seconds long, exceeding the 3 minute im
 
 **File:** `executive_summary.pdf`
 
+Short powerpoint about the app, as requested.
+
 ---
 
 ### 5. ✍🏻 PRFAQ
 
 **File:** `prfaq.pdf`
+
+Some answers to questions that someone might have about the app, both from a user standpoint and technical standpoint.
 
 ---
 
