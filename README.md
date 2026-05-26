@@ -8,12 +8,11 @@ German football emojis, and play AI-driven mini-games triggered by what's
 happening on the pitch — all with a brezn-credit economy that keeps the
 loop running between matches.
 
-📄 [**Submission cover sheet → `docs/submission.md`**](docs/submission.md)
-📦 [**How to package the zip → `submission/README.md`**](submission/README.md)
-🏗️ [**Architecture deep-dive → `docs/architecture.md`**](docs/architecture.md)
-♿ [**Accessibility audit → `docs/accessibility.md`**](docs/accessibility.md)
-📰 [**PRFAQ → `submission/prfaq.md`**](submission/prfaq.md)
-🎬 [**Executive summary (5 slides) → `submission/executive_summary.md`**](submission/executive_summary.md)
+📦 [**Submission overview → `submission/README.md`**](submission/README.md)
+🏗️ [**AWS Deployment Diagram → `submission/aws-deployment.pdf`**](submission/aws-deployment.pdf)
+♿ [**Demo Video URL → `submission/`**](submission/README.md)
+📰 [**PRFAQ → `submission/prfaq.pdf`**](submission/prfaq.pdf)
+🎬 [**Executive summary (5 slides) → `submission/summary.pdf`**](submission/summary.pdf)
 🥽 [**Cross-platform AR concept → `docs/cross-platform-concept.md`**](docs/cross-platform-concept.md)
 
 ---
