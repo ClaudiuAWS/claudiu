@@ -98,6 +98,18 @@ There are three types:
     throughout the match. Answer correctly and quickly to earn bonus points.
 \end{itemize}
 
+\textbf{What are badges and how do I earn them?}
+
+There are 31 badges split across 7 categories — things like scoring, defending, winning, and mini-game performance. Each badge has three tiers: bronze, silver, and gold. You earn them automatically when you hit certain milestones during a match, or you can buy them outright from the shop using brezn credits.
+
+\textbf{What are brezn credits?}
+
+Brezn is the in-app currency. You earn it by winning badges. You can spend it in the shop to buy badges you haven't unlocked yet, or music discs that play in the background while you use the app. Earning and buying costs the same per tier, so there's no grind.
+
+\textbf{Can I chat with my friend during the match?}
+
+Yes. There's an in-match chat that runs alongside the game. It's only active during the match and disappears when it ends, so it stays focused on what's happening on the pitch.
+
 \subsection*{Technical \& Internal FAQs}
 
 \textbf{How does the app stay in sync during a live match?}
@@ -121,16 +133,14 @@ connected client's experience consistent and true to the live match.
 \textbf{Can the application handle sudden traffic spikes?}
 
 Yes. The entire solution is serverless, leveraging AWS Lambda, DynamoDB 
-on-demand, S3, and other managed services that scale automatically with demand.
+on-demand, S3, SQS, EventBridge and other managed services that scale automatically with demand.
 
 \textbf{How is artificial intelligence integrated into the app?}
 
-AWS Bedrock is used to generate live match commentary throughout the game. 
-As events unfold --- a goal, a red card, a last-minute substitution --- 
-Bedrock interprets the event data and produces a short, natural-language 
-comment that appears in the app, giving the experience a broadcast-style 
-voice without requiring a human commentator. This keeps the atmosphere 
-alive between minigames and reinforces the feeling that something is always 
-happening.
+Bedrock acts as a match director throughout the game. It reads what's happening in real time and decides when to trigger mini-games and what commentary to show. As events unfold — a goal, a red card, a substitution — it produces a short natural-language comment that appears in the app, giving it a broadcast-style voice. If it tries to do something that doesn't make sense for the current event, the app overrides it and falls back to a rule-based system, so a bad AI response can never break the experience.
+
+\textbf{How is the app deployed?}
+
+Almost everything deploys automatically. When code changes, GitHub Actions updates the relevant part of the AWS stack without anyone touching the console manually. All infrastructure is defined in CloudFormation, so the whole app can be redeployed from scratch at any time.
 
 \end{document}
