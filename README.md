@@ -49,6 +49,8 @@ Let's take a look at drafting a team, the event feed, some minigames and badges 
 
 ## Quick Start (for judges)
 
+> The easiest way to try the app is the live URL above — just sign up with an email and you're in. One thing to note: a match reset is required before each playthrough, which needs AWS credentials and a quick python data/reset_match.py run. In a real deployment this wouldn't be needed since matches would happen live — we only have one match in the demo dataset so we keep replaying it.
+
 The fastest path to seeing Brezn in action:
 
 1. **Open the live app:** *[d1t5xvsturq92p.cloudfront.net](d1t5xvsturq92p.cloudfront.net)*
