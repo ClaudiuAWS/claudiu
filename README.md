@@ -25,7 +25,7 @@ Let's take a look at drafting a team, the event feed, some minigames and badges 
 
 <img width="212" height="460" alt="Event feed" src="https://github.com/user-attachments/assets/49a83e5b-8c82-438f-bb43-7781b6b15a51" />
 
-<img width="212" height="460" alt="Penalty shootout minigame" src="https://github.com/user-attachments/assets/82781537-8d4d-4880-9910-ff845594c1ab" />
+<img width="212" height="460" alt="Penalty minigame" src="https://github.com/user-attachments/assets/82781537-8d4d-4880-9910-ff845594c1ab" />
 
 <img width="212" height="460" alt="Badge preview" src="https://github.com/user-attachments/assets/aba61686-5917-4a16-9178-deaad2931ce9" />
 
@@ -183,7 +183,7 @@ Live reaction-based games triggered by qualifying match events.
 - Solo bot: random tap timing within ±150–600 ms of the offside moment,
   50% accurate; reaction delay 400–1800 ms after game start.
 
-### PENALTY_SHOOTOUT
+### PENALTY
 
 Triggered whenever a `goal` event lands with `isPenalty: true` — so the
 mini-game fires on the actual penalty kick in the match feed, not on a
@@ -239,7 +239,7 @@ delay 600–3100 ms.
 
 ### Shared mini-game mechanics
 
-These behaviors apply to every mini-game (OFFSIDE_REFLEX, PENALTY_SHOOTOUT,
+These behaviors apply to every mini-game (OFFSIDE_REFLEX, PENALTY,
 HALFTIME_QUIZ) — they're factored out so each per-game section can stick
 to what's unique.
 
@@ -288,7 +288,7 @@ The Director runs alongside the rule-based trigger map, with a
 trigger-validation gate in front of it: if the AI picks
 `start_minigame` but the trigger event's type isn't in the
 allowed-mapping for that game (e.g. it tries to fire `OFFSIDE_REFLEX`
-on a nutmeg, or `PENALTY_SHOOTOUT` on a non-penalty goal), the action
+on a nutmeg, or `PENALTY` on a non-penalty goal), the action
 is downgraded to `commentate` or `wait`. So Nova hallucinations can't
 trigger spurious mini-games.
 
