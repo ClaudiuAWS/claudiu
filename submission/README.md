@@ -26,6 +26,11 @@ Documentation of the cloud architecture and deployment setup.
 
 **File:** `prfaq.pdf`
 
+---
+
+### 5. Cross-platform VR concept
+
+(./cross-platform-hero.jpg)
 
 ---
 
