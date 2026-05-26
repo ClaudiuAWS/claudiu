@@ -1,9 +1,34 @@
-# Our submission
+# 📦 Submission
 
-<img width="530" height="250" alt="Image" src="https://github.com/user-attachments/assets/48653510-e5ee-48f8-8755-99a94ab0d18a" />
+This folder contains all required deliverables for the hackathon submission.
 
-### 🍿 Demo - [https://youtu.be/cgQon7OTM6w](https://youtu.be/cgQon7OTM6w)
+### 1. ☁️ AWS Deployment
 
-### ☁️ AWS Deployment - ***aws-deployment.pdf***
+**File:** `aws-deployment.pdf`
 
-### ✍🏻 PRFAQ - ***prfaq.pdf***
+Documentation of the cloud architecture and deployment setup.
+
+---
+
+### 2. 🎥 Demo Video
+
+**Link:** https://youtu.be/cgQon7OTM6w
+
+---
+
+### 3. 📄 Executive Summary
+
+**File:** `executive_summary.pdf`
+
+---
+
+### 4. ✍🏻 PRFAQ
+
+**File:** `prfaq.pdf`
+
+
+---
+
+## 📝 Notes
+
+* No hackathon data is included in the repository, in compliance with submission rules.
