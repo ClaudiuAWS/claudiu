@@ -1,5 +1,7 @@
 # 📦 Submission
 
+Our team: Mihai Ciorăscu, Robert Béres.
+
 This folder contains all required deliverables for the hackathon submission.
 
 ### 1. Github Link
@@ -17,6 +19,8 @@ Documentation of the cloud architecture and deployment setup.
 ---
 
 ### 3. 🎥 Demo Video
+
+**File** `demo_video_url.txt`
 
 **Link:** https://youtu.be/cgQon7OTM6w
 
