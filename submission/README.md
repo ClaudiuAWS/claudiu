@@ -20,8 +20,6 @@ Documentation of the cloud architecture and deployment setup.
 
 ### 3. 🎥 Demo Video
 
-**File** `demo_video_url.txt`
-
 **Link:** https://youtu.be/cgQon7OTM6w
 
 Demo, published to YouTube to not make the submission too big.
